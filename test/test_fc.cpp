@@ -1,6 +1,7 @@
 #include <cublas_v2.h>
 #include <cuda_runtime.h>
 #include <gtest/gtest.h>
+#include <thread_pool.h>
 
 #include <Eigen/Dense>
 
@@ -47,9 +48,9 @@ void TestForwardT(const dllm::Context &context) {
   auto layoutY = cute::make_layout(shapeY, cute::GenRowMajor{});
 
   void *ptrX, *ptrW, *ptrY;
-  cudaMalloc(&ptrX, sizeof(DataTypeInput) * cute::size(layoutX));
-  cudaMalloc(&ptrW, sizeof(DataTypeInput) * cute::size(layoutW));
-  cudaMalloc(&ptrY, sizeof(DataTypeOutput) * cute::size(layoutY));
+  CHECK_CUDART(cudaMalloc(&ptrX, sizeof(DataTypeInput) * cute::size(layoutX)));
+  CHECK_CUDART(cudaMalloc(&ptrW, sizeof(DataTypeInput) * cute::size(layoutW)));
+  CHECK_CUDART(cudaMalloc(&ptrY, sizeof(DataTypeOutput) * cute::size(layoutY)));
 
   auto tensorX = std::make_shared<dllm::Tensor3D>(
       ptrX, layoutX, dllm::toDtype<DataTypeInput>(), dllm::CUDA);
@@ -70,17 +71,20 @@ void TestForwardT(const dllm::Context &context) {
           hostW.transpose().template cast<ComputeType>())
              .template cast<DataTypeOutput>();
 
-  cudaMemcpy(ptrX, hostX.data(), sizeof(DataTypeInput) * cute::size(layoutX),
-             cudaMemcpyHostToDevice);
-  cudaMemcpy(ptrW, hostW.data(), sizeof(DataTypeInput) * cute::size(layoutW),
-             cudaMemcpyHostToDevice);
+  CHECK_CUDART(cudaMemcpy(ptrX, hostX.data(),
+                          sizeof(DataTypeInput) * cute::size(layoutX),
+                          cudaMemcpyHostToDevice));
+  CHECK_CUDART(cudaMemcpy(ptrW, hostW.data(),
+                          sizeof(DataTypeInput) * cute::size(layoutW),
+                          cudaMemcpyHostToDevice));
 
   auto task = dllm::compute::FcNoBias::forward(
       tensorY, tensorX, tensorW, toCublasComputeType<ComputeType>());
   task(&context);
 
-  cudaMemcpy(hostY.data(), ptrY, sizeof(DataTypeOutput) * cute::size(layoutY),
-             cudaMemcpyDeviceToHost);
+  CHECK_CUDART(cudaMemcpy(hostY.data(), ptrY,
+                          sizeof(DataTypeOutput) * cute::size(layoutY),
+                          cudaMemcpyDeviceToHost));
 
   for (int col = 0; col < refY.cols(); ++col) {
     for (int row = 0; row < refY.rows(); ++row) {
@@ -88,9 +92,9 @@ void TestForwardT(const dllm::Context &context) {
     }
   }
 
-  cudaFree(ptrY);
-  cudaFree(ptrW);
-  cudaFree(ptrX);
+  CHECK_CUDART(cudaFree(ptrY));
+  CHECK_CUDART(cudaFree(ptrW));
+  CHECK_CUDART(cudaFree(ptrX));
 }
 }  // namespace
 
@@ -113,9 +117,11 @@ void TestBackwardWT(const dllm::Context &context) {
   auto layoutDY = cute::make_layout(shapeDY, cute::GenRowMajor{});
 
   void *ptrX, *ptrDW, *ptrDY;
-  cudaMalloc(&ptrX, sizeof(DataTypeInput) * cute::size(layoutX));
-  cudaMalloc(&ptrDW, sizeof(DataTypeOutput) * cute::size(layoutDW));
-  cudaMalloc(&ptrDY, sizeof(DataTypeInput) * cute::size(layoutDY));
+  CHECK_CUDART(cudaMalloc(&ptrX, sizeof(DataTypeInput) * cute::size(layoutX)));
+  CHECK_CUDART(
+      cudaMalloc(&ptrDW, sizeof(DataTypeOutput) * cute::size(layoutDW)));
+  CHECK_CUDART(
+      cudaMalloc(&ptrDY, sizeof(DataTypeInput) * cute::size(layoutDY)));
 
   auto tensorX = std::make_shared<dllm::Tensor3D>(
       ptrX, layoutX, dllm::toDtype<DataTypeInput>(), dllm::CUDA);
@@ -136,18 +142,20 @@ void TestBackwardWT(const dllm::Context &context) {
            hostX.template cast<ComputeType>())
               .template cast<DataTypeOutput>();
 
-  cudaMemcpy(ptrX, hostX.data(), sizeof(DataTypeInput) * cute::size(layoutX),
-             cudaMemcpyHostToDevice);
-  cudaMemcpy(ptrDY, hostDY.data(), sizeof(DataTypeInput) * cute::size(layoutDY),
-             cudaMemcpyHostToDevice);
+  CHECK_CUDART(cudaMemcpy(ptrX, hostX.data(),
+                          sizeof(DataTypeInput) * cute::size(layoutX),
+                          cudaMemcpyHostToDevice));
+  CHECK_CUDART(cudaMemcpy(ptrDY, hostDY.data(),
+                          sizeof(DataTypeInput) * cute::size(layoutDY),
+                          cudaMemcpyHostToDevice));
 
   auto task = dllm::compute::FcNoBias::backwardW(
       tensorDW, tensorDY, tensorX, toCublasComputeType<ComputeType>());
   task(&context);
 
-  cudaMemcpy(hostDW.data(), ptrDW,
-             sizeof(DataTypeOutput) * cute::size(layoutDW),
-             cudaMemcpyDeviceToHost);
+  CHECK_CUDART(cudaMemcpy(hostDW.data(), ptrDW,
+                          sizeof(DataTypeOutput) * cute::size(layoutDW),
+                          cudaMemcpyDeviceToHost));
 
   for (int col = 0; col < refDW.cols(); ++col) {
     for (int row = 0; row < refDW.rows(); ++row) {
@@ -155,9 +163,9 @@ void TestBackwardWT(const dllm::Context &context) {
     }
   }
 
-  cudaFree(ptrDY);
-  cudaFree(ptrDW);
-  cudaFree(ptrX);
+  CHECK_CUDART(cudaFree(ptrDY));
+  CHECK_CUDART(cudaFree(ptrDW));
+  CHECK_CUDART(cudaFree(ptrX));
 }
 }  // namespace
 
@@ -180,9 +188,11 @@ void TestBackwardXT(const dllm::Context &context) {
   auto layoutW = cute::make_layout(shapeW, cute::GenRowMajor{});
 
   void *ptrDX, *ptrDY, *ptrW;
-  cudaMalloc(&ptrDX, sizeof(DataTypeOutput) * cute::size(layoutDX));
-  cudaMalloc(&ptrDY, sizeof(DataTypeInput) * cute::size(layoutDY));
-  cudaMalloc(&ptrW, sizeof(DataTypeInput) * cute::size(layoutW));
+  CHECK_CUDART(
+      cudaMalloc(&ptrDX, sizeof(DataTypeOutput) * cute::size(layoutDX)));
+  CHECK_CUDART(
+      cudaMalloc(&ptrDY, sizeof(DataTypeInput) * cute::size(layoutDY)));
+  CHECK_CUDART(cudaMalloc(&ptrW, sizeof(DataTypeInput) * cute::size(layoutW)));
 
   auto tensorDX = std::make_shared<dllm::Tensor3D>(
       ptrDX, layoutDX, dllm::toDtype<DataTypeOutput>(), dllm::CUDA);
@@ -203,18 +213,20 @@ void TestBackwardXT(const dllm::Context &context) {
       (hostDY.template cast<ComputeType>() * hostW.template cast<ComputeType>())
           .template cast<DataTypeOutput>();
 
-  cudaMemcpy(ptrDY, hostDY.data(), sizeof(DataTypeInput) * cute::size(layoutDY),
-             cudaMemcpyHostToDevice);
-  cudaMemcpy(ptrW, hostW.data(), sizeof(DataTypeInput) * cute::size(layoutW),
-             cudaMemcpyHostToDevice);
+  CHECK_CUDART(cudaMemcpy(ptrDY, hostDY.data(),
+                          sizeof(DataTypeInput) * cute::size(layoutDY),
+                          cudaMemcpyHostToDevice));
+  CHECK_CUDART(cudaMemcpy(ptrW, hostW.data(),
+                          sizeof(DataTypeInput) * cute::size(layoutW),
+                          cudaMemcpyHostToDevice));
 
   auto task = dllm::compute::FcNoBias::backwardX(
       tensorDX, tensorDY, tensorW, toCublasComputeType<ComputeType>());
   task(&context);
 
-  cudaMemcpy(hostDX.data(), ptrDX,
-             sizeof(DataTypeOutput) * cute::size(layoutDX),
-             cudaMemcpyDeviceToHost);
+  CHECK_CUDART(cudaMemcpy(hostDX.data(), ptrDX,
+                          sizeof(DataTypeOutput) * cute::size(layoutDX),
+                          cudaMemcpyDeviceToHost));
 
   for (int col = 0; col < refDX.cols(); ++col) {
     for (int row = 0; row < refDX.rows(); ++row) {
@@ -222,9 +234,9 @@ void TestBackwardXT(const dllm::Context &context) {
     }
   }
 
-  cudaFree(ptrDX);
-  cudaFree(ptrDY);
-  cudaFree(ptrW);
+  CHECK_CUDART(cudaFree(ptrDX));
+  CHECK_CUDART(cudaFree(ptrDY));
+  CHECK_CUDART(cudaFree(ptrW));
 }
 }  // namespace
 
@@ -233,4 +245,79 @@ TEST_F(FcTestFixture, TestBackwardXF32F32F32) {
 }
 TEST_F(FcTestFixture, TestBackwardXF64F64F64) {
   TestBackwardXT<double, double, double>(context);
+}
+
+class FcPoolTestFixture : public ::testing::Test {
+ protected:
+  dllm::ThreadPool threadPool{0, 1};
+};
+
+namespace {
+template <typename DataTypeInput, typename DataTypeOutput, typename ComputeType>
+void TestForwardPoolT(dllm::ThreadPool &threadPool) {
+  const int m = 128, n = 2048, k = 512, s = 3;
+  auto shapeX = cute::make_shape(m, s, k);
+  auto layoutX = cute::make_layout(shapeX, cute::GenRowMajor{});
+  auto shapeW = cute::make_shape(n, k);
+  auto layoutW = cute::make_layout(shapeW, cute::GenRowMajor{});
+  auto shapeY = cute::make_shape(m, s, n);
+  auto layoutY = cute::make_layout(shapeY, cute::GenRowMajor{});
+
+  void *ptrX, *ptrW, *ptrY;
+  CHECK_CUDART(cudaMalloc(&ptrX, sizeof(DataTypeInput) * cute::size(layoutX)));
+  CHECK_CUDART(cudaMalloc(&ptrW, sizeof(DataTypeInput) * cute::size(layoutW)));
+  CHECK_CUDART(cudaMalloc(&ptrY, sizeof(DataTypeOutput) * cute::size(layoutY)));
+
+  auto tensorX = std::make_shared<dllm::Tensor3D>(
+      ptrX, layoutX, dllm::toDtype<DataTypeInput>(), dllm::CUDA);
+  auto tensorW = std::make_shared<dllm::Tensor2D>(
+      ptrW, layoutW, dllm::toDtype<DataTypeInput>(), dllm::CUDA);
+  auto tensorY = std::make_shared<dllm::Tensor3D>(
+      ptrY, layoutY, dllm::toDtype<DataTypeOutput>(), dllm::CUDA);
+
+  Eigen::Matrix<DataTypeInput, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>
+      hostX(m * s, k), hostW(n, k);
+  Eigen::Matrix<DataTypeOutput, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>
+      hostY(m * s, n), refY;
+
+  hostX.setRandom();
+  hostW.setRandom();
+
+  refY = (hostX.template cast<ComputeType>() *
+          hostW.transpose().template cast<ComputeType>())
+             .template cast<DataTypeOutput>();
+
+  CHECK_CUDART(cudaMemcpy(ptrX, hostX.data(),
+                          sizeof(DataTypeInput) * cute::size(layoutX),
+                          cudaMemcpyHostToDevice));
+  CHECK_CUDART(cudaMemcpy(ptrW, hostW.data(),
+                          sizeof(DataTypeInput) * cute::size(layoutW),
+                          cudaMemcpyHostToDevice));
+
+  auto task = dllm::compute::FcNoBias::forward(
+      tensorY, tensorX, tensorW, toCublasComputeType<ComputeType>());
+  auto future = threadPool.submit(std::move(task));
+  future.wait();
+
+  CHECK_CUDART(cudaMemcpy(hostY.data(), ptrY,
+                          sizeof(DataTypeOutput) * cute::size(layoutY),
+                          cudaMemcpyDeviceToHost));
+
+  for (int col = 0; col < refY.cols(); ++col) {
+    for (int row = 0; row < refY.rows(); ++row) {
+      ASSERT_NEAR(hostY(row, col), refY(row, col), 1e-4);
+    }
+  }
+
+  CHECK_CUDART(cudaFree(ptrY));
+  CHECK_CUDART(cudaFree(ptrW));
+  CHECK_CUDART(cudaFree(ptrX));
+}
+}  // namespace
+
+TEST_F(FcPoolTestFixture, TestForwardF32F32F32) {
+  TestForwardPoolT<float, float, float>(threadPool);
+}
+TEST_F(FcPoolTestFixture, TestForwardF64F64F64) {
+  TestForwardPoolT<double, double, double>(threadPool);
 }

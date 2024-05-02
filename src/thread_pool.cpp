@@ -31,15 +31,15 @@ void threadTask(const int localRank, std::queue<Task> *taskQueue,
   CHECK_CUBLAS(cublasCreate_v2(&context.cublasHandle));
   CHECK_CUBLAS(cublasSetStream_v2(context.cublasHandle, context.cudaStream));
   while (!shutDown->load()) {
-    Task fn;
+    Task task;
     std::unique_lock lock{*queueMutex};
     if (!taskQueue->empty()) {
-      fn = std::move(taskQueue->back());
+      task = std::move(taskQueue->back());
       taskQueue->pop();
     }
     lock.unlock();
-    if (fn.valid()) {
-      fn(&context);
+    if (task.valid()) {
+      task(&context);
     } else {
       std::unique_lock<std::mutex> uniqueLock{*cvMutex};
       cv->wait(uniqueLock,
@@ -68,6 +68,14 @@ ThreadPool::ThreadPool(int localRank, int threadNum,
   }
 }
 
+ThreadPool::~ThreadPool() {
+  shutDown = true;
+  cv.notify_all();
+  for (auto &t : threadVector) {
+    t.join();
+  }
+}
+
 Future ThreadPool::submit(Task task) {
   auto future = task.get_future();
   std::unique_lock lock{queueMutex};
@@ -75,12 +83,5 @@ Future ThreadPool::submit(Task task) {
   lock.unlock();
   cv.notify_one();
   return future;
-}
-ThreadPool::~ThreadPool() {
-  shutDown = true;
-  cv.notify_all();
-  for (auto &t : threadVector) {
-    t.join();
-  }
 }
 }  // namespace dllm
