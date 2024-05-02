@@ -11,7 +11,7 @@ conda install gcc gxx openmpi -c conda-forge
 
 ```bash
 git clone git@github.com:TheCoreTeam/DLLM.cpp.git
-cd DLLM
+cd DLLM.cpp
 git submodule init
 git submodule update
 mkdir build
