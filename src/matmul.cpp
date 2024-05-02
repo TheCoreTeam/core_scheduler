@@ -8,32 +8,35 @@ cublasStatus_t cublasGemmExOneAlpheZeroBeta(
     const void *B, cudaDataType Btype, int ldb, void *C, cudaDataType Ctype,
     int ldc, cublasComputeType_t computeType, cublasGemmAlgo_t algo) {
   switch (computeType) {
-  case CUBLAS_COMPUTE_16F_PEDANTIC:
-  case CUBLAS_COMPUTE_16F: {
-    nv_half alpha = 1., beta = 0.;
-    return cublasGemmEx(handle, transa, transb, m, n, k, &alpha, A, Atype, lda,
-                        B, Btype, ldb, &beta, C, Ctype, ldc, computeType, algo);
-  }
-  case CUBLAS_COMPUTE_32F_FAST_16F:
-  case CUBLAS_COMPUTE_32F_FAST_16BF:
-  case CUBLAS_COMPUTE_32F_FAST_TF32:
-  case CUBLAS_COMPUTE_32F_PEDANTIC:
-  case CUBLAS_COMPUTE_32F: {
-    float alpha = 1., beta = 0.;
-    return cublasGemmEx(handle, transa, transb, m, n, k, &alpha, A, Atype, lda,
-                        B, Btype, ldb, &beta, C, Ctype, ldc, computeType, algo);
-  }
-  case CUBLAS_COMPUTE_64F_PEDANTIC:
-  case CUBLAS_COMPUTE_64F: {
-    double alpha = 1., beta = 0.;
-    return cublasGemmEx(handle, transa, transb, m, n, k, &alpha, A, Atype, lda,
-                        B, Btype, ldb, &beta, C, Ctype, ldc, computeType, algo);
-  }
-  default:
-    return CUBLAS_STATUS_INVALID_VALUE;
+    case CUBLAS_COMPUTE_16F_PEDANTIC:
+    case CUBLAS_COMPUTE_16F: {
+      nv_half alpha = 1., beta = 0.;
+      return cublasGemmEx(handle, transa, transb, m, n, k, &alpha, A, Atype,
+                          lda, B, Btype, ldb, &beta, C, Ctype, ldc, computeType,
+                          algo);
+    }
+    case CUBLAS_COMPUTE_32F_FAST_16F:
+    case CUBLAS_COMPUTE_32F_FAST_16BF:
+    case CUBLAS_COMPUTE_32F_FAST_TF32:
+    case CUBLAS_COMPUTE_32F_PEDANTIC:
+    case CUBLAS_COMPUTE_32F: {
+      float alpha = 1., beta = 0.;
+      return cublasGemmEx(handle, transa, transb, m, n, k, &alpha, A, Atype,
+                          lda, B, Btype, ldb, &beta, C, Ctype, ldc, computeType,
+                          algo);
+    }
+    case CUBLAS_COMPUTE_64F_PEDANTIC:
+    case CUBLAS_COMPUTE_64F: {
+      double alpha = 1., beta = 0.;
+      return cublasGemmEx(handle, transa, transb, m, n, k, &alpha, A, Atype,
+                          lda, B, Btype, ldb, &beta, C, Ctype, ldc, computeType,
+                          algo);
+    }
+    default:
+      return CUBLAS_STATUS_INVALID_VALUE;
   }
 }
-} // namespace
+}  // namespace
 
 void RowMajorNNMatmulNoBias(cublasHandle_t handle, const Tensor2D &A,
                             const Tensor2D &B, const Tensor2D &C,
@@ -85,4 +88,4 @@ void RowMajorTNMatmulNoBias(cublasHandle_t handle, const Tensor2D &A,
       toCudaDataType(B.dtype), ldb, A.data, toCudaDataType(A.dtype), lda,
       C.data, toCudaDataType(C.dtype), ldc, computeType, CUBLAS_GEMM_DEFAULT);
 }
-} // namespace dllm
+}  // namespace dllm

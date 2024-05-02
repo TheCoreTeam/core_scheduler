@@ -5,4 +5,4 @@ enum DeviceType {
   CPU,
   CUDA,
 };
-} // namespace dllm
+}  // namespace dllm

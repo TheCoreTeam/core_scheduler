@@ -1,7 +1,8 @@
 #pragma once
-#include <cute/layout.hpp>
 #include <mpi.h>
 #include <nccl.h>
+
+#include <cute/layout.hpp>
 #include <tuple>
 #include <vector>
 
@@ -35,7 +36,8 @@ struct repeat_last_1_type<T, 0, Template, Args...> {
   using type = Template<Args..., cute::_1>;
 };
 
-template <int N> struct Tensor {
+template <int N>
+struct Tensor {
   using Shape = typename repeat_type<int, N, cute::Shape>::type;
   using Stride = typename repeat_last_1_type<int, N - 1, cute::Stride>::type;
   using Layout = cute::Layout<Shape, Stride>;
@@ -46,12 +48,13 @@ template <int N> struct Tensor {
   DeviceType deviceType;
 };
 
-template <int N> struct DistributedTensor : Tensor<N> {
-private:
+template <int N>
+struct DistributedTensor : Tensor<N> {
+ private:
   using Base = Tensor<N>;
   using Coord = typename repeat_type<int, N, cute::Coord>::type;
 
-public:
+ public:
   Coord localCoord;
   Base::Layout localLayout;
   MPI_Comm commTpMpi;
@@ -61,12 +64,12 @@ public:
 };
 
 using Tensor1D = Tensor<1>;
-using Tensor2D = Tensor<2>; // (Row, Col)
-using Tensor3D = Tensor<3>; // (Batch, Sequence, Feature)
+using Tensor2D = Tensor<2>;  // (Row, Col)
+using Tensor3D = Tensor<3>;  // (Batch, Sequence, Feature)
 using Tensor4D = Tensor<4>;
 
 using DistributedTensor1D = DistributedTensor<1>;
-using DistributedTensor2D = DistributedTensor<2>; // (Row, Col)
-using DistributedTensor3D = DistributedTensor<3>; // (Batch, Sequence, Feature)
+using DistributedTensor2D = DistributedTensor<2>;  // (Row, Col)
+using DistributedTensor3D = DistributedTensor<3>;  // (Batch, Sequence, Feature)
 using DistributedTensor4D = DistributedTensor<4>;
-} // namespace dllm
+}  // namespace dllm

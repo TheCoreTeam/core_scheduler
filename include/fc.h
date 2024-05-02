@@ -1,6 +1,7 @@
 #pragma once
-#include "tensor.h"
 #include <cublas_v2.h>
+
+#include "tensor.h"
 
 namespace dllm {
 struct FcNoBias {
@@ -16,4 +17,4 @@ struct FcNoBias {
                         const Tensor3D &dy, const Tensor2D &w,
                         cublasComputeType_t computeType);
 };
-} // namespace dllm
+}  // namespace dllm

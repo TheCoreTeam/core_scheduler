@@ -1,8 +1,10 @@
-#include "fc.h"
-#include <Eigen/Dense>
 #include <cublas_v2.h>
 #include <cuda_runtime.h>
 #include <gtest/gtest.h>
+
+#include <Eigen/Dense>
+
+#include "fc.h"
 
 TEST(FcTests, TestForward) {
   cublasHandle_t handle;

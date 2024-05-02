@@ -1,7 +1,9 @@
 #include "fc.h"
+
+#include <spdlog/spdlog.h>
+
 #include "logger.h"
 #include "matmul.h"
-#include <spdlog/spdlog.h>
 
 namespace dllm {
 void FcNoBias::forward(cublasHandle_t handle, const Tensor3D &y,
@@ -97,4 +99,4 @@ void FcNoBias::backwardX(cublasHandle_t handle, const Tensor3D &dx,
       dx.dtype, dx.deviceType};
   RowMajorNNMatmulNoBias(handle, dyView, w, dxView, computeType);
 }
-} // namespace dllm
+}  // namespace dllm
