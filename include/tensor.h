@@ -1,7 +1,4 @@
 #pragma once
-#include <mpi.h>
-#include <nccl.h>
-
 #include <cute/layout.hpp>
 #include <future>
 #include <memory>
@@ -73,24 +70,8 @@ struct Tensor {
   const void *data_;
 };
 
-template <int N>
-struct DistributedTensor : public Tensor<N> {
- private:
-  using Base = Tensor<N>;
-  using Coord = typename repeat_type<int, N, cute::Coord>::type;
-
- public:
-  Coord localCoord;
-  Base::Layout localLayout;
-};
-
 using Tensor1D = Tensor<1>;
 using Tensor2D = Tensor<2>;  // (Row, Col)
 using Tensor3D = Tensor<3>;  // (Batch, Sequence, Feature)
 using Tensor4D = Tensor<4>;
-
-using DistributedTensor1D = DistributedTensor<1>;
-using DistributedTensor2D = DistributedTensor<2>;  // (Row, Col)
-using DistributedTensor3D = DistributedTensor<3>;  // (Batch, Sequence, Feature)
-using DistributedTensor4D = DistributedTensor<4>;
 }  // namespace dllm

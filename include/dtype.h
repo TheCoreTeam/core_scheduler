@@ -4,6 +4,20 @@
 namespace dllm {
 enum Dtype { R_64F, R_32F, R_16F, R_16BF };
 
+inline std::size_t toByte(Dtype dtype) {
+  switch (dtype) {
+    case R_64F:
+      return 8;
+    case R_32F:
+      return 4;
+    case R_16F:
+    case R_16BF:
+      return 2;
+    default:
+      return 0;
+  }
+}
+
 template <typename T>
 constexpr Dtype toDtype() {
   if constexpr (std::is_same_v<T, double>) {

@@ -1,4 +1,4 @@
-#include "matmul.h"
+#include "compute/matmul.h"
 
 #include "logger.h"
 

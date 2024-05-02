@@ -4,7 +4,7 @@
 
 #include <Eigen/Dense>
 
-#include "fc.h"
+#include "compute/fc.h"
 #include "logger.h"
 
 class FcTestFixture : public ::testing::Test {

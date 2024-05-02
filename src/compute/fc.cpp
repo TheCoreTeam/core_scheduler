@@ -1,9 +1,9 @@
-#include "fc.h"
+#include "compute/fc.h"
 
 #include <spdlog/spdlog.h>
 
+#include "compute/matmul.h"
 #include "logger.h"
-#include "matmul.h"
 
 namespace dllm {
 Task FcNoBias::forward(const std::shared_ptr<Tensor3D> &y,
