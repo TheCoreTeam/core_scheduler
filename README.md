@@ -5,8 +5,8 @@
 ```bash
 conda create -n dllm
 conda activate dllm
-conda install cuda-toolkit -c nvidia
-conda install gcc gxx openmpi -c conda-forge
+conda install cuda-toolkit nccl -c nvidia
+conda install gcc gxx mpich -c conda-forge
 ```
 
 ```bash
