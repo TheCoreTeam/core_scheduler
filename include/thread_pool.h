@@ -21,6 +21,6 @@ struct ThreadPool {
   std::mutex queueMutex;
   std::condition_variable cv;
   std::mutex cvMutex;
-  std::atomic<bool> shutDown;
+  std::atomic<bool> shutDown{false};
 };
 }  // namespace dllm
