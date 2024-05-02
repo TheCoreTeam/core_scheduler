@@ -1,5 +1,6 @@
 add_library(dllm SHARED
         logger.cpp
+        thread_pool.cpp
         tensor.cpp
         matmul.cpp
         fc.cpp

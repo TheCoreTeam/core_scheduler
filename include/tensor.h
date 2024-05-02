@@ -3,6 +3,7 @@
 #include <nccl.h>
 
 #include <cute/layout.hpp>
+#include <future>
 #include <tuple>
 #include <vector>
 
@@ -46,10 +47,17 @@ struct Tensor {
   Layout layout;
   Dtype dtype;
   DeviceType deviceType;
+  std::future<void> future;
+
+  void waitFutureIfValid() const {
+    if (future.valid()) {
+      future.wait();
+    }
+  }
 };
 
 template <int N>
-struct DistributedTensor : Tensor<N> {
+struct DistributedTensor : public Tensor<N> {
  private:
   using Base = Tensor<N>;
   using Coord = typename repeat_type<int, N, cute::Coord>::type;
@@ -57,10 +65,6 @@ struct DistributedTensor : Tensor<N> {
  public:
   Coord localCoord;
   Base::Layout localLayout;
-  MPI_Comm commTpMpi;
-  ncclComm_t commTpNccl;
-  int rank;
-  int localRank;
 };
 
 using Tensor1D = Tensor<1>;

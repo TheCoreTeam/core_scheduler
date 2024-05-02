@@ -33,6 +33,9 @@ void FcNoBias::forward(cublasHandle_t handle, const Tensor3D &y,
               cute::stride<decltype(x.layout)::rank - 2>(x.layout)),
           cute::layout<decltype(x.layout)::rank - 1>(x.layout)),
       x.dtype, x.deviceType};
+  y.waitFutureIfValid();
+  x.waitFutureIfValid();
+  w.waitFutureIfValid();
   RowMajorNTMatmulNoBias(handle, xView, w, yView, computeType);
 }
 
@@ -66,6 +69,9 @@ void FcNoBias::backwardW(cublasHandle_t handle, const Tensor2D &dw,
               cute::stride<decltype(x.layout)::rank - 2>(x.layout)),
           cute::layout<decltype(x.layout)::rank - 1>(x.layout)),
       x.dtype, x.deviceType};
+  dw.waitFutureIfValid();
+  dy.waitFutureIfValid();
+  x.waitFutureIfValid();
   RowMajorTNMatmulNoBias(handle, dyView, xView, dw, computeType);
 }
 
@@ -100,6 +106,9 @@ void FcNoBias::backwardX(cublasHandle_t handle, const Tensor3D &dx,
               cute::stride<decltype(dx.layout)::rank - 2>(dx.layout)),
           cute::layout<decltype(dx.layout)::rank - 1>(dx.layout)),
       dx.dtype, dx.deviceType};
+  dx.waitFutureIfValid();
+  dy.waitFutureIfValid();
+  w.waitFutureIfValid();
   RowMajorNNMatmulNoBias(handle, dyView, w, dxView, computeType);
 }
 }  // namespace dllm
