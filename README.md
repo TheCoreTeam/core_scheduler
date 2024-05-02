@@ -9,6 +9,9 @@ conda install cuda-toolkit -c nvidia
 conda install gcc=13 gxx=13 mpich nccl -c conda-forge
 ```
 
+For Ubuntu 20.04 users, you may need to use system packages:
+
+
 ```bash
 git clone git@github.com:TheCoreTeam/DLLM.cpp.git
 cd DLLM.cpp
