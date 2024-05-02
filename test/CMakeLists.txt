@@ -17,5 +17,5 @@ target_compile_options(dllm_tests PRIVATE
 )
 
 target_compile_options(dllm_tests PRIVATE
-        $<$<CONFIG:Debug>:-O1>
+        $<$<CONFIG:Debug>:-O0>
 )

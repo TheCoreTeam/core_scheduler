@@ -17,7 +17,7 @@ target_compile_options(dllm PRIVATE
 )
 
 target_compile_options(dllm PRIVATE
-        $<$<CONFIG:Debug>:-O1>
+        $<$<CONFIG:Debug>:-O0>
 )
 
 target_include_directories(dllm PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/../include")
