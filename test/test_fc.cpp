@@ -10,9 +10,9 @@ class FcTestFixture : public ::testing::Test {
  protected:
   cublasHandle_t handle{nullptr};
 
-  void SetUp() override { cublasCreate(&handle); }
+  void SetUp() override { cublasCreate_v2(&handle); }
 
-  void TearDown() override { cublasDestroy(handle); }
+  void TearDown() override { cublasDestroy_v2(handle); }
 };
 
 namespace {
