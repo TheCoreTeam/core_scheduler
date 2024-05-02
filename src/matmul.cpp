@@ -41,7 +41,7 @@ cublasStatus_t cublasGemmExOneAlpheZeroBeta(
 }  // namespace
 
 void RowMajorNNMatmulNoBias(cublasHandle_t handle, const Tensor2D &A,
-                            const Tensor2D &B, const Tensor2D &C,
+                            const Tensor2D &B, Tensor2D &C,
                             cublasComputeType_t computeType) {
   // C (row) = A (row) * B (row) -> C (col) = B (col) @ A (col)
   const auto m = C.layout.shape<1>();
@@ -52,13 +52,14 @@ void RowMajorNNMatmulNoBias(cublasHandle_t handle, const Tensor2D &A,
   const auto ldc = C.layout.stride<0>();
 
   CHECK_CUBLAS(cublasGemmExOneAlpheZeroBeta(
-      handle, CUBLAS_OP_N, CUBLAS_OP_N, m, n, k, B.data,
-      toCudaDataType(B.dtype), ldb, A.data, toCudaDataType(A.dtype), lda,
-      C.data, toCudaDataType(C.dtype), ldc, computeType, CUBLAS_GEMM_DEFAULT));
+      handle, CUBLAS_OP_N, CUBLAS_OP_N, m, n, k, B.data(),
+      toCudaDataType(B.dtype), ldb, A.data(), toCudaDataType(A.dtype), lda,
+      C.data(), toCudaDataType(C.dtype), ldc, computeType,
+      CUBLAS_GEMM_DEFAULT));
 }
 
 void RowMajorNTMatmulNoBias(cublasHandle_t handle, const Tensor2D &A,
-                            const Tensor2D &B, const Tensor2D &C,
+                            const Tensor2D &B, Tensor2D &C,
                             cublasComputeType_t computeType) {
   // C (row) = A (row) * B^T (row) -> C (col) = B^T (col) @ A (col)
   const auto m = C.layout.shape<1>();
@@ -69,13 +70,14 @@ void RowMajorNTMatmulNoBias(cublasHandle_t handle, const Tensor2D &A,
   const auto ldc = C.layout.stride<0>();
 
   CHECK_CUBLAS(cublasGemmExOneAlpheZeroBeta(
-      handle, CUBLAS_OP_T, CUBLAS_OP_N, m, n, k, B.data,
-      toCudaDataType(B.dtype), ldb, A.data, toCudaDataType(A.dtype), lda,
-      C.data, toCudaDataType(C.dtype), ldc, computeType, CUBLAS_GEMM_DEFAULT));
+      handle, CUBLAS_OP_T, CUBLAS_OP_N, m, n, k, B.data(),
+      toCudaDataType(B.dtype), ldb, A.data(), toCudaDataType(A.dtype), lda,
+      C.data(), toCudaDataType(C.dtype), ldc, computeType,
+      CUBLAS_GEMM_DEFAULT));
 }
 
 void RowMajorTNMatmulNoBias(cublasHandle_t handle, const Tensor2D &A,
-                            const Tensor2D &B, const Tensor2D &C,
+                            const Tensor2D &B, Tensor2D &C,
                             cublasComputeType_t computeType) {
   // C (row) = A^T (row) * B (row) -> C (col) = B (col) @ A^T (col)
   const auto m = C.layout.shape<1>();
@@ -86,8 +88,9 @@ void RowMajorTNMatmulNoBias(cublasHandle_t handle, const Tensor2D &A,
   const auto ldc = C.layout.stride<0>();
 
   CHECK_CUBLAS(cublasGemmExOneAlpheZeroBeta(
-      handle, CUBLAS_OP_N, CUBLAS_OP_T, m, n, k, B.data,
-      toCudaDataType(B.dtype), ldb, A.data, toCudaDataType(A.dtype), lda,
-      C.data, toCudaDataType(C.dtype), ldc, computeType, CUBLAS_GEMM_DEFAULT));
+      handle, CUBLAS_OP_N, CUBLAS_OP_T, m, n, k, B.data(),
+      toCudaDataType(B.dtype), ldb, A.data(), toCudaDataType(A.dtype), lda,
+      C.data(), toCudaDataType(C.dtype), ldc, computeType,
+      CUBLAS_GEMM_DEFAULT));
 }
 }  // namespace dllm

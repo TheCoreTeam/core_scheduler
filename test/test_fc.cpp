@@ -9,7 +9,7 @@
 
 class FcTestFixture : public ::testing::Test {
  protected:
-  dllm::Context context;
+  dllm::Context context{};
 
   void SetUp() override {
     CHECK_CUDART(
@@ -51,12 +51,12 @@ void TestForwardT(const dllm::Context &context) {
   cudaMalloc(&ptrW, sizeof(DataTypeInput) * cute::size(layoutW));
   cudaMalloc(&ptrY, sizeof(DataTypeOutput) * cute::size(layoutY));
 
-  dllm::Tensor3D tensorX{ptrX, layoutX, dllm::toDtype<DataTypeInput>(),
-                         dllm::CUDA};
-  dllm::Tensor2D tensorW{ptrW, layoutW, dllm::toDtype<DataTypeInput>(),
-                         dllm::CUDA};
-  dllm::Tensor3D tensorY{ptrY, layoutY, dllm::toDtype<DataTypeOutput>(),
-                         dllm::CUDA};
+  auto tensorX = std::make_shared<dllm::Tensor3D>(
+      ptrX, layoutX, dllm::toDtype<DataTypeInput>(), dllm::CUDA);
+  auto tensorW = std::make_shared<dllm::Tensor2D>(
+      ptrW, layoutW, dllm::toDtype<DataTypeInput>(), dllm::CUDA);
+  auto tensorY = std::make_shared<dllm::Tensor3D>(
+      ptrY, layoutY, dllm::toDtype<DataTypeOutput>(), dllm::CUDA);
 
   Eigen::Matrix<DataTypeInput, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>
       hostX(m * s, k), hostW(n, k);
@@ -117,12 +117,12 @@ void TestBackwardWT(const dllm::Context &context) {
   cudaMalloc(&ptrDW, sizeof(DataTypeOutput) * cute::size(layoutDW));
   cudaMalloc(&ptrDY, sizeof(DataTypeInput) * cute::size(layoutDY));
 
-  dllm::Tensor3D tensorX{ptrX, layoutX, dllm::toDtype<DataTypeInput>(),
-                         dllm::CUDA};
-  dllm::Tensor2D tensorDW{ptrDW, layoutDW, dllm::toDtype<DataTypeOutput>(),
-                          dllm::CUDA};
-  dllm::Tensor3D tensorDY{ptrDY, layoutDY, dllm::toDtype<DataTypeInput>(),
-                          dllm::CUDA};
+  auto tensorX = std::make_shared<dllm::Tensor3D>(
+      ptrX, layoutX, dllm::toDtype<DataTypeInput>(), dllm::CUDA);
+  auto tensorDW = std::make_shared<dllm::Tensor2D>(
+      ptrDW, layoutDW, dllm::toDtype<DataTypeOutput>(), dllm::CUDA);
+  auto tensorDY = std::make_shared<dllm::Tensor3D>(
+      ptrDY, layoutDY, dllm::toDtype<DataTypeInput>(), dllm::CUDA);
 
   Eigen::Matrix<DataTypeInput, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>
       hostX(m * s, k), hostDY(m * s, n);
@@ -184,12 +184,12 @@ void TestBackwardXT(const dllm::Context &context) {
   cudaMalloc(&ptrDY, sizeof(DataTypeInput) * cute::size(layoutDY));
   cudaMalloc(&ptrW, sizeof(DataTypeInput) * cute::size(layoutW));
 
-  dllm::Tensor3D tensorDX{ptrDX, layoutDX, dllm::toDtype<DataTypeOutput>(),
-                          dllm::CUDA};
-  dllm::Tensor3D tensorDY{ptrDY, layoutDY, dllm::toDtype<DataTypeInput>(),
-                          dllm::CUDA};
-  dllm::Tensor2D tensorW{ptrW, layoutW, dllm::toDtype<DataTypeInput>(),
-                         dllm::CUDA};
+  auto tensorDX = std::make_shared<dllm::Tensor3D>(
+      ptrDX, layoutDX, dllm::toDtype<DataTypeOutput>(), dllm::CUDA);
+  auto tensorDY = std::make_shared<dllm::Tensor3D>(
+      ptrDY, layoutDY, dllm::toDtype<DataTypeInput>(), dllm::CUDA);
+  auto tensorW = std::make_shared<dllm::Tensor2D>(
+      ptrW, layoutW, dllm::toDtype<DataTypeInput>(), dllm::CUDA);
 
   Eigen::Matrix<DataTypeInput, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>
       hostDY(m * s, n), hostW(n, k);

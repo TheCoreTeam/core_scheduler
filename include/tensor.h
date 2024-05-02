@@ -4,6 +4,7 @@
 
 #include <cute/layout.hpp>
 #include <future>
+#include <memory>
 #include <tuple>
 #include <vector>
 
@@ -44,17 +45,32 @@ struct Tensor {
   using Stride = typename repeat_last_1_type<int, N - 1, cute::Stride>::type;
   using Layout = cute::Layout<Shape, Stride>;
 
-  void *data;
-  Layout layout;
-  Dtype dtype;
-  DeviceType deviceType;
-  std::shared_ptr<Future> future;
+  Tensor(const void *data, Layout layout, Dtype dtype, DeviceType deviceType,
+         std::shared_ptr<Future> future = {})
+      : data_{data},
+        layout{layout},
+        dtype{dtype},
+        deviceType{deviceType},
+        future{std::move(future)} {}
 
   void waitFutureIfValid() const {
     if (future != nullptr && future->valid()) {
       future->wait();
     }
   }
+
+  void *data() { return const_cast<void *>(data_); }
+
+  const void *data() const { return data_; }
+
+ public:
+  Layout layout;
+  Dtype dtype;
+  DeviceType deviceType;
+  std::shared_ptr<Future> future;
+
+ private:
+  const void *data_;
 };
 
 template <int N>
