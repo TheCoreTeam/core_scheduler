@@ -75,6 +75,7 @@ ThreadPool::~ThreadPool() {
     while (!t.joinable()) {
       cv.notify_all();
     }
+    t.join();
   }
 }
 
