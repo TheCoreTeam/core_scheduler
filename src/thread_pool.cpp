@@ -21,7 +21,7 @@ void setThreadAffinity(std::thread &th, int coreId) {
   }
 }
 
-void threadTask(const int localRank, std::queue<ThreadPool::Task> *taskQueue,
+void threadTask(const int localRank, std::queue<Task> *taskQueue,
                 std::mutex *queueMutex, std::condition_variable *cv,
                 std::mutex *cvMutex, std::atomic<bool> *shutDown) {
   Context context;
@@ -31,7 +31,7 @@ void threadTask(const int localRank, std::queue<ThreadPool::Task> *taskQueue,
   CHECK_CUBLAS(cublasCreate_v2(&context.cublasHandle));
   CHECK_CUBLAS(cublasSetStream_v2(context.cublasHandle, context.cudaStream));
   while (!shutDown->load()) {
-    ThreadPool::Task fn;
+    Task fn;
     std::unique_lock lock{*queueMutex};
     if (!taskQueue->empty()) {
       fn = std::move(taskQueue->back());
@@ -46,6 +46,8 @@ void threadTask(const int localRank, std::queue<ThreadPool::Task> *taskQueue,
                [&] { return shutDown->load() || !taskQueue->empty(); });
     }
   }
+  CHECK_CUBLAS(cublasDestroy_v2(context.cublasHandle));
+  CHECK_CUDART(cudaStreamDestroy(context.cudaStream));
 }
 }  // namespace
 
@@ -66,7 +68,7 @@ ThreadPool::ThreadPool(int localRank, int threadNum,
   }
 }
 
-ThreadPool::Future ThreadPool::submit(ThreadPool::Task task) {
+Future ThreadPool::submit(Task task) {
   auto future = task.get_future();
   std::unique_lock lock{queueMutex};
   taskQueue.push(std::move(task));

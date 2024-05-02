@@ -9,6 +9,7 @@
 
 #include "device.h"
 #include "dtype.h"
+#include "task.h"
 
 namespace dllm {
 
@@ -47,11 +48,11 @@ struct Tensor {
   Layout layout;
   Dtype dtype;
   DeviceType deviceType;
-  std::future<void> future;
+  std::shared_ptr<Future> future;
 
   void waitFutureIfValid() const {
-    if (future.valid()) {
-      future.wait();
+    if (future != nullptr && future->valid()) {
+      future->wait();
     }
   }
 };

@@ -5,15 +5,12 @@
 #include <mutex>
 #include <queue>
 #include <thread>
-
+#include "task.h"
 #include "context.h"
 
 namespace dllm {
 struct ThreadPool {
-  using Task = std::packaged_task<void(Context *)>;
-  using Future = std::future<void>;
-
-  ThreadPool(int localRank, int threadNum, const std::vector<int> &bindingMap);
+  ThreadPool(int localRank, int threadNum, const std::vector<int> &bindingMap = {});
 
   ~ThreadPool();
 

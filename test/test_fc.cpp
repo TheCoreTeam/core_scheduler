@@ -5,14 +5,23 @@
 #include <Eigen/Dense>
 
 #include "fc.h"
+#include "logger.h"
 
 class FcTestFixture : public ::testing::Test {
  protected:
-  cublasHandle_t handle{nullptr};
+  dllm::Context context;
 
-  void SetUp() override { cublasCreate_v2(&handle); }
+  void SetUp() override {
+    CHECK_CUDART(
+        cudaStreamCreateWithFlags(&context.cudaStream, cudaStreamNonBlocking));
+    CHECK_CUBLAS(cublasCreate_v2(&context.cublasHandle));
+    CHECK_CUBLAS(cublasSetStream_v2(context.cublasHandle, context.cudaStream));
+  }
 
-  void TearDown() override { cublasDestroy_v2(handle); }
+  void TearDown() override {
+    CHECK_CUBLAS(cublasDestroy_v2(context.cublasHandle));
+    CHECK_CUDART(cudaStreamDestroy(context.cudaStream));
+  }
 };
 
 namespace {
@@ -28,7 +37,7 @@ cublasComputeType_t toCublasComputeType() {
 
 namespace {
 template <typename DataTypeInput, typename DataTypeOutput, typename ComputeType>
-void TestForwardT(cublasHandle_t handle) {
+void TestForwardT(const dllm::Context &context) {
   const int m = 128, n = 2048, k = 512, s = 3;
   auto shapeX = cute::make_shape(m, s, k);
   auto layoutX = cute::make_layout(shapeX, cute::GenRowMajor{});
@@ -66,8 +75,9 @@ void TestForwardT(cublasHandle_t handle) {
   cudaMemcpy(ptrW, hostW.data(), sizeof(DataTypeInput) * cute::size(layoutW),
              cudaMemcpyHostToDevice);
 
-  dllm::FcNoBias::forward(handle, tensorY, tensorX, tensorW,
-                          toCublasComputeType<ComputeType>());
+  auto task = dllm::FcNoBias::forward(tensorY, tensorX, tensorW,
+                                      toCublasComputeType<ComputeType>());
+  task(&context);
 
   cudaMemcpy(hostY.data(), ptrY, sizeof(DataTypeOutput) * cute::size(layoutY),
              cudaMemcpyDeviceToHost);
@@ -85,15 +95,15 @@ void TestForwardT(cublasHandle_t handle) {
 }  // namespace
 
 TEST_F(FcTestFixture, TestForwardF32F32F32) {
-  TestForwardT<float, float, float>(handle);
+  TestForwardT<float, float, float>(context);
 }
 TEST_F(FcTestFixture, TestForwardF64F64F64) {
-  TestForwardT<double, double, double>(handle);
+  TestForwardT<double, double, double>(context);
 }
 
 namespace {
 template <typename DataTypeInput, typename DataTypeOutput, typename ComputeType>
-void TestBackwardWT(cublasHandle_t handle) {
+void TestBackwardWT(const dllm::Context &context) {
   const int m = 128, n = 2048, k = 512, s = 3;
   auto shapeX = cute::make_shape(m, s, k);
   auto layoutX = cute::make_layout(shapeX, cute::GenRowMajor{});
@@ -131,8 +141,9 @@ void TestBackwardWT(cublasHandle_t handle) {
   cudaMemcpy(ptrDY, hostDY.data(), sizeof(DataTypeInput) * cute::size(layoutDY),
              cudaMemcpyHostToDevice);
 
-  dllm::FcNoBias::backwardW(handle, tensorDW, tensorDY, tensorX,
-                            toCublasComputeType<ComputeType>());
+  auto task = dllm::FcNoBias::backwardW(tensorDW, tensorDY, tensorX,
+                                        toCublasComputeType<ComputeType>());
+  task(&context);
 
   cudaMemcpy(hostDW.data(), ptrDW,
              sizeof(DataTypeOutput) * cute::size(layoutDW),
@@ -151,15 +162,15 @@ void TestBackwardWT(cublasHandle_t handle) {
 }  // namespace
 
 TEST_F(FcTestFixture, TestBackwardWF32F32F32) {
-  TestBackwardWT<float, float, float>(handle);
+  TestBackwardWT<float, float, float>(context);
 }
 TEST_F(FcTestFixture, TestBackwardWF64F64F64) {
-  TestBackwardWT<double, double, double>(handle);
+  TestBackwardWT<double, double, double>(context);
 }
 
 namespace {
 template <typename DataTypeInput, typename DataTypeOutput, typename ComputeType>
-void TestBackwardXT(cublasHandle_t handle) {
+void TestBackwardXT(const dllm::Context &context) {
   const int m = 128, n = 2048, k = 512, s = 3;
   auto shapeDX = cute::make_shape(m, s, k);
   auto layoutDX = cute::make_layout(shapeDX, cute::GenRowMajor{});
@@ -197,8 +208,9 @@ void TestBackwardXT(cublasHandle_t handle) {
   cudaMemcpy(ptrW, hostW.data(), sizeof(DataTypeInput) * cute::size(layoutW),
              cudaMemcpyHostToDevice);
 
-  dllm::FcNoBias::backwardX(handle, tensorDX, tensorDY, tensorW,
-                            toCublasComputeType<ComputeType>());
+  auto task = dllm::FcNoBias::backwardX(tensorDX, tensorDY, tensorW,
+                                        toCublasComputeType<ComputeType>());
+  task(&context);
 
   cudaMemcpy(hostDX.data(), ptrDX,
              sizeof(DataTypeOutput) * cute::size(layoutDX),
@@ -217,8 +229,8 @@ void TestBackwardXT(cublasHandle_t handle) {
 }  // namespace
 
 TEST_F(FcTestFixture, TestBackwardXF32F32F32) {
-  TestBackwardXT<float, float, float>(handle);
+  TestBackwardXT<float, float, float>(context);
 }
 TEST_F(FcTestFixture, TestBackwardXF64F64F64) {
-  TestBackwardXT<double, double, double>(handle);
+  TestBackwardXT<double, double, double>(context);
 }
