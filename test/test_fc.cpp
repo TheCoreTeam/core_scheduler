@@ -75,8 +75,8 @@ void TestForwardT(const dllm::Context &context) {
   cudaMemcpy(ptrW, hostW.data(), sizeof(DataTypeInput) * cute::size(layoutW),
              cudaMemcpyHostToDevice);
 
-  auto task = dllm::FcNoBias::forward(tensorY, tensorX, tensorW,
-                                      toCublasComputeType<ComputeType>());
+  auto task = dllm::compute::FcNoBias::forward(
+      tensorY, tensorX, tensorW, toCublasComputeType<ComputeType>());
   task(&context);
 
   cudaMemcpy(hostY.data(), ptrY, sizeof(DataTypeOutput) * cute::size(layoutY),
@@ -141,8 +141,8 @@ void TestBackwardWT(const dllm::Context &context) {
   cudaMemcpy(ptrDY, hostDY.data(), sizeof(DataTypeInput) * cute::size(layoutDY),
              cudaMemcpyHostToDevice);
 
-  auto task = dllm::FcNoBias::backwardW(tensorDW, tensorDY, tensorX,
-                                        toCublasComputeType<ComputeType>());
+  auto task = dllm::compute::FcNoBias::backwardW(
+      tensorDW, tensorDY, tensorX, toCublasComputeType<ComputeType>());
   task(&context);
 
   cudaMemcpy(hostDW.data(), ptrDW,
@@ -208,8 +208,8 @@ void TestBackwardXT(const dllm::Context &context) {
   cudaMemcpy(ptrW, hostW.data(), sizeof(DataTypeInput) * cute::size(layoutW),
              cudaMemcpyHostToDevice);
 
-  auto task = dllm::FcNoBias::backwardX(tensorDX, tensorDY, tensorW,
-                                        toCublasComputeType<ComputeType>());
+  auto task = dllm::compute::FcNoBias::backwardX(
+      tensorDX, tensorDY, tensorW, toCublasComputeType<ComputeType>());
   task(&context);
 
   cudaMemcpy(hostDX.data(), ptrDX,

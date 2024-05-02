@@ -5,11 +5,11 @@
 #include "compute/matmul.h"
 #include "logger.h"
 
-namespace dllm {
-Task FcNoBias::forward(const std::shared_ptr<Tensor3D> &y,
-                       const std::shared_ptr<const Tensor3D> &x,
-                       const std::shared_ptr<const Tensor2D> &w,
-                       const cublasComputeType_t computeType) {
+namespace dllm::compute::FcNoBias {
+Task forward(const std::shared_ptr<Tensor3D> &y,
+             const std::shared_ptr<const Tensor3D> &x,
+             const std::shared_ptr<const Tensor2D> &w,
+             const cublasComputeType_t computeType) {
   // y: Batch x Sequence x Feature -> (Batch * Sequence) x Feature
   if (x->layout.stride<0>() != x->layout.shape<1>() * x->layout.stride<1>()) {
     SPDLOG_LOGGER_CRITICAL(&logger(), "Input data is not contiguous");
@@ -45,10 +45,10 @@ Task FcNoBias::forward(const std::shared_ptr<Tensor3D> &y,
   }};
 }
 
-Task FcNoBias::backwardW(const std::shared_ptr<Tensor2D> &dw,
-                         const std::shared_ptr<const Tensor3D> &dy,
-                         const std::shared_ptr<const Tensor3D> &x,
-                         cublasComputeType_t computeType) {
+Task backwardW(const std::shared_ptr<Tensor2D> &dw,
+               const std::shared_ptr<const Tensor3D> &dy,
+               const std::shared_ptr<const Tensor3D> &x,
+               cublasComputeType_t computeType) {
   // dx, x: M * K
   // dy: M * N
   // dw = dy^T @ x
@@ -88,10 +88,10 @@ Task FcNoBias::backwardW(const std::shared_ptr<Tensor2D> &dw,
   }};
 }
 
-Task FcNoBias::backwardX(const std::shared_ptr<Tensor3D> &dx,
-                         const std::shared_ptr<const Tensor3D> &dy,
-                         const std::shared_ptr<const Tensor2D> &w,
-                         cublasComputeType_t computeType) {
+Task backwardX(const std::shared_ptr<Tensor3D> &dx,
+               const std::shared_ptr<const Tensor3D> &dy,
+               const std::shared_ptr<const Tensor2D> &w,
+               cublasComputeType_t computeType) {
   // dw, w: N * K
   // dy: M * N
   // dx = dy @ w
@@ -130,4 +130,4 @@ Task FcNoBias::backwardX(const std::shared_ptr<Tensor3D> &dx,
     CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
   }};
 }
-}  // namespace dllm
+}  // namespace dllm::compute::FcNoBias

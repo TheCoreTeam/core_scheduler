@@ -2,7 +2,7 @@
 
 #include "logger.h"
 
-namespace dllm {
+namespace dllm::compute {
 namespace {
 cublasStatus_t cublasGemmExOneAlpheZeroBeta(
     cublasHandle_t handle, cublasOperation_t transa, cublasOperation_t transb,
@@ -93,4 +93,4 @@ void RowMajorTNMatmulNoBias(cublasHandle_t handle, const Tensor2D &A,
       C.data(), toCudaDataType(C.dtype), ldc, computeType,
       CUBLAS_GEMM_DEFAULT));
 }
-}  // namespace dllm
+}  // namespace dllm::compute

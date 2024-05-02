@@ -3,7 +3,7 @@
 
 #include "tensor.h"
 
-namespace dllm {
+namespace dllm::compute {
 // C = A @ B
 void RowMajorNNMatmulNoBias(cublasHandle_t handle, const Tensor2D &A,
                             const Tensor2D &B, Tensor2D &C,
@@ -18,4 +18,4 @@ void RowMajorNTMatmulNoBias(cublasHandle_t handle, const Tensor2D &A,
 void RowMajorTNMatmulNoBias(cublasHandle_t handle, const Tensor2D &A,
                             const Tensor2D &B, Tensor2D &C,
                             cublasComputeType_t computeType);
-}  // namespace dllm
+}  // namespace dllm::compute
