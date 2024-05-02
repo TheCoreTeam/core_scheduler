@@ -19,3 +19,26 @@ target_compile_options(dllm_tests PRIVATE
 target_compile_options(dllm_tests PRIVATE
         $<$<CONFIG:Debug>:-O0>
 )
+
+add_executable(dllm_communication_tests
+        main_communication.cpp
+        test_all_reduce.cpp
+)
+
+target_link_libraries(dllm_communication_tests PRIVATE
+        dllm
+        spdlog::spdlog
+        CUDA::cudart
+        CUDA::cublas
+        Eigen3::Eigen
+        GTest::gtest
+        MPI::MPI_CXX
+)
+
+target_compile_options(dllm_communication_tests PRIVATE
+        $<$<CONFIG:Release>:-O3>
+)
+
+target_compile_options(dllm_communication_tests PRIVATE
+        $<$<CONFIG:Debug>:-O1>
+)

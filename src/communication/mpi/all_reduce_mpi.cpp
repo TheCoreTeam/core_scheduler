@@ -58,7 +58,7 @@ Task AllReduce<MPI>::runInplace(const std::shared_ptr<DTensor1D<MPI>> &tensor,
   return Task{[=](const Context *context) {
     // Be careful: possible deadlock
     tensor->waitFutureIfValid();
-    CHECK_MPI(MPI_Allreduce(tensor->data(), tensor->data(),
+    CHECK_MPI(MPI_Allreduce(MPI_IN_PLACE, tensor->data(),
                             cute::size(tensor->layout), datatype,
                             toMpiOp(operation), tensor->comm));
   }};

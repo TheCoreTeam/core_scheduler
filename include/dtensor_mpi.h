@@ -6,8 +6,12 @@
 namespace dllm {
 template <int N>
 struct DTensor<N, communication::MPI> : public Tensor<N> {
-  int rank, lrank;
+  using Base = Tensor<N>;
+  int rank;
   MPI_Comm comm;
+
+  DTensor(int rank, MPI_Comm comm, const Base &tensor)
+      : Base{tensor}, rank{rank}, comm{comm} {}
 };
 
 namespace communication {
