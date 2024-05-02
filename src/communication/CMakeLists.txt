@@ -1,4 +1,5 @@
 set(DLLM_COMMUNICATION_SRCS "")
 add_subdirectory(mpi)
+add_subdirectory(nccl)
 
 set(DLLM_COMMUNICATION_SRCS ${DLLM_COMMUNICATION_SRCS} PARENT_SCOPE)
