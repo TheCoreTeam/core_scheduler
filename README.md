@@ -26,3 +26,8 @@ cmake ..
 make -j dllm_tests
 ./test/dllm_tests
 ```
+
+## Feature:
+1. Task
+2. Thread pool
+3. Memory release pool
