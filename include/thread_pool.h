@@ -14,7 +14,7 @@ struct ThreadPool {
 
   ~ThreadPool();
 
-  Future submit(Task task);
+  std::shared_ptr<Future> submit(Task task);
 
   std::vector<std::thread> threadVector;
   std::queue<Task> taskQueue;

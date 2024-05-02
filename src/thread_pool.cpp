@@ -76,12 +76,12 @@ ThreadPool::~ThreadPool() {
   }
 }
 
-Future ThreadPool::submit(Task task) {
+std::shared_ptr<Future> ThreadPool::submit(Task task) {
   auto future = task.get_future();
   std::unique_lock lock{queueMutex};
   taskQueue.push(std::move(task));
   lock.unlock();
   cv.notify_one();
-  return future;
+  return std::make_shared<Future>(std::move(future));
 }
 }  // namespace dllm
