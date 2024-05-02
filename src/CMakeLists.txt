@@ -12,6 +12,14 @@ add_library(dllm SHARED
         ${DLLM_COMMUNICATION_SRCS}
 )
 
+target_compile_options(dllm PRIVATE
+        $<$<CONFIG:Release>:-O3>
+)
+
+target_compile_options(dllm PRIVATE
+        $<$<CONFIG:Debug>:-O0>
+)
+
 target_include_directories(dllm PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/../include")
 
 target_link_libraries(dllm PRIVATE CUDA::cudart CUDA::cublas MPI::MPI_CXX nccl)
