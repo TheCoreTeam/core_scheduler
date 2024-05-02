@@ -4,6 +4,7 @@
 
 ```bash
 conda create -n dllm
+conda activate dllm
 conda install cuda-toolkit -c nvidia
 conda install gcc gxx openmpi -c conda-forge
 ```
