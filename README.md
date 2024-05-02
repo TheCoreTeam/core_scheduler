@@ -2,7 +2,7 @@
 
 ## Usage
 
-conda packages:
+Conda packages:
 ```bash
 conda create -n dllm
 conda activate dllm
@@ -14,6 +14,7 @@ For Ubuntu 20.04 users, you may need to use the system packages:
 ```bash
 ```
 
+Run:
 ```bash
 git clone git@github.com:TheCoreTeam/DLLM.cpp.git
 cd DLLM.cpp
