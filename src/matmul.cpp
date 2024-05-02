@@ -1,5 +1,7 @@
 #include "matmul.h"
 
+#include "logger.h"
+
 namespace dllm {
 namespace {
 cublasStatus_t cublasGemmExOneAlpheZeroBeta(
@@ -49,10 +51,10 @@ void RowMajorNNMatmulNoBias(cublasHandle_t handle, const Tensor2D &A,
   const auto ldb = B.layout.stride<0>();
   const auto ldc = C.layout.stride<0>();
 
-  cublasGemmExOneAlpheZeroBeta(
-      handle, CUBLAS_OP_T, CUBLAS_OP_T, m, n, k, B.data,
+  CHECK_CUBLAS(cublasGemmExOneAlpheZeroBeta(
+      handle, CUBLAS_OP_N, CUBLAS_OP_N, m, n, k, B.data,
       toCudaDataType(B.dtype), ldb, A.data, toCudaDataType(A.dtype), lda,
-      C.data, toCudaDataType(C.dtype), ldc, computeType, CUBLAS_GEMM_DEFAULT);
+      C.data, toCudaDataType(C.dtype), ldc, computeType, CUBLAS_GEMM_DEFAULT));
 }
 
 void RowMajorNTMatmulNoBias(cublasHandle_t handle, const Tensor2D &A,
@@ -66,10 +68,10 @@ void RowMajorNTMatmulNoBias(cublasHandle_t handle, const Tensor2D &A,
   const auto ldb = B.layout.stride<0>();
   const auto ldc = C.layout.stride<0>();
 
-  cublasGemmExOneAlpheZeroBeta(
+  CHECK_CUBLAS(cublasGemmExOneAlpheZeroBeta(
       handle, CUBLAS_OP_T, CUBLAS_OP_N, m, n, k, B.data,
       toCudaDataType(B.dtype), ldb, A.data, toCudaDataType(A.dtype), lda,
-      C.data, toCudaDataType(C.dtype), ldc, computeType, CUBLAS_GEMM_DEFAULT);
+      C.data, toCudaDataType(C.dtype), ldc, computeType, CUBLAS_GEMM_DEFAULT));
 }
 
 void RowMajorTNMatmulNoBias(cublasHandle_t handle, const Tensor2D &A,
@@ -83,9 +85,9 @@ void RowMajorTNMatmulNoBias(cublasHandle_t handle, const Tensor2D &A,
   const auto ldb = B.layout.stride<0>();
   const auto ldc = C.layout.stride<0>();
 
-  cublasGemmExOneAlpheZeroBeta(
+  CHECK_CUBLAS(cublasGemmExOneAlpheZeroBeta(
       handle, CUBLAS_OP_N, CUBLAS_OP_T, m, n, k, B.data,
       toCudaDataType(B.dtype), ldb, A.data, toCudaDataType(A.dtype), lda,
-      C.data, toCudaDataType(C.dtype), ldc, computeType, CUBLAS_GEMM_DEFAULT);
+      C.data, toCudaDataType(C.dtype), ldc, computeType, CUBLAS_GEMM_DEFAULT));
 }
 }  // namespace dllm

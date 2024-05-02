@@ -21,8 +21,8 @@ void FcNoBias::forward(cublasHandle_t handle, const Tensor3D &y,
       cute::make_layout(
           cute::make_layout(
               cute::size(cute::take<0, decltype(y.layout)::rank - 1>(y.layout)),
-              cute::stride<1>(y.layout)),
-          cute::layout<2>(y.layout)),
+              cute::stride<decltype(x.layout)::rank - 2>(y.layout)),
+          cute::layout<decltype(y.layout)::rank - 1>(y.layout)),
       y.dtype, y.deviceType};
   // x: Batch x Sequence x Feature -> (Batch * Sequence) x Feature
   Tensor2D xView{
@@ -30,8 +30,8 @@ void FcNoBias::forward(cublasHandle_t handle, const Tensor3D &y,
       cute::make_layout(
           cute::make_layout(
               cute::size(cute::take<0, decltype(x.layout)::rank - 1>(x.layout)),
-              cute::stride<1>(x.layout)),
-          cute::layout<2>(x.layout)),
+              cute::stride<decltype(x.layout)::rank - 2>(x.layout)),
+          cute::layout<decltype(x.layout)::rank - 1>(x.layout)),
       x.dtype, x.deviceType};
   RowMajorNTMatmulNoBias(handle, xView, w, yView, computeType);
 }
@@ -52,18 +52,19 @@ void FcNoBias::backwardW(cublasHandle_t handle, const Tensor2D &dw,
       dy.data,
       cute::make_layout(
           cute::make_layout(
-              cute::size(cute::take<0, decltype(dy.layout)::rank>(dy.layout)),
-              cute::stride<1>(dy.layout)),
-          cute::layout<2>(dy.layout)),
+              cute::size(
+                  cute::take<0, decltype(dy.layout)::rank - 1>(dy.layout)),
+              cute::stride<decltype(dy.layout)::rank - 2>(dy.layout)),
+          cute::layout<decltype(dy.layout)::rank - 1>(dy.layout)),
       dy.dtype, dy.deviceType};
   // x: Batch x Sequence x Feature -> (Batch * Sequence) x Feature
   Tensor2D xView{
       x.data,
       cute::make_layout(
           cute::make_layout(
-              cute::size(cute::take<0, decltype(x.layout)::rank>(x.layout)),
-              cute::stride<1>(x.layout)),
-          cute::layout<2>(x.layout)),
+              cute::size(cute::take<0, decltype(x.layout)::rank - 1>(x.layout)),
+              cute::stride<decltype(x.layout)::rank - 2>(x.layout)),
+          cute::layout<decltype(x.layout)::rank - 1>(x.layout)),
       x.dtype, x.deviceType};
   RowMajorTNMatmulNoBias(handle, dyView, xView, dw, computeType);
 }
@@ -84,18 +85,20 @@ void FcNoBias::backwardX(cublasHandle_t handle, const Tensor3D &dx,
       dy.data,
       cute::make_layout(
           cute::make_layout(
-              cute::size(cute::take<0, decltype(dy.layout)::rank>(dy.layout)),
-              cute::stride<1>(dy.layout)),
-          cute::layout<2>(dy.layout)),
+              cute::size(
+                  cute::take<0, decltype(dy.layout)::rank - 1>(dy.layout)),
+              cute::stride<decltype(dy.layout)::rank - 2>(dy.layout)),
+          cute::layout<decltype(dy.layout)::rank - 1>(dy.layout)),
       dy.dtype, dy.deviceType};
   // x: Batch x Sequence x Feature -> (Batch * Sequence) x Feature
   Tensor2D dxView{
       dx.data,
       cute::make_layout(
           cute::make_layout(
-              cute::size(cute::take<0, decltype(dx.layout)::rank>(dx.layout)),
-              cute::stride<1>(dx.layout)),
-          cute::layout<2>(dx.layout)),
+              cute::size(
+                  cute::take<0, decltype(dx.layout)::rank - 1>(dx.layout)),
+              cute::stride<decltype(dx.layout)::rank - 2>(dx.layout)),
+          cute::layout<decltype(dx.layout)::rank - 1>(dx.layout)),
       dx.dtype, dx.deviceType};
   RowMajorNNMatmulNoBias(handle, dyView, w, dxView, computeType);
 }
