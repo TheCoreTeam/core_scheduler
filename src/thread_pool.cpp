@@ -72,7 +72,9 @@ ThreadPool::~ThreadPool() {
   shutDown = true;
   cv.notify_all();
   for (auto &t : threadVector) {
-    t.join();
+    while (!t.joinable()) {
+      cv.notify_all();
+    }
   }
 }
 
