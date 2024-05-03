@@ -5,22 +5,36 @@
 #include <mutex>
 #include <queue>
 #include <thread>
-#include "task.h"
+
 #include "context.h"
+#include "task.h"
 
 namespace dllm {
-struct ThreadPool {
-  ThreadPool(int localRank, int threadNum, const std::vector<int> &bindingMap = {});
+struct ThreadPoolBase {
+  ~ThreadPoolBase();
 
-  ~ThreadPool();
+  std::shared_ptr<Future> submit(Task &&task);
 
-  std::shared_ptr<Future> submit(Task task);
+  std::shared_ptr<Future> submit(const Task &task) = delete;
 
-  std::vector<std::thread> threadVector;
-  std::queue<Task> taskQueue;
-  std::mutex queueMutex;
-  std::condition_variable cv;
-  std::mutex cvMutex;
+ protected:
+  ThreadPoolBase() = default;
+
+  std::vector<std::thread> threadVector{};
+  std::queue<Task> taskQueue{};
+  std::mutex queueMutex{};
+  std::condition_variable cv{};
+  std::mutex cvMutex{};
   std::atomic<bool> shutDown{false};
+};
+
+struct ThreadPool : public ThreadPoolBase {
+  ThreadPool(int localRank, int threadNum,
+             const std::vector<int> &bindingMap = {});
+};
+
+struct ThreadPoolLight : public ThreadPoolBase {
+  ThreadPoolLight(int localRank, int threadNum,
+                  const std::vector<int> &bindingMap = {});
 };
 }  // namespace dllm

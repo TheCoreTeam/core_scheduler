@@ -49,7 +49,53 @@ void threadTask(const int localRank, std::queue<Task> *taskQueue,
   CHECK_CUBLAS(cublasDestroy_v2(context.cublasHandle));
   CHECK_CUDART(cudaStreamDestroy(context.cudaStream));
 }
+
+void threadTaskLight(const int localRank, std::queue<Task> *taskQueue,
+                     std::mutex *queueMutex, std::condition_variable *cv,
+                     std::mutex *cvMutex, std::atomic<bool> *shutDown) {
+  Context context{};
+  CHECK_CUDART(cudaSetDevice(localRank));
+  CHECK_CUDART(
+      cudaStreamCreateWithFlags(&context.cudaStream, cudaStreamNonBlocking));
+  while (!shutDown->load()) {
+    Task task;
+    std::unique_lock lock{*queueMutex};
+    if (!taskQueue->empty()) {
+      task = std::move(taskQueue->back());
+      taskQueue->pop();
+    }
+    lock.unlock();
+    if (task.valid()) {
+      task(&context);
+    } else {
+      std::unique_lock<std::mutex> uniqueLock{*cvMutex};
+      cv->wait(uniqueLock,
+               [&] { return shutDown->load() || !taskQueue->empty(); });
+    }
+  }
+  CHECK_CUDART(cudaStreamDestroy(context.cudaStream));
+}
 }  // namespace
+
+ThreadPoolBase::~ThreadPoolBase() {
+  shutDown = true;
+  cv.notify_all();
+  for (auto &t : threadVector) {
+    while (!t.joinable()) {
+      cv.notify_all();
+    }
+    t.join();
+  }
+}
+
+std::shared_ptr<Future> ThreadPoolBase::submit(Task &&task) {
+  auto future = task.get_future();
+  std::unique_lock lock{queueMutex};
+  taskQueue.push(std::move(task));
+  lock.unlock();
+  cv.notify_one();
+  return std::make_shared<Future>(std::move(future));
+}
 
 ThreadPool::ThreadPool(int localRank, int threadNum,
                        const std::vector<int> &bindingMap) {
@@ -68,23 +114,21 @@ ThreadPool::ThreadPool(int localRank, int threadNum,
   }
 }
 
-ThreadPool::~ThreadPool() {
-  shutDown = true;
-  cv.notify_all();
-  for (auto &t : threadVector) {
-    while (!t.joinable()) {
-      cv.notify_all();
+ThreadPoolLight::ThreadPoolLight(int localRank, int threadNum,
+                                 const std::vector<int> &bindingMap) {
+  if (!bindingMap.empty() && bindingMap.size() != threadNum) {
+    SPDLOG_LOGGER_CRITICAL(&logger(), "bindingMap size incorrect");
+  }
+  threadVector.reserve(threadNum);
+  for (int i = 0; i < threadNum; ++i) {
+    threadVector.emplace_back(threadTaskLight, localRank, &taskQueue,
+                              &queueMutex, &cv, &cvMutex, &shutDown);
+  }
+  if (!bindingMap.empty()) {
+    for (int i = 0; i < threadNum; ++i) {
+      setThreadAffinity(threadVector[i], bindingMap[i]);
     }
-    t.join();
   }
 }
 
-std::shared_ptr<Future> ThreadPool::submit(Task task) {
-  auto future = task.get_future();
-  std::unique_lock lock{queueMutex};
-  taskQueue.push(std::move(task));
-  lock.unlock();
-  cv.notify_one();
-  return std::make_shared<Future>(std::move(future));
-}
 }  // namespace dllm

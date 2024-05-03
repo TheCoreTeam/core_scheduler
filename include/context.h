@@ -4,7 +4,7 @@
 
 namespace dllm {
 struct Context {
-  cudaStream_t cudaStream;
-  cublasHandle_t cublasHandle;
+  cudaStream_t cudaStream{nullptr};
+  cublasHandle_t cublasHandle{nullptr};
 };
 }  // namespace dllm
