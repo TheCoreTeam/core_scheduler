@@ -11,18 +11,14 @@
 class AllReduceMPITestFixture : public ::testing::Test {
  protected:
   dllm::Context context{};
-  int localRank, rank, worldSize;
+  int rank, worldSize;
   MPI_Comm comm;
 
   void SetUp() override {
     CHECK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &rank));
     CHECK_MPI(MPI_Comm_size(MPI_COMM_WORLD, &worldSize));
-    MPI_Comm_split_type(MPI_COMM_WORLD, MPI_COMM_TYPE_SHARED, 0, MPI_INFO_NULL,
-                        &comm);
-    MPI_Comm_rank(comm, &localRank);
+    comm = MPI_COMM_WORLD;
   }
-
-  void TearDown() override { MPI_Comm_free(&comm); }
 };
 
 namespace {
@@ -64,10 +60,10 @@ void TestAllReduceT(const dllm::Context &context, int rank, MPI_Comm comm) {
 }  // namespace
 
 TEST_F(AllReduceMPITestFixture, TestForwardF32) {
-  TestAllReduceT<float>(context, localRank, comm);
+  TestAllReduceT<float>(context, rank, comm);
 }
 TEST_F(AllReduceMPITestFixture, TestForwardF64) {
-  TestAllReduceT<double>(context, localRank, comm);
+  TestAllReduceT<double>(context, rank, comm);
 }
 
 class AllReduceMPIThreadPoolTestFixture : public ::testing::Test {
@@ -77,25 +73,7 @@ class AllReduceMPIThreadPoolTestFixture : public ::testing::Test {
     CHECK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &rank));
     return rank;
   }()};
-  int worldSize{[] {
-    int worldSize;
-    CHECK_MPI(MPI_Comm_size(MPI_COMM_WORLD, &worldSize));
-    return worldSize;
-  }()};
-  MPI_Comm comm{[] {
-    MPI_Comm comm;
-    MPI_Comm_split_type(MPI_COMM_WORLD, MPI_COMM_TYPE_SHARED, 0, MPI_INFO_NULL,
-                        &comm);
-    return comm;
-  }()};
-  int localRank{[&] {
-    int localRank;
-    MPI_Comm_rank(comm, &localRank);
-    return localRank;
-  }()};
-  dllm::ThreadPool threadPool{localRank, 3};
-
-  ~AllReduceMPIThreadPoolTestFixture() { MPI_Comm_free(&comm); }
+  dllm::ThreadPool threadPool{rank, 3};
 };
 
 namespace {
@@ -139,8 +117,8 @@ void TestThreadPoolAllReduceT(dllm::ThreadPool &threadPool, int rank,
 }  // namespace
 
 TEST_F(AllReduceMPIThreadPoolTestFixture, TestForwardF32) {
-  TestThreadPoolAllReduceT<float>(threadPool, localRank, comm);
+  TestThreadPoolAllReduceT<float>(threadPool, rank, MPI_COMM_WORLD);
 }
 TEST_F(AllReduceMPIThreadPoolTestFixture, TestForwardF64) {
-  TestThreadPoolAllReduceT<double>(threadPool, localRank, comm);
+  TestThreadPoolAllReduceT<double>(threadPool, rank, MPI_COMM_WORLD);
 }
