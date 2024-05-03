@@ -7,6 +7,7 @@
 
 #include "compute/fc.h"
 #include "logger.h"
+#include "util.h"
 
 namespace Eigen::internal {
 template <>
@@ -89,8 +90,8 @@ void TestForwardT(const dllm::Context &context) {
                           cudaMemcpyHostToDevice));
   CHECK_CUDART(cudaDeviceSynchronize());
 
-  auto tensorY2D = dllm::flatten<2>(tensorY);
-  auto tensorX2D = dllm::flatten<2>(tensorX);
+  auto tensorY2D = dllm::util::flatten<2>(tensorY);
+  auto tensorX2D = dllm::util::flatten<2>(tensorX);
 
   auto task = dllm::compute::FcNoBias::forward(
       tensorY2D, tensorX2D, tensorW, toCublasComputeType<ComputeType>());
@@ -171,8 +172,8 @@ void TestBackwardWT(const dllm::Context &context) {
                           cudaMemcpyHostToDevice));
   CHECK_CUDART(cudaDeviceSynchronize());
 
-  auto tensorDY2D = dllm::flatten<2>(tensorDY);
-  auto tensorX2D = dllm::flatten<2>(tensorX);
+  auto tensorDY2D = dllm::util::flatten<2>(tensorDY);
+  auto tensorX2D = dllm::util::flatten<2>(tensorX);
   auto task = dllm::compute::FcNoBias::backwardW(
       tensorDW, tensorDY2D, tensorX2D, toCublasComputeType<ComputeType>());
   tensorDW.reset();
@@ -252,8 +253,8 @@ void TestBackwardXT(const dllm::Context &context) {
                           cudaMemcpyHostToDevice));
   CHECK_CUDART(cudaDeviceSynchronize());
 
-  auto tensorDX2D = dllm::flatten<2>(tensorDX);
-  auto tensorDY2D = dllm::flatten<2>(tensorDY);
+  auto tensorDX2D = dllm::util::flatten<2>(tensorDX);
+  auto tensorDY2D = dllm::util::flatten<2>(tensorDY);
   auto task = dllm::compute::FcNoBias::backwardX(
       tensorDX2D, tensorDY2D, tensorW, toCublasComputeType<ComputeType>());
   tensorDX.reset();
@@ -336,8 +337,8 @@ void TestThreadPoolForwardT(dllm::ThreadPool &threadPool) {
                           cudaMemcpyHostToDevice));
   CHECK_CUDART(cudaDeviceSynchronize());
 
-  auto tensorY2D = dllm::flatten<2>(tensorY);
-  auto tensorX2D = dllm::flatten<2>(tensorX);
+  auto tensorY2D = dllm::util::flatten<2>(tensorY);
+  auto tensorX2D = dllm::util::flatten<2>(tensorX);
   auto task = dllm::compute::FcNoBias::forward(
       tensorY2D, tensorX2D, tensorW, toCublasComputeType<ComputeType>());
   tensorY.reset();
@@ -418,8 +419,8 @@ void TestThreadPoolBackwardWT(dllm::ThreadPool &threadPool) {
                           cudaMemcpyHostToDevice));
   CHECK_CUDART(cudaDeviceSynchronize());
 
-  auto tensorDY2D = dllm::flatten<2>(tensorDY);
-  auto tensorX2D = dllm::flatten<2>(tensorX);
+  auto tensorDY2D = dllm::util::flatten<2>(tensorDY);
+  auto tensorX2D = dllm::util::flatten<2>(tensorX);
   auto task = dllm::compute::FcNoBias::backwardW(
       tensorDW, tensorDY2D, tensorX2D, toCublasComputeType<ComputeType>());
   tensorDW.reset();
@@ -500,8 +501,8 @@ void TestThreadPoolBackwardXT(dllm::ThreadPool &threadPool) {
                           cudaMemcpyHostToDevice));
   CHECK_CUDART(cudaDeviceSynchronize());
 
-  auto tensorDX2D = dllm::flatten<2>(tensorDX);
-  auto tensorDY2D = dllm::flatten<2>(tensorDY);
+  auto tensorDX2D = dllm::util::flatten<2>(tensorDX);
+  auto tensorDY2D = dllm::util::flatten<2>(tensorDY);
   auto task = dllm::compute::FcNoBias::backwardX(
       tensorDX2D, tensorDY2D, tensorW, toCublasComputeType<ComputeType>());
   tensorDX.reset();

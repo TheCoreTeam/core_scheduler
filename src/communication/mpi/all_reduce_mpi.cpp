@@ -3,6 +3,7 @@
 #include "communication/all_reduce.h"
 #include "dtensor_mpi.h"
 #include "logger.h"
+#include "util.h"
 
 namespace dllm::communication {
 template <>
@@ -31,8 +32,8 @@ Task AllReduce<MPI>::run(
     }
   }();
 
-  return Task{[=](const Context *context) {
-    tensorSend->waitFutureIfValid();
+  return Task{[=, future = tensorSend->future](const Context *context) {
+    util::waitFutureIfValid(future);
     CHECK_MPI(MPI_Allreduce(tensorSend->data(), tensorReceive->data(),
                             cute::size(tensorSend->layout), datatype,
                             toMpiOp(operation), tensorSend->comm));
@@ -55,9 +56,9 @@ Task AllReduce<MPI>::runInplace(const std::shared_ptr<DTensor1D<MPI>> &tensor,
     }
   }();
 
-  return Task{[=](const Context *context) {
+  return Task{[=, future = tensor->future](const Context *context) {
     // Be careful: possible deadlock
-    tensor->waitFutureIfValid();
+    util::waitFutureIfValid(future);
     CHECK_MPI(MPI_Allreduce(MPI_IN_PLACE, tensor->data(),
                             cute::size(tensor->layout), datatype,
                             toMpiOp(operation), tensor->comm));

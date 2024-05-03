@@ -3,6 +3,7 @@
 #include "communication/all_reduce.h"
 #include "dtensor_nccl.h"
 #include "logger.h"
+#include "util.h"
 
 namespace dllm::communication {
 template <>
@@ -21,8 +22,8 @@ Task AllReduce<NCCL>::run(
     SPDLOG_LOGGER_CRITICAL(&logger(),
                            "sendbuff's dtype is different from the recvbuff's");
   }
-  return Task{[=](const Context *context) {
-    tensorSend->waitFutureIfValid();
+  return Task{[=, futureSend = tensorSend->future](const Context *context) {
+    util::waitFutureIfValid(futureSend);
     CHECK_NCCL(ncclAllReduce(
         tensorSend->data(), tensorReceive->data(),
         cute::size(tensorSend->layout), toNcclDataType(tensorSend->dtype),
@@ -37,9 +38,9 @@ Task AllReduce<NCCL>::runInplace(const std::shared_ptr<DTensor1D<NCCL>> &tensor,
   if (tensor->deviceType != CUDA) {
     SPDLOG_LOGGER_CRITICAL(&logger(), "NCCL backend only supports CUDA tensor");
   }
-  return Task{[=](const Context *context) {
+  return Task{[=, future = tensor->future](const Context *context) {
     // Be careful: possible deadlock
-    tensor->waitFutureIfValid();
+    util::waitFutureIfValid(future);
     CHECK_NCCL(ncclAllReduce(
         tensor->data(), tensor->data(), cute::size(tensor->layout),
         toNcclDataType(tensor->dtype), toNcclRedOp(operation), tensor->comm,

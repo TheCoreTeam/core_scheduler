@@ -3,8 +3,10 @@ project(dllm LANGUAGES CXX CUDA)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+set(CMAKE_CUDA_ARCHITECTURES "80;86;90;90a")
 
 option(DLLM_ENABLE_TESTS "" ON)
+option(DLLM_ENABLE_EXAMPLES "" ON)
 
 find_package(CUDAToolkit REQUIRED)
 find_package(MPI REQUIRED)
@@ -27,12 +29,24 @@ add_subdirectory(third_party/cutlass)
 
 add_subdirectory(src)
 
+set(DLLM_EIGEN_ADDED OFF)
 if (DLLM_ENABLE_TESTS)
     add_subdirectory(third_party/googletest)
 
     set(EIGEN_BUILD_DOC OFF)
     set(BUILD_TESTING OFF)
     add_subdirectory(third_party/eigen)
+    set(DLLM_EIGEN_ADDED ON)
 
     add_subdirectory(test)
+endif ()
+
+if (DLLM_ENABLE_EXAMPLES)
+    set(EIGEN_BUILD_DOC OFF)
+    set(BUILD_TESTING OFF)
+    if (NOT DLLM_EIGEN_ADDED)
+        add_subdirectory(third_party/eigen)
+    endif ()
+
+    add_subdirectory(example)
 endif ()

@@ -40,5 +40,5 @@ target_compile_options(dllm_communication_tests PRIVATE
 )
 
 target_compile_options(dllm_communication_tests PRIVATE
-        $<$<CONFIG:Debug>:-O1>
+        $<$<CONFIG:Debug>:-O0>
 )

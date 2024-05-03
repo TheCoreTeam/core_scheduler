@@ -4,6 +4,7 @@
 
 #include "compute/matmul.h"
 #include "logger.h"
+#include "util.h"
 
 namespace dllm::compute::FcNoBias {
 Task forward(const std::shared_ptr<Tensor2D> &y,
@@ -11,12 +12,13 @@ Task forward(const std::shared_ptr<Tensor2D> &y,
              const std::shared_ptr<const Tensor2D> &w,
              const cublasComputeType_t computeType) {
   // y: Batch x Sequence x Feature -> (Batch * Sequence) x Feature
-  return Task{[=](const Context *context) {
-    x->waitFutureIfValid();
-    w->waitFutureIfValid();
-    RowMajorNTMatmulNoBias(context->cublasHandle, *x, *w, *y, computeType);
-    CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
-  }};
+  return Task{
+      [=, futureX = x->future, futureW = w->future](const Context *context) {
+        util::waitFutureIfValid(futureX);
+        util::waitFutureIfValid(futureW);
+        RowMajorNTMatmulNoBias(context->cublasHandle, *x, *w, *y, computeType);
+        CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
+      }};
 }
 
 Task backwardW(const std::shared_ptr<Tensor2D> &dw,
@@ -26,9 +28,10 @@ Task backwardW(const std::shared_ptr<Tensor2D> &dw,
   // dx, x: M * K
   // dy: M * N
   // dw = dy^T @ x
-  return Task{[=](const Context *context) {
-    dy->waitFutureIfValid();
-    x->waitFutureIfValid();
+  return Task{[=, futureDy = dy->future,
+               futureX = x->future](const Context *context) {
+    util::waitFutureIfValid(futureDy);
+    util::waitFutureIfValid(futureX);
     RowMajorTNMatmulNoBias(context->cublasHandle, *dy, *x, *dw, computeType);
     CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
   }};
@@ -41,9 +44,10 @@ Task backwardX(const std::shared_ptr<Tensor2D> &dx,
   // dw, w: N * K
   // dy: M * N
   // dx = dy @ w
-  return Task{[=](const Context *context) {
-    dy->waitFutureIfValid();
-    w->waitFutureIfValid();
+  return Task{[=, futureDy = dy->future,
+               futureW = w->future](const Context *context) {
+    util::waitFutureIfValid(futureDy);
+    util::waitFutureIfValid(futureW);
     RowMajorNNMatmulNoBias(context->cublasHandle, *dy, *w, *dx, computeType);
     CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
   }};
