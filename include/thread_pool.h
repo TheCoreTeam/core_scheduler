@@ -10,6 +10,8 @@
 #include "task.h"
 
 namespace dllm {
+// Basic thread pool, but we do not want you to use it alone. Consider
+// ThreadPool or ThreadPoolLight.
 struct ThreadPoolBase {
   ~ThreadPoolBase();
 
@@ -28,11 +30,16 @@ struct ThreadPoolBase {
   std::atomic<bool> shutDown{false};
 };
 
+// This is only for anything, including computation (cublas, cublasLt, etc.) as
+// well as communication (MPI, NCCL, etc.). However, this thread pool requires
+// more resource (e.g., GPU context memory).
 struct ThreadPool : public ThreadPoolBase {
   ThreadPool(int localRank, int threadNum,
              const std::vector<int> &bindingMap = {});
 };
 
+// This is only for communication (MPI, NCCL, etc.), do not submit any
+// non-CPU computation task to this thread pool!
 struct ThreadPoolLight : public ThreadPoolBase {
   ThreadPoolLight(int localRank, int threadNum,
                   const std::vector<int> &bindingMap = {});
