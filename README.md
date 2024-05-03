@@ -28,6 +28,6 @@ make -j dllm_tests
 ```
 
 ## Feature:
-1. Task
+1. Task Vector
 2. Thread pool
 3. Memory release pool
