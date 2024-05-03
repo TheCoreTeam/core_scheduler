@@ -34,7 +34,7 @@ void threadTask(const int localRank, std::queue<Task> *taskQueue,
     Task task;
     std::unique_lock lock{*queueMutex};
     if (!taskQueue->empty()) {
-      task = std::move(taskQueue->back());
+      task = std::move(taskQueue->front());
       taskQueue->pop();
     }
     lock.unlock();
@@ -61,7 +61,7 @@ void threadTaskLight(const int localRank, std::queue<Task> *taskQueue,
     Task task;
     std::unique_lock lock{*queueMutex};
     if (!taskQueue->empty()) {
-      task = std::move(taskQueue->back());
+      task = std::move(taskQueue->front());
       taskQueue->pop();
     }
     lock.unlock();
