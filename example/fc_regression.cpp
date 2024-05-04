@@ -20,7 +20,6 @@ void printTensor(const dllm::Tensor1D &tensor) {
         using T = float;
         const auto size = cute::size(tensor.layout);
         Eigen::Vector<T, Eigen::Dynamic> buffer(size);
-        printf("Future: %p, valid: %d\n", tensor.future.get(), tensor.future->valid());
         dllm::util::waitFutureIfValid(tensor.future);
         CHECK_CUDART(cudaMemcpy(buffer.data(), tensor.data(), sizeof(T) * size,
                                 cudaMemcpyDeviceToHost));
@@ -42,7 +41,7 @@ int main() {
   const double lr = 1e-3;
   auto f = [](auto x) {
     using Scalar = decltype(x)::Scalar;
-    return static_cast<Scalar>(2) * x.array() + static_cast<Scalar>(5);
+    return static_cast<Scalar>(2) * x.array();
   };
   const int inputDim = 1;
   const int batchSize = 100;
@@ -168,9 +167,6 @@ int main() {
     tensorW2->future = future;
   }
 
-  printTensor(*dllm::util::flatten<1>(tensorW1));
-  printTensor(*dllm::util::flatten<1>(tensorW2));
-
   const int epoch = 10;
   for (int i = 0; i < epoch; ++i) {
     for (auto &[tensorX, tensorY] : tensor) {
@@ -268,8 +264,6 @@ int main() {
                           sizeof(T) * yTest.size(), cudaMemcpyDeviceToHost));
   CHECK_CUDART(cudaDeviceSynchronize());
 
-  std::cout << yTest.topRows(5).transpose() << std::endl;
-  std::cout << yTestRef.topRows(5).transpose() << std::endl;
   printf("Error: %f\n", (yTest - yTestRef).norm());
 
   CHECK_CUDART(cudaFree(ptrW2Out));

@@ -20,7 +20,7 @@ __global__ void grad(T* dx, const T* x, const T* y, std::size_t n) {
     return;
   }
   T grad = static_cast<T>(2) * (x[tid] - y[tid]);
-  dx[tid] = static_cast<double>(grad) > 0 ? grad : -grad;
+  dx[tid] = grad;
 }
 
 template <typename Fn>

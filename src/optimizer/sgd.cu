@@ -10,7 +10,7 @@ __global__ void step(T* w, const T* dw, const T lr, std::size_t n) {
   if (tid >= n) {
     return;
   }
-  w[tid] += lr * dw[tid];
+  w[tid] -= lr * dw[tid];
 }
 
 template <typename Fn>
