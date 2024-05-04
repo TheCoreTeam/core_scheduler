@@ -55,8 +55,8 @@ void threadTask(const ncclUniqueId id, const int ncclWorldSize,
 ThreadStreamNccl::~ThreadStreamNccl() {
   shutDown = true;
   cv.notify_one();
-  if (!thread.joinable()) {
-    cv.notify_all();
+  while (!thread.joinable()) {
+    cv.notify_one();
   }
   thread.join();
 }

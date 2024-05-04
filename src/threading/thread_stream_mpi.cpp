@@ -45,8 +45,8 @@ void threadTask(const ContextMpi context, std::queue<TaskMpi> *taskQueue,
 ThreadStreamMpi::~ThreadStreamMpi() {
   shutDown = true;
   cv.notify_one();
-  if (!thread.joinable()) {
-    cv.notify_all();
+  while (!thread.joinable()) {
+    cv.notify_one();
   }
   thread.join();
 }
