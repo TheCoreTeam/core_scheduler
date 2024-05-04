@@ -34,7 +34,7 @@ void TestAllReduceT(const dllm::ContextCompute &context,
 
   Eigen::Vector<T, Eigen::Dynamic> x(m);
 
-  auto tensorX = std::make_shared<dllm::DTensor1D<dllm::communication::MPI>>(
+  auto tensorX = std::make_shared<dllm::Tensor1D>(
       dllm::Tensor1D{x.data(), layoutX, dllm::toDtype<T>(), dllm::CUDA});
 
   std::srand(contextMpi.mpiRank + 1);
@@ -90,7 +90,7 @@ void TestThreadPoolComputeAllReduceT(dllm::ThreadStreamMpi &threadStreamMpi,
 
   Eigen::Vector<T, Eigen::Dynamic> x(m);
 
-  auto tensorX = std::make_shared<dllm::DTensor1D<dllm::communication::MPI>>(
+  auto tensorX = std::make_shared<dllm::Tensor1D>(
       dllm::Tensor1D{x.data(), layoutX, dllm::toDtype<T>(), dllm::CUDA});
 
   std::srand(contextMpi.mpiRank + 1);
@@ -176,7 +176,7 @@ void TestNcclAllReduceT(const dllm::ContextCompute &context,
                           cudaMemcpyHostToDevice));
   CHECK_CUDART(cudaDeviceSynchronize());
 
-  auto tensorX = std::make_shared<dllm::DTensor1D<dllm::communication::NCCL>>(
+  auto tensorX = std::make_shared<dllm::Tensor1D>(
       dllm::Tensor1D{xDev, layoutX, dllm::toDtype<T>(), dllm::CUDA});
 
   auto task =
@@ -252,7 +252,7 @@ void TestThreadStreamNcclAllReduceT(dllm::ThreadStreamNccl &threadStreamNccl,
 
   Eigen::Vector<T, Eigen::Dynamic> x(m);
 
-  auto tensorX = std::make_shared<dllm::DTensor1D<dllm::communication::NCCL>>(
+  auto tensorX = std::make_shared<dllm::Tensor1D>(
       dllm::Tensor1D{x.data(), layoutX, dllm::toDtype<T>(), dllm::CUDA});
 
   std::srand(contextMpi.mpiRank + 1);

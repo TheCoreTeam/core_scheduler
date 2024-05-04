@@ -6,9 +6,9 @@
 #include "util.h"
 
 namespace dllm::communication {
-TaskMpi AllReduce<MPI>::run(
-    const std::shared_ptr<const DTensor1D<MPI>> &tensorSend,
-    const std::shared_ptr<DTensor1D<MPI>> &tensorReceive, Operation operation) {
+TaskMpi AllReduce<MPI>::run(const std::shared_ptr<const Tensor1D> &tensorSend,
+                            const std::shared_ptr<Tensor1D> &tensorReceive,
+                            Operation operation) {
   if (cute::size(tensorSend->layout) != cute::size(tensorReceive->layout)) {
     SPDLOG_LOGGER_CRITICAL(&logger(),
                            "sendbuff's size is different from the recvbuff's");
@@ -35,12 +35,12 @@ TaskMpi AllReduce<MPI>::run(
     util::waitFutureIfValid(future);
     CHECK_MPI(MPI_Allreduce(tensorSend->data(), tensorReceive->data(),
                             cute::size(tensorSend->layout), datatype,
-                            toMpiOp(operation), context->mpiComm));
+                            util::toMpiOp(operation), context->mpiComm));
   }};
 }
 
-TaskMpi AllReduce<MPI>::runInplace(
-    const std::shared_ptr<DTensor1D<MPI>> &tensor, Operation operation) {
+TaskMpi AllReduce<MPI>::runInplace(const std::shared_ptr<Tensor1D> &tensor,
+                                   Operation operation) {
   MPI_Datatype datatype = [&]() {
     switch (tensor->dtype) {
       case R_64F:
@@ -59,7 +59,7 @@ TaskMpi AllReduce<MPI>::runInplace(
     util::waitFutureIfValid(future);
     CHECK_MPI(MPI_Allreduce(MPI_IN_PLACE, tensor->data(),
                             cute::size(tensor->layout), datatype,
-                            toMpiOp(operation), context->mpiComm));
+                            util::toMpiOp(operation), context->mpiComm));
   }};
 }
 }  // namespace dllm::communication

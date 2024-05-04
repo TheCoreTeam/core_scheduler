@@ -1,16 +1,12 @@
 #pragma once
 #include <nccl.h>
 
-#include "dtensor.h"
+#include "communication.h"
 
-namespace dllm {
-template <int N>
-struct DTensor<N, communication::NCCL> : public Tensor<N> {};
-
-namespace communication {
-constexpr ncclRedOp_t toNcclRedOp(Operation operation) {
+namespace dllm::util {
+constexpr ncclRedOp_t toNcclRedOp(communication::Operation operation) {
   switch (operation) {
-    case SUM:
+    case communication::SUM:
       return ncclSum;
     default:
       return static_cast<ncclRedOp_t>(0);
@@ -31,5 +27,4 @@ inline ncclDataType_t toNcclDataType(Dtype dtype) {
       return static_cast<ncclDataType_t>(0);
   }
 }
-}  // namespace communication
-}  // namespace dllm
+}  // namespace dllm::util

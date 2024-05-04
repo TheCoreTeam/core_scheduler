@@ -6,10 +6,9 @@
 #include "util.h"
 
 namespace dllm::communication {
-TaskNccl AllReduce<NCCL>::run(
-    const std::shared_ptr<const DTensor1D<NCCL>> &tensorSend,
-    const std::shared_ptr<DTensor1D<NCCL>> &tensorReceive,
-    Operation operation) {
+TaskNccl AllReduce<NCCL>::run(const std::shared_ptr<const Tensor1D> &tensorSend,
+                              const std::shared_ptr<Tensor1D> &tensorReceive,
+                              Operation operation) {
   if (cute::size(tensorSend->layout) != cute::size(tensorReceive->layout)) {
     SPDLOG_LOGGER_CRITICAL(&logger(),
                            "sendbuff is not the same as the recvbuff");
@@ -21,19 +20,19 @@ TaskNccl AllReduce<NCCL>::run(
     SPDLOG_LOGGER_CRITICAL(&logger(),
                            "sendbuff's dtype is different from the recvbuff's");
   }
-  return TaskNccl{
-      [=, futureSend = tensorSend->future](const ContextNccl *context) {
-        util::waitFutureIfValid(futureSend);
-        CHECK_NCCL(ncclAllReduce(
-            tensorSend->data(), tensorReceive->data(),
-            cute::size(tensorSend->layout), toNcclDataType(tensorSend->dtype),
-            toNcclRedOp(operation), context->ncclComm, context->cudaStream));
-        CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
-      }};
+  return TaskNccl{[=, futureSend =
+                          tensorSend->future](const ContextNccl *context) {
+    util::waitFutureIfValid(futureSend);
+    CHECK_NCCL(ncclAllReduce(
+        tensorSend->data(), tensorReceive->data(),
+        cute::size(tensorSend->layout), util::toNcclDataType(tensorSend->dtype),
+        util::toNcclRedOp(operation), context->ncclComm, context->cudaStream));
+    CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
+  }};
 }
 
-TaskNccl AllReduce<NCCL>::runInplace(
-    const std::shared_ptr<DTensor1D<NCCL>> &tensor, Operation operation) {
+TaskNccl AllReduce<NCCL>::runInplace(const std::shared_ptr<Tensor1D> &tensor,
+                                     Operation operation) {
   if (tensor->deviceType != CUDA) {
     SPDLOG_LOGGER_CRITICAL(&logger(), "NCCL backend only supports CUDA tensor");
   }
@@ -42,7 +41,7 @@ TaskNccl AllReduce<NCCL>::runInplace(
     util::waitFutureIfValid(future);
     CHECK_NCCL(ncclAllReduce(
         tensor->data(), tensor->data(), cute::size(tensor->layout),
-        toNcclDataType(tensor->dtype), toNcclRedOp(operation),
+        util::toNcclDataType(tensor->dtype), util::toNcclRedOp(operation),
         context->ncclComm, context->cudaStream));
     CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
   }};

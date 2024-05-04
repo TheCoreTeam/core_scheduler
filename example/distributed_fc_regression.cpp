@@ -6,12 +6,14 @@
 #include <iostream>
 #include <vector>
 
+#include "communication/nccl/all_reduce.h"
 #include "compute/fc.h"
 #include "compute/init.h"
 #include "compute/mse.h"
 #include "logger.h"
 #include "optimizer/sgd.h"
-#include "thread_pool.h"
+#include "threading/thread_pool_compute.h"
+#include "threading/thread_stream_nccl.h"
 #include "util.h"
 
 void printTensor(const dllm::Tensor1D &tensor) {
@@ -46,11 +48,12 @@ int main(int argc, char **argv) {
   int mpiRank;
   CHECK_MPI(MPI_Comm_size(MPI_COMM_WORLD, &worldSize));
   CHECK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &mpiRank));
-  int deviceCount;
-  CHECK_CUDART(cudaGetDeviceCount(&deviceCount));
   ncclUniqueId id;
-  ncclComm_t comm;
-  CHECK_NCCL(ncclGetUniqueId(&id));
+  if (mpiRank == 0) {
+    CHECK_NCCL(ncclGetUniqueId(&id));
+  }
+  CHECK_MPI(MPI_Bcast(&id, sizeof(ncclUniqueId), MPI_BYTE, 0, MPI_COMM_WORLD));
+  dllm::ThreadStreamNccl threadStreamNccl{id, worldSize, mpiRank, mpiRank};
 
   int deviceRank;
   using T = float;
@@ -61,7 +64,7 @@ int main(int argc, char **argv) {
   };
   const int inputDim = 1;
   const int batchSize = 100;
-  const int sampleNum = 1000;
+  const int sampleNum = 1000 / worldSize;
   using Input = Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic>;
   using Output = Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic>;
   std::vector<std::tuple<Input, Output>> data;
@@ -170,7 +173,7 @@ int main(int argc, char **argv) {
   auto tensorDW2Out = std::make_shared<dllm::Tensor2D>(
       ptrDW2Out, layoutDW2Out, dllm::toDtype<T>(), dllm::CUDA);
 
-  dllm::ThreadPool threadPool{0, 1};
+  dllm::ThreadPoolCompute threadPool{0, 2};
 
   {
     auto task = dllm::compute::Init::kaimingNorm(tensorW1);
@@ -231,6 +234,20 @@ int main(int argc, char **argv) {
         tensorDW1->future = future;
       }
       {
+        auto task = dllm::communication::AllReduce<dllm::communication::NCCL>::
+            runInplace(dllm::util::flatten<1>(tensorW2),
+                       dllm::communication::SUM);
+        auto future = threadStreamNccl.submit(std::move(task));
+        tensorW2->future = future;
+      }
+      {
+        auto task = dllm::communication::AllReduce<dllm::communication::NCCL>::
+            runInplace(dllm::util::flatten<1>(tensorW1),
+                       dllm::communication::SUM);
+        auto future = threadStreamNccl.submit(std::move(task));
+        tensorW1->future = future;
+      }
+      {
         auto task = dllm::optimizer::Sgd::step(
             dllm::util::flatten<1>(tensorW2),
             dllm::util::toConstSharedPtr(dllm::util::flatten<1>(tensorDW2)),
@@ -280,7 +297,9 @@ int main(int argc, char **argv) {
                           sizeof(T) * yTest.size(), cudaMemcpyDeviceToHost));
   CHECK_CUDART(cudaDeviceSynchronize());
 
-  printf("Error: %.5e\n", (yTest - yTestRef).norm());
+  if (mpiRank == 0) {
+    printf("Error: %.5e\n", (yTest - yTestRef).norm());
+  }
 
   CHECK_CUDART(cudaFree(ptrW2Out));
   CHECK_CUDART(cudaFree(ptrW2));

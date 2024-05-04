@@ -1,20 +1,15 @@
 #pragma once
 #include <mpi.h>
 
-#include "dtensor.h"
+#include "communication.h"
 
-namespace dllm {
-template <int N>
-struct DTensor<N, communication::MPI> : public Tensor<N> {};
-
-namespace communication {
-constexpr MPI_Op toMpiOp(Operation operation) {
+namespace dllm::util {
+constexpr MPI_Op toMpiOp(communication::Operation operation) {
   switch (operation) {
-    case SUM:
+    case communication::SUM:
       return MPI_SUM;
     default:
       return 0;
   }
 }
-}  // namespace communication
-}  // namespace dllm
+}  // namespace dllm::util
