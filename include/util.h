@@ -27,9 +27,8 @@ constexpr __inline__ __attribute__((always_inline)) long ceilDiv(long a,
 }
 
 template <int OutN, int InN>
-  requires(InN > 1 && OutN < InN && OutN != 1)
-__inline__ __attribute__((always_inline)) Tensor<OutN> flatten(
-    const Tensor<InN> &tensor) {
+__inline__ __attribute__((always_inline)) Tensor<OutN> flatten_impl(
+    const Tensor<InN> &tensor, std::true_type /* OutN != 1 */) {
   return {tensor.data(),
           cute::make_layout(
               cute::make_layout(
@@ -44,19 +43,28 @@ __inline__ __attribute__((always_inline)) Tensor<OutN> flatten(
 }
 
 template <int OutN, int InN>
-  requires(InN > 1 && OutN < InN && OutN == 1)
-__inline__ __attribute__((always_inline)) Tensor<OutN> flatten(
-    const Tensor<InN> &tensor) {
+__inline__ __attribute__((always_inline)) Tensor<OutN> flatten_impl(
+    const Tensor<InN> &tensor, std::false_type /* OutN == 1 */) {
   return {tensor.data(),
           cute::make_layout(cute::shape(cute::size(tensor.layout)),
                             cute::make_stride(cute::_1{})),
           tensor.dtype, tensor.deviceType, tensor.future};
 }
 
+template <int OutN, int InN>
+__inline__ __attribute__((always_inline)) Tensor<OutN> flatten(
+    const Tensor<InN> &tensor) {
+  static_assert(InN > 1 && OutN < InN);
+  if constexpr (OutN != 1) {
+    return flatten_impl<OutN>(tensor, std::true_type{});
+  } else {
+    return flatten_impl<OutN>(tensor, std::false_type{});
+  }
+}
+
 template <int OutN, template <int> class T, int InN>
-  requires isTensor<T, InN> && (InN > 1) && (OutN < InN) && (OutN != 1)
-__inline__ __attribute__((always_inline)) auto flatten(
-    const std::shared_ptr<T<InN>> &tensor) {
+auto flatten_impl(const std::shared_ptr<T<InN>> &tensor,
+                  std::true_type /* OutN != 1 */) {
   return std::make_shared<T<OutN>>(
       tensor->data(),
       cute::make_layout(
@@ -72,14 +80,24 @@ __inline__ __attribute__((always_inline)) auto flatten(
 }
 
 template <int OutN, template <int> class T, int InN>
-  requires isTensor<T, InN> && (InN > 1) && (OutN < InN) && (OutN == 1)
-__inline__ __attribute__((always_inline)) auto flatten(
-    const std::shared_ptr<T<InN>> &tensor) {
+auto flatten_impl(const std::shared_ptr<T<InN>> &tensor,
+                  std::false_type /* OutN == 1 */) {
   return std::make_shared<T<OutN>>(
       tensor->data(),
       cute::make_layout(cute::make_shape(cute::size(tensor->layout)),
                         cute::make_stride(cute::_1{})),
       tensor->dtype, tensor->deviceType, tensor->future);
+}
+
+template <int OutN, template <int> class T, int InN>
+auto flatten(const std::shared_ptr<T<InN>> &tensor) {
+  static_assert(isTensor<T, InN>);
+  static_assert(InN > 1 && OutN < InN);
+  if constexpr (OutN != 1) {
+    return flatten_impl<OutN>(tensor, std::true_type{});
+  } else {
+    return flatten_impl<OutN>(tensor, std::false_type{});
+  }
 }
 
 template <typename T>

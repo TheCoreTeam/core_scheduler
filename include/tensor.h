@@ -84,7 +84,7 @@ struct Tensor {
 };
 
 template <template <int> class T, int N>
-concept isTensor =
+constexpr bool isTensor =
     std::is_same_v<std::remove_const_t<std::decay_t<T<N>>>, Tensor<N>>;
 
 using Tensor1D = Tensor<1>;
