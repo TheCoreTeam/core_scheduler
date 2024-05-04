@@ -5,6 +5,7 @@
 int main(int argc, char **argv) {
   MPI_Init(&argc, &argv);
   ::testing::InitGoogleTest(&argc, argv);
-  RUN_ALL_TESTS();
+  auto error = RUN_ALL_TESTS();
   MPI_Finalize();
+  return error;
 }

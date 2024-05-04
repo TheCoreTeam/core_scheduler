@@ -30,6 +30,7 @@ target_link_libraries(dllm_communication_tests PRIVATE
         Eigen3::Eigen
         GTest::gtest
         MPI::MPI_CXX
+        nccl
 )
 
 target_compile_options(dllm_communication_tests PRIVATE

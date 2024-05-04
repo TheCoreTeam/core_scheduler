@@ -1,4 +1,3 @@
-#include <dtensor_mpi.h>
 #include <gtest/gtest.h>
 #include <mpi.h>
 
@@ -6,9 +5,12 @@
 
 #include "communication/mpi/all_reduce.h"
 #include "communication/nccl/all_reduce.h"
+#include "dtensor_mpi.h"
+#include "dtensor_nccl.h"
 #include "logger.h"
 #include "threading/thread_pool_compute.h"
 #include "threading/thread_stream_mpi.h"
+#include "threading/thread_stream_nccl.h"
 
 class AllReduceMPITestFixture : public ::testing::Test {
  protected:
@@ -25,7 +27,7 @@ class AllReduceMPITestFixture : public ::testing::Test {
 namespace {
 template <typename T>
 void TestAllReduceT(const dllm::ContextCompute &context,
-                    const dllm::ContextMpi contextMpi) {
+                    const dllm::ContextMpi &contextMpi) {
   const int m = 128;
   auto shapeX = cute::make_shape(m);
   auto layoutX = cute::make_layout(shapeX, cute::GenRowMajor{});
@@ -75,15 +77,13 @@ class AllReduceMPIThreadPoolComputeTestFixture : public ::testing::Test {
                                 return rank;
                               }(),
                               MPI_COMM_WORLD};
-  dllm::ThreadPoolCompute threadPool{0, 3};
   dllm::ThreadStreamMpi threadStreamMpi{contextMpi};
 };
 
 namespace {
 template <typename T>
-void TestThreadPoolComputeAllReduceT(dllm::ThreadPoolCompute &threadPool,
-                                     dllm::ThreadStreamMpi &threadStreamMpi,
-                                     dllm::ContextMpi contextMpi) {
+void TestThreadPoolComputeAllReduceT(dllm::ThreadStreamMpi &threadStreamMpi,
+                                     dllm::ContextMpi &contextMpi) {
   const int m = 128;
   auto shapeX = cute::make_shape(m);
   auto layoutX = cute::make_layout(shapeX, cute::GenRowMajor{});
@@ -120,10 +120,170 @@ void TestThreadPoolComputeAllReduceT(dllm::ThreadPoolCompute &threadPool,
 }  // namespace
 
 TEST_F(AllReduceMPIThreadPoolComputeTestFixture, TestForwardF32) {
-  TestThreadPoolComputeAllReduceT<float>(threadPool, threadStreamMpi,
-                                         contextMpi);
+  TestThreadPoolComputeAllReduceT<float>(threadStreamMpi, contextMpi);
 }
 TEST_F(AllReduceMPIThreadPoolComputeTestFixture, TestForwardF64) {
-  TestThreadPoolComputeAllReduceT<double>(threadPool, threadStreamMpi,
-                                          contextMpi);
+  TestThreadPoolComputeAllReduceT<double>(threadStreamMpi, contextMpi);
+}
+
+class AllReduceNcclTestFixture : public ::testing::Test {
+ protected:
+  dllm::ContextCompute context{};
+  int rank;
+  dllm::ContextMpi contextMpi;
+  dllm::ContextNccl contextNccl;
+
+  void SetUp() override {
+    int processesPerNode;
+    CHECK_MPI(MPI_Comm_split_type(MPI_COMM_WORLD, MPI_COMM_TYPE_SHARED, rank,
+                                  MPI_INFO_NULL, &contextMpi.mpiComm));
+    CHECK_MPI(MPI_Comm_size(contextMpi.mpiComm, &processesPerNode));
+    CHECK_MPI(MPI_Comm_rank(contextMpi.mpiComm, &contextMpi.mpiRank));
+    ncclUniqueId id;
+    if (contextMpi.mpiRank == 0) {
+      CHECK_NCCL(ncclGetUniqueId(&id));
+    }
+    CHECK_MPI(
+        MPI_Bcast(&id, sizeof(ncclUniqueId), MPI_BYTE, 0, contextMpi.mpiComm));
+    contextNccl.ncclRank = contextMpi.mpiRank;
+    CHECK_CUDART(cudaSetDevice(contextMpi.mpiRank));
+    CHECK_NCCL(ncclCommInitRank(&contextNccl.ncclComm, processesPerNode, id,
+                                contextMpi.mpiRank));
+  }
+
+  void TearDown() override {
+    CHECK_NCCL(ncclCommDestroy(contextNccl.ncclComm));
+    CHECK_MPI(MPI_Comm_free(&contextMpi.mpiComm));
+  }
+};
+
+namespace {
+template <typename T>
+void TestNcclAllReduceT(const dllm::ContextCompute &context,
+                        const dllm::ContextMpi &contextMpi,
+                        const dllm::ContextNccl &contextNccl) {
+  const int m = 128;
+  auto shapeX = cute::make_shape(m);
+  auto layoutX = cute::make_layout(shapeX, cute::GenRowMajor{});
+
+  Eigen::Vector<T, Eigen::Dynamic> x(m);
+  std::srand(contextMpi.mpiRank + 1);
+  x.setRandom();
+
+  T *xDev;
+  CHECK_CUDART(cudaMalloc(&xDev, sizeof(T) * cute::size(layoutX)));
+  CHECK_CUDART(cudaMemcpy(xDev, x.data(), sizeof(T) * cute::size(layoutX),
+                          cudaMemcpyHostToDevice));
+  CHECK_CUDART(cudaDeviceSynchronize());
+
+  auto tensorX = std::make_shared<dllm::DTensor1D<dllm::communication::NCCL>>(
+      dllm::Tensor1D{xDev, layoutX, dllm::toDtype<T>(), dllm::CUDA});
+
+  auto task =
+      dllm::communication::AllReduce<dllm::communication::NCCL>::runInplace(
+          tensorX, dllm::communication::SUM);
+  tensorX.reset();
+  task(&contextNccl);
+  task.get_future().wait();
+
+  CHECK_CUDART(cudaMemcpy(x.data(), xDev, sizeof(T) * cute::size(layoutX),
+                          cudaMemcpyDeviceToHost));
+
+  Eigen::Vector<T, Eigen::Dynamic> accumulator(m);
+  if (contextMpi.mpiRank == 0) {
+    int worldSize;
+    CHECK_MPI(MPI_Comm_size(contextMpi.mpiComm, &worldSize));
+    accumulator.setZero();
+    for (int i = 0; i < worldSize; ++i) {
+      std::srand(i + 1);
+      accumulator += Eigen::Vector<T, Eigen::Dynamic>(m).setRandom();
+    }
+    ASSERT_NEAR(
+        accumulator.array().abs().maxCoeff() - x.array().abs().maxCoeff(), 0,
+        1e-4);
+  }
+  CHECK_CUDART(cudaFree(xDev));
+}
+}  // namespace
+
+TEST_F(AllReduceNcclTestFixture, TestForwardF32) {
+  TestNcclAllReduceT<float>(context, contextMpi, contextNccl);
+}
+TEST_F(AllReduceNcclTestFixture, TestForwardF64) {
+  TestNcclAllReduceT<double>(context, contextMpi, contextNccl);
+}
+
+class AllReduceThreadStreamNcclTestFixture : public ::testing::Test {
+ protected:
+  dllm::ContextCompute context{};
+  int rank;
+  dllm::ContextMpi contextMpi;
+  dllm::ThreadStreamNccl *threadStreamNccl;
+
+  AllReduceThreadStreamNcclTestFixture() {
+    int processesPerNode;
+    CHECK_MPI(MPI_Comm_split_type(MPI_COMM_WORLD, MPI_COMM_TYPE_SHARED, rank,
+                                  MPI_INFO_NULL, &contextMpi.mpiComm));
+    CHECK_MPI(MPI_Comm_size(contextMpi.mpiComm, &processesPerNode));
+    CHECK_MPI(MPI_Comm_rank(contextMpi.mpiComm, &contextMpi.mpiRank));
+    ncclUniqueId id;
+    if (contextMpi.mpiRank == 0) {
+      CHECK_NCCL(ncclGetUniqueId(&id));
+    }
+    CHECK_MPI(
+        MPI_Bcast(&id, sizeof(ncclUniqueId), MPI_BYTE, 0, contextMpi.mpiComm));
+    threadStreamNccl = new dllm::ThreadStreamNccl{
+        id, processesPerNode, contextMpi.mpiRank, contextMpi.mpiRank};
+  }
+
+  ~AllReduceThreadStreamNcclTestFixture() {
+    delete threadStreamNccl;
+    CHECK_MPI(MPI_Comm_free(&contextMpi.mpiComm));
+  }
+};
+
+namespace {
+template <typename T>
+void TestThreadStreamNcclAllReduceT(dllm::ThreadStreamNccl &threadStreamNccl,
+                                    dllm::ContextMpi &contextMpi) {
+  const int m = 128;
+  auto shapeX = cute::make_shape(m);
+  auto layoutX = cute::make_layout(shapeX, cute::GenRowMajor{});
+
+  Eigen::Vector<T, Eigen::Dynamic> x(m);
+
+  auto tensorX = std::make_shared<dllm::DTensor1D<dllm::communication::NCCL>>(
+      dllm::Tensor1D{x.data(), layoutX, dllm::toDtype<T>(), dllm::CUDA});
+
+  std::srand(contextMpi.mpiRank + 1);
+  x.setRandom();
+
+  auto task =
+      dllm::communication::AllReduce<dllm::communication::NCCL>::runInplace(
+          tensorX, dllm::communication::SUM);
+  tensorX.reset();
+  auto future = threadStreamNccl.submit(std::move(task));
+  future->wait();
+
+  Eigen::Vector<T, Eigen::Dynamic> accumulator(m);
+  if (contextMpi.mpiRank == 0) {
+    int worldSize;
+    CHECK_MPI(MPI_Comm_size(contextMpi.mpiComm, &worldSize));
+    accumulator.setZero();
+    for (int i = 0; i < worldSize; ++i) {
+      std::srand(i + 1);
+      accumulator += Eigen::Vector<T, Eigen::Dynamic>(m).setRandom();
+    }
+    ASSERT_NEAR(
+        accumulator.array().abs().maxCoeff() - x.array().abs().maxCoeff(), 0,
+        1e-4);
+  }
+}
+}  // namespace
+
+TEST_F(AllReduceThreadStreamNcclTestFixture, TestForwardF32) {
+  TestThreadStreamNcclAllReduceT<float>(*threadStreamNccl, contextMpi);
+}
+TEST_F(AllReduceThreadStreamNcclTestFixture, TestForwardF64) {
+  TestThreadStreamNcclAllReduceT<double>(*threadStreamNccl, contextMpi);
 }
