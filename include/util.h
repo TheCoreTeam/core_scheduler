@@ -72,39 +72,10 @@ __inline__ __attribute__((always_inline)) auto flatten(
 }
 
 template <int OutN, template <int> class T, int InN>
-  requires isTensor<T, InN> && (InN > 1) && (OutN < InN) && (OutN != 1)
-__inline__ __attribute__((always_inline)) auto flatten(
-    const std::shared_ptr<const T<InN>> &tensor) {
-  return std::make_shared<const T<OutN>>(
-      tensor->data(),
-      cute::make_layout(
-          cute::make_layout(
-              cute::size(
-                  cute::take<0, decltype(tensor->layout)::rank - (OutN - 1)>(
-                      tensor->layout)),
-              cute::stride<decltype(tensor->layout)::rank - OutN>(
-                  tensor->layout)),
-          cute::layout<decltype(tensor->layout)::rank - (OutN - 1)>(
-              tensor->layout)),
-      tensor->dtype, tensor->deviceType, tensor->future);
-}
-
-template <int OutN, template <int> class T, int InN>
   requires isTensor<T, InN> && (InN > 1) && (OutN < InN) && (OutN == 1)
 __inline__ __attribute__((always_inline)) auto flatten(
     const std::shared_ptr<T<InN>> &tensor) {
   return std::make_shared<T<OutN>>(
-      tensor->data(),
-      cute::make_layout(cute::make_shape(cute::size(tensor->layout)),
-                        cute::make_stride(cute::_1{})),
-      tensor->dtype, tensor->deviceType, tensor->future);
-}
-
-template <int OutN, template <int> class T, int InN>
-  requires isTensor<T, InN> && (InN > 1) && (OutN < InN) && (OutN == 1)
-__inline__ __attribute__((always_inline)) auto flatten(
-    const std::shared_ptr<const T<InN>> &tensor) {
-  return std::make_shared<const T<OutN>>(
       tensor->data(),
       cute::make_layout(cute::make_shape(cute::size(tensor->layout)),
                         cute::make_stride(cute::_1{})),
