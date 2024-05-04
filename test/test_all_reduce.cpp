@@ -230,13 +230,10 @@ class AllReduceThreadStreamNcclTestFixture : public ::testing::Test {
     if (contextMpi.mpiRank == 0) {
       CHECK_NCCL(ncclGetUniqueId(&id));
     }
-    int deviceCount;
-    CHECK_CUDART(cudaGetDeviceCount(&deviceCount));
     CHECK_MPI(
         MPI_Bcast(&id, sizeof(ncclUniqueId), MPI_BYTE, 0, contextMpi.mpiComm));
-    threadStreamNccl =
-        new dllm::ThreadStreamNccl{id, processesPerNode, contextMpi.mpiRank,
-                                   contextMpi.mpiRank % deviceCount};
+    threadStreamNccl = new dllm::ThreadStreamNccl{
+        id, processesPerNode, contextMpi.mpiRank, contextMpi.mpiRank};
   }
 
   ~AllReduceThreadStreamNcclTestFixture() {
