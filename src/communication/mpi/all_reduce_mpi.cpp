@@ -27,7 +27,7 @@ TaskMpi AllReduce<MPI>::run(
       default:
         SPDLOG_LOGGER_CRITICAL(&logger(),
                                "Not supported MPI all-reduce datatype");
-        return 0;
+        return reinterpret_cast<MPI_Datatype>(0);
     }
   }();
 
@@ -50,7 +50,7 @@ TaskMpi AllReduce<MPI>::runInplace(
       default:
         SPDLOG_LOGGER_CRITICAL(&logger(),
                                "Not supported MPI all-reduce datatype");
-        return 0;
+        return reinterpret_cast<MPI_Datatype>(0);
     }
   }();
 
