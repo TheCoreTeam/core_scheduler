@@ -32,7 +32,8 @@ void printTensor(const dllm::Tensor1D &tensor) {
 
 int main() {
   // dtype: FP32
-  // f(x) = 2x + 5
+  // Because we use FcNoBias, we can only fit to a linear function without bias
+  // f(x) = 2x
   // 1000 samples, batch size = 100, no shuffle
   // x (N x 1) -> FC1 -> f1 (N x 8) -> FC2 -> f2 (N x 1) -> MSE
   // FC1.w (8 x 1)
