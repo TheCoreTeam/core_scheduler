@@ -9,7 +9,6 @@
 #include "compute/mse.h"
 #include "logger.h"
 #include "optimizer/sgd.h"
-#include "tensor.h"
 #include "thread_pool.h"
 #include "util.h"
 
@@ -26,6 +25,8 @@ void printTensor(const dllm::Tensor1D &tensor) {
         CHECK_CUDART(cudaDeviceSynchronize());
         std::cout << buffer.transpose() << std::endl;
       }
+      default:
+        return;
     }
   }
 }
@@ -265,7 +266,7 @@ int main() {
                           sizeof(T) * yTest.size(), cudaMemcpyDeviceToHost));
   CHECK_CUDART(cudaDeviceSynchronize());
 
-  printf("Error: %f\n", (yTest - yTestRef).norm());
+  printf("Error: %.5e\n", (yTest - yTestRef).norm());
 
   CHECK_CUDART(cudaFree(ptrW2Out));
   CHECK_CUDART(cudaFree(ptrW2));
