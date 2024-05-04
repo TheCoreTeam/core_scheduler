@@ -5,14 +5,7 @@
 
 namespace dllm {
 template <int N>
-struct DTensor<N, communication::NCCL> : public Tensor<N> {
-  using Base = Tensor<N>;
-  int rank;
-  ncclComm_t comm;
-
-  DTensor(int rank, ncclComm_t comm, const Base &tensor)
-      : Base{tensor}, rank{rank}, comm{comm} {}
-};
+struct DTensor<N, communication::NCCL> : public Tensor<N> {};
 
 namespace communication {
 constexpr ncclRedOp_t toNcclRedOp(Operation operation) {

@@ -7,20 +7,20 @@ add_subdirectory(communication)
 set(DLLM_OPTIMIZER_SRCS "")
 add_subdirectory(optimizer)
 
+set(DLLM_THREADING_SRCS "")
+add_subdirectory(threading)
+
 add_library(dllm SHARED
         logger.cpp
-        thread_pool.cpp
         tensor.cpp
         ${DLLM_COMPUTE_SRCS}
         ${DLLM_COMMUNICATION_SRCS}
         ${DLLM_OPTIMIZER_SRCS}
+        ${DLLM_THREADING_SRCS}
 )
 
 target_compile_options(dllm PRIVATE
         $<$<CONFIG:Release>:-O3>
-)
-
-target_compile_options(dllm PRIVATE
         $<$<CONFIG:Debug>:-O0>
 )
 

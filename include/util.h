@@ -1,17 +1,17 @@
 #pragma once
-#include "task.h"
 #include "tensor.h"
+#include "threading/task_compute.h"
 
 namespace dllm::util {
 __inline__ __attribute__((always_inline)) void waitFutureIfValid(
-    const std::shared_ptr<Future> &future) {
+    const std::shared_ptr<FutureCompute> &future) {
   if (future != nullptr && future->valid()) {
     future->wait();
   }
 }
 
 __inline__ __attribute__((always_inline)) void waitFutureIfValid(
-    const Future &future) {
+    const FutureCompute &future) {
   if (future.valid()) {
     future.wait();
   }

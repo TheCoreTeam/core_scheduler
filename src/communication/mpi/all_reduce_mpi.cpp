@@ -1,13 +1,12 @@
 #include <mpi.h>
 
-#include "communication/all_reduce.h"
+#include "communication/mpi/all_reduce.h"
 #include "dtensor_mpi.h"
 #include "logger.h"
 #include "util.h"
 
 namespace dllm::communication {
-template <>
-Task AllReduce<MPI>::run(
+TaskMpi AllReduce<MPI>::run(
     const std::shared_ptr<const DTensor1D<MPI>> &tensorSend,
     const std::shared_ptr<DTensor1D<MPI>> &tensorReceive, Operation operation) {
   if (cute::size(tensorSend->layout) != cute::size(tensorReceive->layout)) {
@@ -32,17 +31,16 @@ Task AllReduce<MPI>::run(
     }
   }();
 
-  return Task{[=, future = tensorSend->future](const Context *context) {
+  return TaskMpi{[=, future = tensorSend->future](const ContextMpi *context) {
     util::waitFutureIfValid(future);
     CHECK_MPI(MPI_Allreduce(tensorSend->data(), tensorReceive->data(),
                             cute::size(tensorSend->layout), datatype,
-                            toMpiOp(operation), tensorSend->comm));
+                            toMpiOp(operation), context->mpiComm));
   }};
 }
 
-template <>
-Task AllReduce<MPI>::runInplace(const std::shared_ptr<DTensor1D<MPI>> &tensor,
-                                Operation operation) {
+TaskMpi AllReduce<MPI>::runInplace(
+    const std::shared_ptr<DTensor1D<MPI>> &tensor, Operation operation) {
   MPI_Datatype datatype = [&]() {
     switch (tensor->dtype) {
       case R_64F:
@@ -56,12 +54,12 @@ Task AllReduce<MPI>::runInplace(const std::shared_ptr<DTensor1D<MPI>> &tensor,
     }
   }();
 
-  return Task{[=, future = tensor->future](const Context *context) {
+  return TaskMpi{[=, future = tensor->future](const ContextMpi *context) {
     // Be careful: possible deadlock
     util::waitFutureIfValid(future);
     CHECK_MPI(MPI_Allreduce(MPI_IN_PLACE, tensor->data(),
                             cute::size(tensor->layout), datatype,
-                            toMpiOp(operation), tensor->comm));
+                            toMpiOp(operation), context->mpiComm));
   }};
 }
 }  // namespace dllm::communication

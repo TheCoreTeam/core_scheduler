@@ -7,7 +7,7 @@
 
 #include "device.h"
 #include "dtype.h"
-#include "task.h"
+#include "threading/task_compute.h"
 
 namespace dllm {
 
@@ -62,7 +62,7 @@ struct Tensor {
   }
 
   Tensor(const void *data, Layout layout, Dtype dtype, DeviceType deviceType,
-         std::shared_ptr<Future> future = {})
+         std::shared_ptr<FutureCompute> future = {})
       : data_{data},
         layout{layout},
         dtype{dtype},
@@ -77,7 +77,7 @@ struct Tensor {
   Layout layout;
   Dtype dtype;
   DeviceType deviceType;
-  std::shared_ptr<Future> future;
+  std::shared_ptr<FutureCompute> future;
 
  private:
   const void *data_;

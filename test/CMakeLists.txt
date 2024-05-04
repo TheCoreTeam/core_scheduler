@@ -14,9 +14,6 @@ target_link_libraries(dllm_tests PRIVATE
 
 target_compile_options(dllm_tests PRIVATE
         $<$<CONFIG:Release>:-O3>
-)
-
-target_compile_options(dllm_tests PRIVATE
         $<$<CONFIG:Debug>:-O0>
 )
 
@@ -37,8 +34,5 @@ target_link_libraries(dllm_communication_tests PRIVATE
 
 target_compile_options(dllm_communication_tests PRIVATE
         $<$<CONFIG:Release>:-O3>
-)
-
-target_compile_options(dllm_communication_tests PRIVATE
         $<$<CONFIG:Debug>:-O0>
 )

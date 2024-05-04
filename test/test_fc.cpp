@@ -1,12 +1,12 @@
 #include <cublas_v2.h>
 #include <cuda_runtime.h>
 #include <gtest/gtest.h>
-#include <thread_pool.h>
 
 #include <Eigen/Dense>
 
 #include "compute/fc.h"
 #include "logger.h"
+#include "threading/thread_pool_compute.h"
 #include "util.h"
 
 namespace Eigen::internal {
@@ -21,7 +21,7 @@ struct scalar_random_op<nv_half> {
 
 class FcTestFixture : public ::testing::Test {
  protected:
-  dllm::Context context{};
+  dllm::ContextCompute context{};
 
   void SetUp() override {
     CHECK_CUDART(
@@ -49,7 +49,7 @@ cublasComputeType_t toCublasComputeType() {
 
 namespace {
 template <typename DataTypeInput, typename DataTypeOutput, typename ComputeType>
-void TestForwardT(const dllm::Context &context) {
+void TestForwardT(const dllm::ContextCompute &context) {
   const int m = 128, n = 2048, k = 512, s = 3;
   auto shapeX = cute::make_shape(m, s, k);
   auto layoutX = cute::make_layout(shapeX, cute::GenRowMajor{});
@@ -129,7 +129,7 @@ TEST_F(FcTestFixture, TestForwardF64F64F64) {
 
 namespace {
 template <typename DataTypeInput, typename DataTypeOutput, typename ComputeType>
-void TestBackwardWT(const dllm::Context &context) {
+void TestBackwardWT(const dllm::ContextCompute &context) {
   const int m = 128, n = 2048, k = 512, s = 3;
   auto shapeX = cute::make_shape(m, s, k);
   auto layoutX = cute::make_layout(shapeX, cute::GenRowMajor{});
@@ -210,7 +210,7 @@ TEST_F(FcTestFixture, TestBackwardWF64F64F64) {
 
 namespace {
 template <typename DataTypeInput, typename DataTypeOutput, typename ComputeType>
-void TestBackwardXT(const dllm::Context &context) {
+void TestBackwardXT(const dllm::ContextCompute &context) {
   const int m = 128, n = 2048, k = 512, s = 3;
   auto shapeDX = cute::make_shape(m, s, k);
   auto layoutDX = cute::make_layout(shapeDX, cute::GenRowMajor{});
@@ -289,14 +289,14 @@ TEST_F(FcTestFixture, TestBackwardXF64F64F64) {
   TestBackwardXT<double, double, double>(context);
 }
 
-class FcThreadPoolTestFixture : public ::testing::Test {
+class FcThreadPoolComputeTestFixture : public ::testing::Test {
  protected:
-  dllm::ThreadPool threadPool{0, 1};
+  dllm::ThreadPoolCompute threadPool{0, 1};
 };
 
 namespace {
 template <typename DataTypeInput, typename DataTypeOutput, typename ComputeType>
-void TestThreadPoolForwardT(dllm::ThreadPool &threadPool) {
+void TestThreadPoolComputeForwardT(dllm::ThreadPoolCompute &threadPool) {
   const int m = 128, n = 2048, k = 512, s = 3;
   auto shapeX = cute::make_shape(m, s, k);
   auto layoutX = cute::make_layout(shapeX, cute::GenRowMajor{});
@@ -364,19 +364,19 @@ void TestThreadPoolForwardT(dllm::ThreadPool &threadPool) {
 }
 }  // namespace
 
-TEST_F(FcThreadPoolTestFixture, TestForwardF16F32F32) {
-  TestThreadPoolForwardT<nv_half, float, float>(threadPool);
+TEST_F(FcThreadPoolComputeTestFixture, TestForwardF16F32F32) {
+  TestThreadPoolComputeForwardT<nv_half, float, float>(threadPool);
 }
-TEST_F(FcThreadPoolTestFixture, TestForwardF32F32F32) {
-  TestThreadPoolForwardT<float, float, float>(threadPool);
+TEST_F(FcThreadPoolComputeTestFixture, TestForwardF32F32F32) {
+  TestThreadPoolComputeForwardT<float, float, float>(threadPool);
 }
-TEST_F(FcThreadPoolTestFixture, TestForwardF64F64F64) {
-  TestThreadPoolForwardT<double, double, double>(threadPool);
+TEST_F(FcThreadPoolComputeTestFixture, TestForwardF64F64F64) {
+  TestThreadPoolComputeForwardT<double, double, double>(threadPool);
 }
 
 namespace {
 template <typename DataTypeInput, typename DataTypeOutput, typename ComputeType>
-void TestThreadPoolBackwardWT(dllm::ThreadPool &threadPool) {
+void TestThreadPoolComputeBackwardWT(dllm::ThreadPoolCompute &threadPool) {
   const int m = 128, n = 2048, k = 512, s = 3;
   auto shapeX = cute::make_shape(m, s, k);
   auto layoutX = cute::make_layout(shapeX, cute::GenRowMajor{});
@@ -446,19 +446,19 @@ void TestThreadPoolBackwardWT(dllm::ThreadPool &threadPool) {
 }
 }  // namespace
 
-TEST_F(FcThreadPoolTestFixture, TestBackwardWF16F32F32) {
-  TestThreadPoolBackwardWT<nv_half, float, float>(threadPool);
+TEST_F(FcThreadPoolComputeTestFixture, TestBackwardWF16F32F32) {
+  TestThreadPoolComputeBackwardWT<nv_half, float, float>(threadPool);
 }
-TEST_F(FcThreadPoolTestFixture, TestBackwardWF32F32F32) {
-  TestThreadPoolBackwardWT<float, float, float>(threadPool);
+TEST_F(FcThreadPoolComputeTestFixture, TestBackwardWF32F32F32) {
+  TestThreadPoolComputeBackwardWT<float, float, float>(threadPool);
 }
-TEST_F(FcThreadPoolTestFixture, TestBackwardWF64F64F64) {
-  TestThreadPoolBackwardWT<double, double, double>(threadPool);
+TEST_F(FcThreadPoolComputeTestFixture, TestBackwardWF64F64F64) {
+  TestThreadPoolComputeBackwardWT<double, double, double>(threadPool);
 }
 
 namespace {
 template <typename DataTypeInput, typename DataTypeOutput, typename ComputeType>
-void TestThreadPoolBackwardXT(dllm::ThreadPool &threadPool) {
+void TestThreadPoolComputeBackwardXT(dllm::ThreadPoolCompute &threadPool) {
   const int m = 128, n = 2048, k = 512, s = 3;
   auto shapeDX = cute::make_shape(m, s, k);
   auto layoutDX = cute::make_layout(shapeDX, cute::GenRowMajor{});
@@ -528,12 +528,12 @@ void TestThreadPoolBackwardXT(dllm::ThreadPool &threadPool) {
 }
 }  // namespace
 
-TEST_F(FcThreadPoolTestFixture, TestBackwardXF16F32F32) {
-  TestThreadPoolBackwardXT<nv_half, float, float>(threadPool);
+TEST_F(FcThreadPoolComputeTestFixture, TestBackwardXF16F32F32) {
+  TestThreadPoolComputeBackwardXT<nv_half, float, float>(threadPool);
 }
-TEST_F(FcThreadPoolTestFixture, TestBackwardXF32F32F32) {
-  TestThreadPoolBackwardXT<float, float, float>(threadPool);
+TEST_F(FcThreadPoolComputeTestFixture, TestBackwardXF32F32F32) {
+  TestThreadPoolComputeBackwardXT<float, float, float>(threadPool);
 }
-TEST_F(FcThreadPoolTestFixture, TestBackwardXF64F64F64) {
-  TestThreadPoolBackwardXT<double, double, double>(threadPool);
+TEST_F(FcThreadPoolComputeTestFixture, TestBackwardXF64F64F64) {
+  TestThreadPoolComputeBackwardXT<double, double, double>(threadPool);
 }

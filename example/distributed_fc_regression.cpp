@@ -1,4 +1,6 @@
 #include <cuda_runtime.h>
+#include <mpi.h>
+#include <nccl.h>
 
 #include <Eigen/Dense>
 #include <iostream>
@@ -9,7 +11,7 @@
 #include "compute/mse.h"
 #include "logger.h"
 #include "optimizer/sgd.h"
-#include "threading/thread_pool_compute.h"
+#include "thread_pool.h"
 #include "util.h"
 
 void printTensor(const dllm::Tensor1D &tensor) {
@@ -31,7 +33,7 @@ void printTensor(const dllm::Tensor1D &tensor) {
   }
 }
 
-int main() {
+int main(int argc, char **argv) {
   // dtype: FP32
   // Because we use FcNoBias, we can only fit to a linear function without bias
   // f(x) = 2x
@@ -39,6 +41,18 @@ int main() {
   // x (N x 1) -> FC1 -> f1 (N x 8) -> FC2 -> f2 (N x 1) -> MSE
   // FC1.w (8 x 1)
   // FC2.w (1 x 8)
+  CHECK_MPI(MPI_Init(&argc, &argv));
+  int worldSize;
+  int mpiRank;
+  CHECK_MPI(MPI_Comm_size(MPI_COMM_WORLD, &worldSize));
+  CHECK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &mpiRank));
+  int deviceCount;
+  CHECK_CUDART(cudaGetDeviceCount(&deviceCount));
+  ncclUniqueId id;
+  ncclComm_t comm;
+  CHECK_NCCL(ncclGetUniqueId(&id));
+
+  int deviceRank;
   using T = float;
   const double lr = 1e-3;
   auto f = [](auto x) {
@@ -156,7 +170,7 @@ int main() {
   auto tensorDW2Out = std::make_shared<dllm::Tensor2D>(
       ptrDW2Out, layoutDW2Out, dllm::toDtype<T>(), dllm::CUDA);
 
-  dllm::ThreadPoolCompute threadPool{0, 2};
+  dllm::ThreadPool threadPool{0, 1};
 
   {
     auto task = dllm::compute::Init::kaimingNorm(tensorW1);
@@ -277,4 +291,5 @@ int main() {
     CHECK_CUDART(cudaFree(ptrX));
     CHECK_CUDART(cudaFree(ptrY));
   }
+  CHECK_MPI(MPI_Finalize());
 }
