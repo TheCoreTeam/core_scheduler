@@ -1,19 +1,56 @@
-set(FLASH_ATTENTION_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../../third_party/flash-attention")
+set(FLASH_ATTENTION_PATH ${CMAKE_CURRENT_SOURCE_DIR}/../../third_party/flash-attention)
+file(GLOB FLASH_ATTENTION_FLASH_ATTN_SRC ${FLASH_ATTENTION_PATH}/csrc/flash_attn/src/*.cu)
+# For debuging:
+#set(FLASH_ATTENTION_FLASH_ATTN_SRC
+#        ${FLASH_ATTENTION_PATH}/csrc/flash_attn/src/flash_bwd_hdim32_bf16_sm80.cu
+#        ${FLASH_ATTENTION_PATH}/csrc/flash_attn/src/flash_fwd_hdim32_bf16_sm80.cu
+#        ${FLASH_ATTENTION_PATH}/csrc/flash_attn/src/flash_fwd_split_hdim32_bf16_sm80.cu
+#)
+set(FLASH_ATTENTION_FLASH_ATTN_INCLUDE
+        ${FLASH_ATTENTION_PATH}/csrc/flash_attn/src/
+)
+
+set(FLASH_ATTENTION_FT_ATTEHTION_SRC
+        ${FLASH_ATTENTION_PATH}/csrc/ft_attention/decoder_masked_multihead_attention.cu
+)
+set(FLASH_ATTENTION_FT_ATTEHTION_INCLUDE
+        ${FLASH_ATTENTION_PATH}/csrc/ft_attention/
+)
+
 set(FLASH_ATTENTION_FUSED_SOFTMAX_SRC
-        "${CMAKE_CURRENT_SOURCE_DIR}/fused_softmax/scaled_masked_softmax_cuda.cu"
-        "${CMAKE_CURRENT_SOURCE_DIR}/fused_softmax/scaled_upper_triang_masked_softmax_cuda.cu"
+        ${CMAKE_CURRENT_SOURCE_DIR}/fused_softmax/scaled_masked_softmax_cuda.cu
+        ${CMAKE_CURRENT_SOURCE_DIR}/fused_softmax/scaled_upper_triang_masked_softmax_cuda.cu
 )
 set(FLASH_ATTENTION_FUSED_SOFTMAX_INCLUDE
-        "${FLASH_ATTENTION_PATH}/csrc/fused_softmax/"
+        ${FLASH_ATTENTION_PATH}/csrc/fused_softmax/
+)
+
+file(GLOB FLASH_ATTENTION_LAYER_NORM_SRC ${FLASH_ATTENTION_PATH}/csrc/layer_norm/*.cu)
+# For debuging:
+#set(FLASH_ATTENTION_LAYER_NORM_SRC
+#        ${FLASH_ATTENTION_PATH}/csrc/layer_norm/ln_bwd_256.cu
+#        ${FLASH_ATTENTION_PATH}/csrc/layer_norm/ln_fwd_256.cu
+#        ${FLASH_ATTENTION_PATH}/csrc/layer_norm/ln_parallel_bwd_256.cu
+#        ${FLASH_ATTENTION_PATH}/csrc/layer_norm/ln_parallel_fwd_256.cu
+#)
+set(FLASH_ATTENTION_LAYER_NORM_INCLUDE
+        ${FLASH_ATTENTION_PATH}/csrc/layer_norm/
 )
 
 add_library(dllm_flash_attention_plugin
+        ${FLASH_ATTENTION_FLASH_ATTN_SRC}
+        ${FLASH_ATTENTION_FT_ATTEHTION_SRC}
         ${FLASH_ATTENTION_FUSED_SOFTMAX_SRC}
+        ${FLASH_ATTENTION_LAYER_NORM_SRC}
 )
 
 target_include_directories(dllm_flash_attention_plugin PRIVATE
-        "${CMAKE_CURRENT_SOURCE_DIR}/fake_torch"
+        ${FLASH_ATTENTION_PATH}/csrc/cutlass/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/fake_torch
+        ${FLASH_ATTENTION_FLASH_ATTN_INCLUDE}
+        ${FLASH_ATTENTION_FT_ATTEHTION_INCLUDE}
         ${FLASH_ATTENTION_FUSED_SOFTMAX_INCLUDE}
+        ${FLASH_ATTENTION_LAYER_NORM_INCLUDE}
 )
 
 target_link_libraries(dllm_flash_attention_plugin PRIVATE dllm CUDA::cudart)
@@ -23,3 +60,5 @@ target_compile_options(dllm_flash_attention_plugin PRIVATE
         $<$<CONFIG:Debug>:-O0>
         $<$<COMPILE_LANGUAGE:CUDA>:--expt-relaxed-constexpr --expt-extended-lambda --use_fast_math>
 )
+
+target_compile_definitions(dllm_flash_attention_plugin PRIVATE -DENABLE_BF16)
