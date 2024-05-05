@@ -38,6 +38,7 @@ set(FLASH_ATTENTION_LAYER_NORM_INCLUDE
 )
 
 add_library(dllm_flash_attention_plugin
+        ${CMAKE_CURRENT_SOURCE_DIR}/context.cpp
         ${FLASH_ATTENTION_FLASH_ATTN_SRC}
         ${FLASH_ATTENTION_FT_ATTEHTION_SRC}
         ${FLASH_ATTENTION_FUSED_SOFTMAX_SRC}
