@@ -73,6 +73,21 @@ struct Tensor {
 
   const void *data() const { return data_; }
 
+  // following functions are internal use to align with pytorch api
+  // NEVER use them alone!
+  template <int k>
+  constexpr auto size() const {
+    return cute::shape<k>(layout);
+  }
+
+  auto scalar_type() const { return dtype; }
+
+  void *data_ptr() { return data(); };
+
+  const void *data_ptr() const { return data(); };
+  // above functions are internal use to align with pytorch api
+  // NEVER use them alone!
+
  public:
   Layout layout;
   Dtype dtype;

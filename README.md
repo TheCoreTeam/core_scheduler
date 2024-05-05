@@ -19,7 +19,7 @@ Run:
 git clone git@github.com:TheCoreTeam/DLLM.cpp.git
 cd DLLM.cpp
 git submodule init
-git submodule update
+git submodule update --recursive
 mkdir build
 cd build
 cmake ..
