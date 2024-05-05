@@ -37,7 +37,7 @@ set(FLASH_ATTENTION_LAYER_NORM_INCLUDE
         ${FLASH_ATTENTION_PATH}/csrc/layer_norm/
 )
 
-add_library(dllm_flash_attention_plugin
+add_library(dllm_flash_attention_plugin SHARED
         ${CMAKE_CURRENT_SOURCE_DIR}/context.cpp
         ${FLASH_ATTENTION_FLASH_ATTN_SRC}
         ${FLASH_ATTENTION_FT_ATTEHTION_SRC}
