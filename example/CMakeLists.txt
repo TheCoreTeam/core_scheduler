@@ -7,7 +7,7 @@ function(create_executable target_name source_files)
             CUDA::cublas
             Eigen3::Eigen
             MPI::MPI_CXX
-            nccl
+            ${NCCL_LIBRARIES}
     )
     target_compile_options(${target_name} PRIVATE
             $<$<CONFIG:Release>:-O3>

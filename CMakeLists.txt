@@ -1,15 +1,19 @@
 cmake_minimum_required(VERSION 3.11)
 project(dllm LANGUAGES CXX CUDA)
 
+set(BUILD_TESTING OFF)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(CMAKE_CUDA_ARCHITECTURES "80;86;90;90a")
+
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_CURRENT_SOURCE_DIR}/cmake/)
 
 option(DLLM_ENABLE_TESTS "" ON)
 option(DLLM_ENABLE_EXAMPLES "" ON)
 option(DLLM_ENABLE_FLASH_ATTENTION "" ON)
 
 find_package(CUDAToolkit REQUIRED)
+find_package(NCCL REQUIRED)
 find_package(MPI REQUIRED)
 
 add_subdirectory(third_party/fmt)

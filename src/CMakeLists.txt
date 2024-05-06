@@ -24,9 +24,12 @@ target_compile_options(dllm_core PRIVATE
         $<$<CONFIG:Debug>:-O0>
 )
 
-target_include_directories(dllm_core PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/../include")
+target_include_directories(dllm_core PUBLIC
+	${CMAKE_CURRENT_SOURCE_DIR}/../include
+	${NCCL_INCLUDE_DIRS}
+)
 
-target_link_libraries(dllm_core PRIVATE CUDA::cudart CUDA::cublas MPI::MPI_CXX nccl)
+target_link_libraries(dllm_core PRIVATE CUDA::cudart CUDA::cublas MPI::MPI_CXX ${NCCL_LIBRARIES})
 target_link_libraries(dllm_core PRIVATE fmt::fmt-header-only)
 target_link_libraries(dllm_core PUBLIC spdlog::spdlog_header_only)
 target_link_libraries(dllm_core PRIVATE nvidia::cutlass::cutlass)
