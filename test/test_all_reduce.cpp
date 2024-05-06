@@ -171,6 +171,7 @@ void TestNcclAllReduceT(const dllm::ContextCompute &context,
   x.setRandom();
 
   T *xDev;
+  CHECK_CUDART(cudaSetDevice(contextMpi.mpiRank));
   CHECK_CUDART(cudaMalloc(&xDev, sizeof(T) * cute::size(layoutX)));
   CHECK_CUDART(cudaMemcpy(xDev, x.data(), sizeof(T) * cute::size(layoutX),
                           cudaMemcpyHostToDevice));
@@ -251,12 +252,18 @@ void TestThreadStreamNcclAllReduceT(dllm::ThreadStreamNccl &threadStreamNccl,
   auto layoutX = cute::make_layout(shapeX, cute::GenRowMajor{});
 
   Eigen::Vector<T, Eigen::Dynamic> x(m);
-
-  auto tensorX = std::make_shared<dllm::Tensor1D>(
-      dllm::Tensor1D{x.data(), layoutX, dllm::toDtype<T>(), dllm::CUDA});
-
   std::srand(contextMpi.mpiRank + 1);
   x.setRandom();
+
+  T *xDev;
+  CHECK_CUDART(cudaSetDevice(contextMpi.mpiRank));
+  CHECK_CUDART(cudaMalloc(&xDev, sizeof(T) * cute::size(layoutX)));
+  CHECK_CUDART(cudaMemcpy(xDev, x.data(), sizeof(T) * cute::size(layoutX),
+                          cudaMemcpyHostToDevice));
+  CHECK_CUDART(cudaDeviceSynchronize());
+
+  auto tensorX = std::make_shared<dllm::Tensor1D>(
+      dllm::Tensor1D{xDev, layoutX, dllm::toDtype<T>(), dllm::CUDA});
 
   auto task =
       dllm::communication::AllReduce<dllm::communication::NCCL>::runInplace(
@@ -278,6 +285,7 @@ void TestThreadStreamNcclAllReduceT(dllm::ThreadStreamNccl &threadStreamNccl,
         accumulator.array().abs().maxCoeff() - x.array().abs().maxCoeff(), 0,
         1e-4);
   }
+  CHECK_CUDART(cudaFree(xDev));
 }
 }  // namespace
 
