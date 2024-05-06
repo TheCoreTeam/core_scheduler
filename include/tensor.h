@@ -63,15 +63,15 @@ struct Tensor {
 
   Tensor(const void *data, Layout layout, Dtype dtype, DeviceType deviceType,
          std::shared_ptr<FutureCompute> future = {})
-      : data_{data},
+      : data_{data, [](const void *) {}},
         layout{layout},
         dtype{dtype},
         deviceType{deviceType},
         future{std::move(future)} {}
 
-  void *data() { return const_cast<void *>(data_); }
+  void *data() { return const_cast<void *>(data_.get()); }
 
-  const void *data() const { return data_; }
+  const void *data() const { return data_.get(); }
 
   // following functions are internal use to align with pytorch api
   // NEVER use them alone!
@@ -80,11 +80,19 @@ struct Tensor {
     return cute::shape<k>(layout);
   }
 
+  auto numel() const { return cute::size(layout); }
+
   auto scalar_type() const { return dtype; }
 
-  void *data_ptr() { return data(); };
+  template <typename T = void>
+  auto data_ptr() {
+    return reinterpret_cast<T *>(data());
+  };
 
-  const void *data_ptr() const { return data(); };
+  template <typename T = const void>
+  auto data_ptr() const {
+    return reinterpret_cast<T *>(data());
+  };
   // above functions are internal use to align with pytorch api
   // NEVER use them alone!
 
@@ -95,7 +103,7 @@ struct Tensor {
   std::shared_ptr<FutureCompute> future;
 
  private:
-  const void *data_;
+  std::shared_ptr<const void> data_;
 };
 
 template <template <int> class T, int N>
