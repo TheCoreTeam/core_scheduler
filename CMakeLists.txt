@@ -1,9 +1,9 @@
 cmake_minimum_required(VERSION 3.11)
 project(dllm LANGUAGES CXX CUDA)
 
-if(NOT CMAKE_BUILD_TYPE)
+if (NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release)
-endif()
+endif ()
 
 set(BUILD_TESTING OFF)
 set(CMAKE_CXX_STANDARD 20)
