@@ -1,18 +1,24 @@
 [submodule "third_party/spdlog"]
 	path = third_party/spdlog
 	url = https://github.com/gabime/spdlog.git
+	shallow = true
 [submodule "third_party/fmt"]
 	path = third_party/fmt
 	url = https://github.com/fmtlib/fmt.git
+	shallow = true
 [submodule "third_party/cutlass"]
 	path = third_party/cutlass
 	url = https://github.com/NVIDIA/cutlass.git
+	shallow = true
 [submodule "third_party/googletest"]
 	path = third_party/googletest
 	url = https://github.com/google/googletest.git
+	shallow = true
 [submodule "third_party/eigen"]
 	path = third_party/eigen
 	url = https://gitlab.com/libeigen/eigen.git
+	shallow = true
 [submodule "third_party/flash-attention"]
 	path = third_party/flash-attention
 	url = https://github.com/Dao-AILab/flash-attention.git
+	shallow = true
