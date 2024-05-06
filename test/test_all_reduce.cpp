@@ -270,6 +270,9 @@ void TestThreadStreamNcclAllReduceT(dllm::ThreadStreamNccl &threadStreamNccl,
   tensorX.reset();
   auto future = threadStreamNccl.submit(std::move(task));
   future->wait();
+  CHECK_CUDART(cudaMemcpy(x.data(), xDev, sizeof(T) * cute::size(layoutX),
+                          cudaMemcpyDeviceToHost));
+  CHECK_CUDART(cudaDeviceSynchronize());
 
   Eigen::Vector<T, Eigen::Dynamic> accumulator(m);
   if (contextMpi.mpiRank == 0) {
