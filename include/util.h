@@ -100,9 +100,21 @@ auto flatten(const std::shared_ptr<T<InN>> &tensor) {
   }
 }
 
+// Binary hacking to improve performance - be careful
 template <typename T>
-__inline__ __attribute__((always_inline)) std::shared_ptr<const T>
+__inline__ __attribute__((always_inline)) std::shared_ptr<const T> &
 toConstSharedPtr(const std::shared_ptr<T> &ptr) {
-  return std::shared_ptr<const T>(ptr);
+  static_assert(sizeof(const std::shared_ptr<T> &) ==
+                sizeof(const std::shared_ptr<const T> &));
+  return reinterpret_cast<const std::shared_ptr<const T> &>(ptr);
+}
+
+// Binary hacking to improve performance - be careful
+template <typename T>
+__inline__ __attribute__((always_inline)) std::shared_ptr<const T> &
+toConstSharedPtr(std::shared_ptr<T> &ptr) {
+  static_assert(sizeof(std::shared_ptr<T> &) ==
+                sizeof(std::shared_ptr<const T> &));
+  return reinterpret_cast<std::shared_ptr<const T> &>(ptr);
 }
 }  // namespace dllm::util
