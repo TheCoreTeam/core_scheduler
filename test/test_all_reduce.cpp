@@ -171,7 +171,6 @@ void TestNcclAllReduceT(const dllm::ContextCompute &context,
   x.setRandom();
 
   T *xDev;
-  CHECK_CUDART(cudaSetDevice(contextMpi.mpiRank));
   CHECK_CUDART(cudaMalloc(&xDev, sizeof(T) * cute::size(layoutX)));
   CHECK_CUDART(cudaMemcpy(xDev, x.data(), sizeof(T) * cute::size(layoutX),
                           cudaMemcpyHostToDevice));
@@ -235,6 +234,7 @@ class AllReduceThreadStreamNcclTestFixture : public ::testing::Test {
         MPI_Bcast(&id, sizeof(ncclUniqueId), MPI_BYTE, 0, contextMpi.mpiComm));
     threadStreamNccl = new dllm::ThreadStreamNccl{
         id, processesPerNode, contextMpi.mpiRank, contextMpi.mpiRank};
+    CHECK_CUDART(cudaSetDevice(contextMpi.mpiRank));
   }
 
   ~AllReduceThreadStreamNcclTestFixture() {
@@ -256,7 +256,6 @@ void TestThreadStreamNcclAllReduceT(dllm::ThreadStreamNccl &threadStreamNccl,
   x.setRandom();
 
   T *xDev;
-  CHECK_CUDART(cudaSetDevice(contextMpi.mpiRank));
   CHECK_CUDART(cudaMalloc(&xDev, sizeof(T) * cute::size(layoutX)));
   CHECK_CUDART(cudaMemcpy(xDev, x.data(), sizeof(T) * cute::size(layoutX),
                           cudaMemcpyHostToDevice));
