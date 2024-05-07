@@ -62,7 +62,8 @@ target_link_libraries(dllm_flash_attention_plugin PRIVATE dllm CUDA::cudart)
 target_compile_options(dllm_flash_attention_plugin PRIVATE
         $<$<CONFIG:Release>:-O3>
         $<$<CONFIG:Debug>:-O0>
-        $<$<COMPILE_LANGUAGE:CUDA>:--expt-relaxed-constexpr --expt-extended-lambda --use_fast_math>
+        $<$<COMPILE_LANGUAGE:CUDA>:--expt-relaxed-constexpr --expt-extended-lambda --use_fast_math -Wno-deprecated-enum-enum-conversion>
+        $<$<COMPILE_LANGUAGE:CXX>:-Wno-deprecated-enum-enum-conversion>
 )
 
 target_compile_definitions(dllm_flash_attention_plugin PRIVATE -DENABLE_BF16)
