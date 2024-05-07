@@ -8,7 +8,8 @@ void mallocFromMemPool(std::shared_ptr<Tensor1D> &x, cudaStream_t stream) {
   x->resetData(std::shared_ptr<void>{
       [&] {
         void *ptr;
-        CHECK_CUDART(cudaMallocAsync(&ptr, cute::size(x->layout), stream));
+        CHECK_CUDART(cudaMallocAsync(
+            &ptr, toByte(x->dtype) * cute::size(x->layout), stream));
         return ptr;
       }(),
       [=](void *ptr) { CHECK_CUDART(cudaFreeAsync(ptr, stream)); }});
