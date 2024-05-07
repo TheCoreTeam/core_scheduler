@@ -392,8 +392,8 @@ auto dropout_add_ln_fwd(
 auto dropout_add_ln_bwd(
     const dllm::ContextCompute *context,
     const at::Tensor<2> &dz,                         // BxSxhidden_size
-    c10::optional<const at::Tensor<3>> &dx_,         // BxSxhidden_size
-    const at::Tensor<3> &x,                          // BxSxhidden_size
+    c10::optional<const at::Tensor<2>> &dx_,         // BxSxhidden_size
+    const at::Tensor<2> &x,                          // BxSxhidden_size
     c10::optional<const at::Tensor<2>> &x0_,         // BxSxhidden_size
     c10::optional<const at::Tensor<2>> &dmask_,      // BxSxhidden_size
     const at::Tensor<2> &mu,                         // BxS, FP32!
@@ -898,11 +898,11 @@ auto dropout_add_ln_parallel_residual_fwd(
 auto dropout_add_ln_parallel_residual_bwd(
     const dllm::ContextCompute *context,
     const at::Tensor<2> &dz0,                     // BxSxhidden_size
-    c10::optional<const at::Tensor<3>> &dz1_,     // BxSxhidden_size
-    c10::optional<const at::Tensor<3>> &dx_,      // BxSxhidden_size
-    const at::Tensor<3> &x,                       // BxSxhidden_size
-    c10::optional<const at::Tensor<3>> &dmask0_,  // BxSxhidden_size
-    c10::optional<const at::Tensor<3>> &dmask1_,  // BxSxhidden_size
+    c10::optional<const at::Tensor<2>> &dz1_,     // BxSxhidden_size
+    c10::optional<const at::Tensor<2>> &dx_,      // BxSxhidden_size
+    const at::Tensor<2> &x,                       // BxSxhidden_size
+    c10::optional<const at::Tensor<2>> &dmask0_,  // BxSxhidden_size
+    c10::optional<const at::Tensor<2>> &dmask1_,  // BxSxhidden_size
     const at::Tensor<2> &mu,                      // BxS, FP32!
     const at::Tensor<2> &rsigma,                  // BxS, FP32!
     const at::Tensor<1> &gamma0,                  // hidden_size
