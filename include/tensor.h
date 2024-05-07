@@ -69,7 +69,16 @@ struct Tensor {
         deviceType{deviceType},
         future{std::move(future)} {}
 
-  void *data() { return const_cast<void *>(data_.get()); }
+  template <template <typename T> class SmartPointer, typename T>
+  Tensor(SmartPointer<T> &&data, Layout layout, Dtype dtype,
+         DeviceType deviceType, std::shared_ptr<FutureCompute> future = {})
+      : data_{std::forward<SmartPointer<T>>(data)},
+        layout{layout},
+        dtype{dtype},
+        deviceType{deviceType},
+        future{std::move(future)} {}
+
+  void *data() { return data_.get(); }
 
   const void *data() const { return data_.get(); }
 
@@ -103,7 +112,7 @@ struct Tensor {
   std::shared_ptr<FutureCompute> future;
 
  private:
-  std::shared_ptr<const void> data_;
+  std::shared_ptr<void> data_;
 };
 
 template <template <int> class T, int N>
