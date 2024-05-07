@@ -25,8 +25,8 @@ target_compile_options(dllm_core PRIVATE
 )
 
 target_include_directories(dllm_core PUBLIC
-	${CMAKE_CURRENT_SOURCE_DIR}/../include
-	${NCCL_INCLUDE_DIRS}
+        ${CMAKE_CURRENT_SOURCE_DIR}/../include
+        ${NCCL_INCLUDE_DIRS}
 )
 
 target_link_libraries(dllm_core PRIVATE CUDA::cudart CUDA::cublas MPI::MPI_CXX ${NCCL_LIBRARIES})
