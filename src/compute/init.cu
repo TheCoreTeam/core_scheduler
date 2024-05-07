@@ -1,19 +1,19 @@
 #include <curand_kernel.h>
 
-#include "compute/init.h"
+#include "compute/random.h"
 #include "util.h"
 
-namespace dllm::compute::Init {
+namespace dllm::compute::Random {
 namespace {
 template <typename T>
-__global__ void kaimingNorm(T* y, double stddev, std::size_t n) {
+__global__ void kaimingNorm(T* y, curandState_t curandState, double stddev,
+                            std::size_t n) {
   auto tid = threadIdx.x + blockIdx.x * blockDim.x;
   if (tid >= n) {
     return;
   }
-  curandState state;
-  curand_init(tid, 0, 0, &state);
-  y[tid] = static_cast<T>(curand_normal(&state) * stddev);
+  skipahead(tid, &curandState);
+  y[tid] = static_cast<T>(curand_normal(&curandState) * stddev);
 }
 
 template <typename Fn>
@@ -38,15 +38,17 @@ __inline__ __attribute__((always_inline)) void autoDispatch(Dtype dtype,
 }
 }  // namespace
 
-void kaimingNormKernel(cudaStream_t cudaStream, Tensor2D& y, double stddev) {
+void kaimingNormKernel(const ContextCompute* context, Tensor2D& y,
+                       double stddev) {
   const auto size = cute::size(y.layout);
   auto f = [&](auto dummy) {
     using T = std::remove_const_t<std::decay_t<decltype(dummy)>>;
-    dim3 block(std::min(128, size));
-    dim3 grid(util::ceilDiv(size, std::min(128, size)));
-    kaimingNorm<<<grid, block, 0, cudaStream>>>(static_cast<T*>(y.data()),
-                                                stddev, size);
+    dim3 block(std::min<decltype(size)>(128, size));
+    dim3 grid(util::ceilDiv(size, std::min<decltype(size)>(128, size)));
+    kaimingNorm<<<grid, block, 0, context->cudaStream>>>(
+        static_cast<T*>(y.data()), context->curandState, stddev, size);
   };
   autoDispatch(y.dtype, f);
+  skipahead(size, context->curandState, context->curandStateMutex);
 }
-}  // namespace dllm::compute::Init
+}  // namespace dllm::compute::Random

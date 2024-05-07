@@ -2,6 +2,7 @@
 
 #include <cublas_v2.h>
 #include <cuda_runtime.h>
+#include <mpi.h>
 #include <pthread.h>
 #include <sched.h>
 
@@ -25,6 +26,16 @@ void threadTask(const int localRank, std::queue<TaskCompute> *taskQueue,
                 std::mutex *queueMutex, std::condition_variable *cv,
                 std::mutex *cvMutex, std::atomic<bool> *shutDown) {
   ContextCompute context{.deviceRank = localRank};
+  {
+    int init = false;
+    CHECK_MPI(MPI_Initialized(&init));
+    int worldRank = 0;
+    if (init) {
+      CHECK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &worldRank));
+    }
+    curand_init(worldRank, reinterpret_cast<std::ptrdiff_t>(&context), 0,
+                &context.curandState);
+  }
   CHECK_CUDART(cudaSetDevice(localRank));
   CHECK_CUDART(
       cudaStreamCreateWithFlags(&context.cudaStream, cudaStreamNonBlocking));

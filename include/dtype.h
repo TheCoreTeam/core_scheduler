@@ -2,17 +2,20 @@
 #include <cuda_runtime.h>
 
 namespace dllm {
-enum Dtype { R_64F, R_32F, R_16F, R_16BF };
+enum Dtype { R_64F, R_32F, R_16F, R_16BF, R_8U, R_32I };
 
-inline std::size_t toByte(Dtype dtype) {
+__inline__ __attribute__((always_inline)) std::size_t toByte(Dtype dtype) {
   switch (dtype) {
     case R_64F:
       return 8;
+    case R_32I:
     case R_32F:
       return 4;
     case R_16F:
     case R_16BF:
       return 2;
+    case R_8U:
+      return 1;
     default:
       return 0;
   }
@@ -28,10 +31,15 @@ constexpr Dtype toDtype() {
     return R_16F;
   } else if constexpr (std::is_same_v<T, nv_bfloat16>) {
     return R_16BF;
+  } else if constexpr (std::is_same_v<T, int32_t>) {
+    return R_32I;
+  } else if constexpr (std::is_same_v<T, uint8_t>) {
+    return R_8U;
   }
 }
 
-inline cudaDataType toCudaDataType(Dtype dtype) {
+__inline__ __attribute__((always_inline)) cudaDataType
+toCudaDataType(Dtype dtype) {
   switch (dtype) {
     case R_64F:
       return CUDA_R_64F;
@@ -40,7 +48,11 @@ inline cudaDataType toCudaDataType(Dtype dtype) {
     case R_16F:
       return CUDA_R_16F;
     case R_16BF:
-      return CUDA_C_16BF;
+      return CUDA_R_16BF;
+    case R_32I:
+      return CUDA_R_32I;
+    case R_8U:
+      return CUDA_R_8U;
     default:
       return static_cast<cudaDataType>(-1);
   }

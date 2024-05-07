@@ -1,5 +1,6 @@
 #include <cuda_runtime.h>
 
+#include "ATen/cuda/CUDAContext.h"
 #include "logger.h"
 
 namespace at::cuda {
@@ -17,7 +18,7 @@ struct cudaDevicePropWarpper {
 };
 }  // namespace
 
-const cudaDeviceProp* getCurrentDeviceProperties() {
+cudaDeviceProp* getCurrentDeviceProperties() {
   static cudaDevicePropWarpper prop{};
   int device;
   CHECK_CUDART(cudaGetDevice(&device));

@@ -28,7 +28,7 @@ namespace {
 template <typename T>
 void TestAllReduceT(const dllm::ContextCompute &context,
                     const dllm::ContextMpi &contextMpi) {
-  const int m = 128;
+  const dllm::TensorIndexType m = 128;
   auto shapeX = cute::make_shape(m);
   auto layoutX = cute::make_layout(shapeX, cute::GenRowMajor{});
 
@@ -84,7 +84,7 @@ namespace {
 template <typename T>
 void TestThreadPoolComputeAllReduceT(dllm::ThreadStreamMpi &threadStreamMpi,
                                      dllm::ContextMpi &contextMpi) {
-  const int m = 128;
+  const dllm::TensorIndexType m = 128;
   auto shapeX = cute::make_shape(m);
   auto layoutX = cute::make_layout(shapeX, cute::GenRowMajor{});
 
@@ -162,7 +162,7 @@ template <typename T>
 void TestNcclAllReduceT(const dllm::ContextCompute &context,
                         const dllm::ContextMpi &contextMpi,
                         const dllm::ContextNccl &contextNccl) {
-  const int m = 128;
+  const dllm::TensorIndexType m = 128;
   auto shapeX = cute::make_shape(m);
   auto layoutX = cute::make_layout(shapeX, cute::GenRowMajor{});
 
@@ -247,7 +247,7 @@ namespace {
 template <typename T>
 void TestThreadStreamNcclAllReduceT(dllm::ThreadStreamNccl &threadStreamNccl,
                                     dllm::ContextMpi &contextMpi) {
-  const int m = 128;
+  const dllm::TensorIndexType m = 128;
   auto shapeX = cute::make_shape(m);
   auto layoutX = cute::make_layout(shapeX, cute::GenRowMajor{});
 

@@ -50,7 +50,7 @@ cublasComputeType_t toCublasComputeType() {
 namespace {
 template <typename DataTypeInput, typename DataTypeOutput, typename ComputeType>
 void TestForwardT(const dllm::ContextCompute &context) {
-  const int m = 128, n = 2048, k = 512, s = 3;
+  const dllm::TensorIndexType m = 128, n = 2048, k = 512, s = 3;
   auto shapeX = cute::make_shape(m, s, k);
   auto layoutX = cute::make_layout(shapeX, cute::GenRowMajor{});
   auto shapeW = cute::make_shape(n, k);
@@ -130,7 +130,7 @@ TEST_F(FcTestFixture, TestForwardF64F64F64) {
 namespace {
 template <typename DataTypeInput, typename DataTypeOutput, typename ComputeType>
 void TestBackwardWT(const dllm::ContextCompute &context) {
-  const int m = 128, n = 2048, k = 512, s = 3;
+  const dllm::TensorIndexType m = 128, n = 2048, k = 512, s = 3;
   auto shapeX = cute::make_shape(m, s, k);
   auto layoutX = cute::make_layout(shapeX, cute::GenRowMajor{});
   auto shapeDW = cute::make_shape(n, k);
@@ -211,7 +211,7 @@ TEST_F(FcTestFixture, TestBackwardWF64F64F64) {
 namespace {
 template <typename DataTypeInput, typename DataTypeOutput, typename ComputeType>
 void TestBackwardXT(const dllm::ContextCompute &context) {
-  const int m = 128, n = 2048, k = 512, s = 3;
+  const dllm::TensorIndexType m = 128, n = 2048, k = 512, s = 3;
   auto shapeDX = cute::make_shape(m, s, k);
   auto layoutDX = cute::make_layout(shapeDX, cute::GenRowMajor{});
   auto shapeDY = cute::make_shape(m, s, n);
@@ -297,7 +297,7 @@ class FcThreadPoolComputeTestFixture : public ::testing::Test {
 namespace {
 template <typename DataTypeInput, typename DataTypeOutput, typename ComputeType>
 void TestThreadPoolComputeForwardT(dllm::ThreadPoolCompute &threadPool) {
-  const int m = 128, n = 2048, k = 512, s = 3;
+  const dllm::TensorIndexType m = 128, n = 2048, k = 512, s = 3;
   auto shapeX = cute::make_shape(m, s, k);
   auto layoutX = cute::make_layout(shapeX, cute::GenRowMajor{});
   auto shapeW = cute::make_shape(n, k);
@@ -377,7 +377,7 @@ TEST_F(FcThreadPoolComputeTestFixture, TestForwardF64F64F64) {
 namespace {
 template <typename DataTypeInput, typename DataTypeOutput, typename ComputeType>
 void TestThreadPoolComputeBackwardWT(dllm::ThreadPoolCompute &threadPool) {
-  const int m = 128, n = 2048, k = 512, s = 3;
+  const dllm::TensorIndexType m = 128, n = 2048, k = 512, s = 3;
   auto shapeX = cute::make_shape(m, s, k);
   auto layoutX = cute::make_layout(shapeX, cute::GenRowMajor{});
   auto shapeDW = cute::make_shape(n, k);
@@ -459,7 +459,7 @@ TEST_F(FcThreadPoolComputeTestFixture, TestBackwardWF64F64F64) {
 namespace {
 template <typename DataTypeInput, typename DataTypeOutput, typename ComputeType>
 void TestThreadPoolComputeBackwardXT(dllm::ThreadPoolCompute &threadPool) {
-  const int m = 128, n = 2048, k = 512, s = 3;
+  const dllm::TensorIndexType m = 128, n = 2048, k = 512, s = 3;
   auto shapeDX = cute::make_shape(m, s, k);
   auto layoutDX = cute::make_layout(shapeDX, cute::GenRowMajor{});
   auto shapeDY = cute::make_shape(m, s, n);

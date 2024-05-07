@@ -1,5 +1,6 @@
 set(FLASH_ATTENTION_PATH ${CMAKE_CURRENT_SOURCE_DIR}/../../third_party/flash-attention)
 file(GLOB FLASH_ATTENTION_FLASH_ATTN_SRC ${FLASH_ATTENTION_PATH}/csrc/flash_attn/src/*.cu)
+list(APPEND FLASH_ATTENTION_FLASH_ATTN_SRC ${CMAKE_CURRENT_SOURCE_DIR}/flash_attn/flash_api.cpp)
 # For debuging:
 #set(FLASH_ATTENTION_FLASH_ATTN_SRC
 #        ${FLASH_ATTENTION_PATH}/csrc/flash_attn/src/flash_bwd_hdim32_bf16_sm80.cu
@@ -11,6 +12,7 @@ set(FLASH_ATTENTION_FLASH_ATTN_INCLUDE
 )
 
 set(FLASH_ATTENTION_FT_ATTEHTION_SRC
+        ${CMAKE_CURRENT_SOURCE_DIR}/ft_attention/ft_attention.cpp
         ${FLASH_ATTENTION_PATH}/csrc/ft_attention/decoder_masked_multihead_attention.cu
 )
 set(FLASH_ATTENTION_FT_ATTEHTION_INCLUDE
@@ -26,6 +28,7 @@ set(FLASH_ATTENTION_FUSED_SOFTMAX_INCLUDE
 )
 
 file(GLOB FLASH_ATTENTION_LAYER_NORM_SRC ${FLASH_ATTENTION_PATH}/csrc/layer_norm/*.cu)
+list(APPEND FLASH_ATTENTION_LAYER_NORM_SRC ${CMAKE_CURRENT_SOURCE_DIR}/layer_norm/ln_api.cpp)
 # For debuging:
 #set(FLASH_ATTENTION_LAYER_NORM_SRC
 #        ${FLASH_ATTENTION_PATH}/csrc/layer_norm/ln_bwd_256.cu

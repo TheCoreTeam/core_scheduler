@@ -39,8 +39,8 @@ void stepKernel(cudaStream_t stream, Tensor1D& w, const Tensor1D& dw,
   const auto size = cute::size(w.layout);
   auto f = [&](auto dummy) {
     using T = std::remove_const_t<std::decay_t<decltype(dummy)>>;
-    dim3 block(std::min(128, size));
-    dim3 grid(util::ceilDiv(size, std::min(128, size)));
+    dim3 block(std::min<decltype(size)>(128, size));
+    dim3 grid(util::ceilDiv(size, std::min<decltype(size)>(128, size)));
     step<T><<<grid, block, 0, stream>>>(
         static_cast<T*>(w.data()), static_cast<const T*>(dw.data()), lr, size);
   };

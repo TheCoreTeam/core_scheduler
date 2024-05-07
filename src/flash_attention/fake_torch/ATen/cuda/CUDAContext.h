@@ -12,5 +12,5 @@
 #define C10_CUDA_KERNEL_LAUNCH_CHECK() C10_CUDA_CHECK(cudaGetLastError())
 
 namespace at::cuda {
-const cudaDeviceProp* getCurrentDeviceProperties();
+cudaDeviceProp* getCurrentDeviceProperties();
 }  // namespace at::cuda

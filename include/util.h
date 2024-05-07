@@ -102,7 +102,7 @@ auto flatten(const std::shared_ptr<T<InN>> &tensor) {
 
 // Binary hacking to improve performance - be careful
 template <typename T>
-__inline__ __attribute__((always_inline)) std::shared_ptr<const T> &
+__inline__ __attribute__((always_inline)) const std::shared_ptr<const T> &
 toConstSharedPtr(const std::shared_ptr<T> &ptr) {
   static_assert(sizeof(const std::shared_ptr<T> &) ==
                 sizeof(const std::shared_ptr<const T> &));
