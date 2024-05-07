@@ -1,12 +1,12 @@
 set(FLASH_ATTENTION_PATH ${CMAKE_CURRENT_SOURCE_DIR}/../../third_party/flash-attention)
-file(GLOB FLASH_ATTENTION_FLASH_ATTN_SRC ${FLASH_ATTENTION_PATH}/csrc/flash_attn/src/*.cu)
-list(APPEND FLASH_ATTENTION_FLASH_ATTN_SRC ${CMAKE_CURRENT_SOURCE_DIR}/flash_attn/flash_api.cpp)
 # For debuging:
 #set(FLASH_ATTENTION_FLASH_ATTN_SRC
 #        ${FLASH_ATTENTION_PATH}/csrc/flash_attn/src/flash_bwd_hdim32_bf16_sm80.cu
 #        ${FLASH_ATTENTION_PATH}/csrc/flash_attn/src/flash_fwd_hdim32_bf16_sm80.cu
 #        ${FLASH_ATTENTION_PATH}/csrc/flash_attn/src/flash_fwd_split_hdim32_bf16_sm80.cu
 #)
+file(GLOB FLASH_ATTENTION_FLASH_ATTN_SRC ${FLASH_ATTENTION_PATH}/csrc/flash_attn/src/*.cu)
+list(APPEND FLASH_ATTENTION_FLASH_ATTN_SRC ${CMAKE_CURRENT_SOURCE_DIR}/flash_attn/flash_api.cpp)
 set(FLASH_ATTENTION_FLASH_ATTN_INCLUDE
         ${FLASH_ATTENTION_PATH}/csrc/flash_attn/src/
 )
@@ -27,8 +27,6 @@ set(FLASH_ATTENTION_FUSED_SOFTMAX_INCLUDE
         ${FLASH_ATTENTION_PATH}/csrc/fused_softmax/
 )
 
-file(GLOB FLASH_ATTENTION_LAYER_NORM_SRC ${FLASH_ATTENTION_PATH}/csrc/layer_norm/*.cu)
-list(APPEND FLASH_ATTENTION_LAYER_NORM_SRC ${CMAKE_CURRENT_SOURCE_DIR}/layer_norm/ln_api.cpp)
 # For debuging:
 #set(FLASH_ATTENTION_LAYER_NORM_SRC
 #        ${FLASH_ATTENTION_PATH}/csrc/layer_norm/ln_bwd_256.cu
@@ -36,14 +34,16 @@ list(APPEND FLASH_ATTENTION_LAYER_NORM_SRC ${CMAKE_CURRENT_SOURCE_DIR}/layer_nor
 #        ${FLASH_ATTENTION_PATH}/csrc/layer_norm/ln_parallel_bwd_256.cu
 #        ${FLASH_ATTENTION_PATH}/csrc/layer_norm/ln_parallel_fwd_256.cu
 #)
+file(GLOB FLASH_ATTENTION_LAYER_NORM_SRC ${FLASH_ATTENTION_PATH}/csrc/layer_norm/*.cu)
+list(APPEND FLASH_ATTENTION_LAYER_NORM_SRC ${CMAKE_CURRENT_SOURCE_DIR}/layer_norm/ln_api.cpp)
 set(FLASH_ATTENTION_LAYER_NORM_INCLUDE
         ${FLASH_ATTENTION_PATH}/csrc/layer_norm/
 )
 
 add_library(dllm_flash_attention_plugin SHARED
         ${CMAKE_CURRENT_SOURCE_DIR}/context.cpp
-        ${FLASH_ATTENTION_FLASH_ATTN_SRC}
-        ${FLASH_ATTENTION_FT_ATTEHTION_SRC}
+#        ${FLASH_ATTENTION_FLASH_ATTN_SRC}
+#        ${FLASH_ATTENTION_FT_ATTEHTION_SRC}
         ${FLASH_ATTENTION_FUSED_SOFTMAX_SRC}
         ${FLASH_ATTENTION_LAYER_NORM_SRC}
 )

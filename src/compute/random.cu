@@ -6,23 +6,27 @@
 namespace dllm::compute::Random {
 namespace {
 template <typename T>
-__global__ void gaussian(T *y, curandState_t curandState, std::size_t n) {
+__global__ void gaussian(T *y, const unsigned long curandSeed,
+                         const unsigned long curandOffset, std::size_t n) {
   auto tid = threadIdx.x + blockIdx.x * blockDim.x;
   if (tid >= n) {
     return;
   }
-  skipahead(tid, &curandState);
-  y[tid] = static_cast<T>(curand_normal(&curandState));
+  curandStatePhilox4_32_10_t state;
+  curand_init(curandSeed, tid, curandOffset, &state);
+  y[tid] = static_cast<T>(curand_normal(&state));
 }
 
 template <typename T>
-__global__ void uniform(T *y, curandState_t curandState, std::size_t n) {
+__global__ void uniform(T *y, const unsigned long curandSeed,
+                        const unsigned long curandOffset, std::size_t n) {
   auto tid = threadIdx.x + blockIdx.x * blockDim.x;
   if (tid >= n) {
     return;
   }
-  skipahead(tid, &curandState);
-  y[tid] = static_cast<T>(curand_uniform(&curandState));
+  curandStatePhilox4_32_10_t state;
+  curand_init(curandSeed, tid, curandOffset, &state);
+  y[tid] = static_cast<T>(curand_uniform(&state));
 }
 
 template <typename Fn>
@@ -54,10 +58,11 @@ void gaussianKernel(const ContextCompute *context, Tensor1D &tensor) {
     dim3 block(std::min<decltype(size)>(128, size));
     dim3 grid(util::ceilDiv(size, std::min<decltype(size)>(128, size)));
     gaussian<<<grid, block, 0, context->cudaStream>>>(
-        static_cast<T *>(tensor.data()), context->curandState, size);
+        static_cast<T *>(tensor.data()), context->curandSeed,
+        context->curandOffset.load(), size);
   };
   autoDispatch(tensor.dtype, f);
-  skipahead(size, context->curandState, context->curandStateMutex);
+  context->curandOffset += size;
 }
 
 void uniformKernel(const ContextCompute *context, Tensor1D &tensor) {
@@ -67,9 +72,10 @@ void uniformKernel(const ContextCompute *context, Tensor1D &tensor) {
     dim3 block(std::min<decltype(size)>(128, size));
     dim3 grid(util::ceilDiv(size, std::min<decltype(size)>(128, size)));
     uniform<<<grid, block, 0, context->cudaStream>>>(
-        static_cast<T *>(tensor.data()), context->curandState, size);
+        static_cast<T *>(tensor.data()), context->curandSeed,
+        context->curandOffset.load(), size);
   };
   autoDispatch(tensor.dtype, f);
-  skipahead(size, context->curandState, context->curandStateMutex);
+  context->curandOffset += size;
 }
 }  // namespace dllm::compute::Random

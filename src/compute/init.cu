@@ -6,14 +6,16 @@
 namespace dllm::compute::Random {
 namespace {
 template <typename T>
-__global__ void kaimingNorm(T* y, curandState_t curandState, double stddev,
+__global__ void kaimingNorm(T* y, const unsigned long curandSeed,
+                            const unsigned long curandOffset, double stddev,
                             std::size_t n) {
   auto tid = threadIdx.x + blockIdx.x * blockDim.x;
   if (tid >= n) {
     return;
   }
-  skipahead(tid, &curandState);
-  y[tid] = static_cast<T>(curand_normal(&curandState) * stddev);
+  curandStatePhilox4_32_10_t state;
+  curand_init(curandSeed, tid, curandOffset, &state);
+  y[tid] = static_cast<T>(curand_normal(&state) * stddev);
 }
 
 template <typename Fn>
@@ -46,9 +48,10 @@ void kaimingNormKernel(const ContextCompute* context, Tensor2D& y,
     dim3 block(std::min<decltype(size)>(128, size));
     dim3 grid(util::ceilDiv(size, std::min<decltype(size)>(128, size)));
     kaimingNorm<<<grid, block, 0, context->cudaStream>>>(
-        static_cast<T*>(y.data()), context->curandState, stddev, size);
+        static_cast<T*>(y.data()), context->curandSeed,
+        context->curandOffset.load(), stddev, size);
   };
   autoDispatch(y.dtype, f);
-  skipahead(size, context->curandState, context->curandStateMutex);
+  context->curandOffset += size;
 }
 }  // namespace dllm::compute::Random

@@ -33,8 +33,8 @@ void threadTask(const int localRank, std::queue<TaskCompute> *taskQueue,
     if (init) {
       CHECK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &worldRank));
     }
-    curand_init(worldRank, reinterpret_cast<std::ptrdiff_t>(&context), 0,
-                &context.curandState);
+    context.curandSeed = worldRank;
+    context.curandOffset = reinterpret_cast<unsigned long>(&context);
   }
   CHECK_CUDART(cudaSetDevice(localRank));
   CHECK_CUDART(

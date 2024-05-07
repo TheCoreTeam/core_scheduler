@@ -94,8 +94,8 @@ struct Tensor {
   // NEVER use them alone!
   template <std::size_t... I>
   __inline__ __attribute__((always_inline)) auto sizes_impl(
-      const Layout &layout, std::index_sequence<I...>) {
-    return std::array<TensorIndexType, N>(cute::shape<I>(layout)...);
+      const Layout &layout, std::index_sequence<I...>) const {
+    return std::array<TensorIndexType, N>{cute::shape<I>(layout)...};
   }
 
   constexpr auto sizes() const {
@@ -120,8 +120,10 @@ struct Tensor {
   auto data_ptr() const {
     return reinterpret_cast<T *>(data());
   };
-  // above functions are internal use to align with pytorch api
-  // NEVER use them alone!
+
+  bool is_cuda() const { return deviceType == CUDA; }
+
+  constexpr TensorIndexType dim() const { return Layout::rank; }
 
   template <DeviceType deviceType, typename Layout, typename... Args>
   static std::shared_ptr<Tensor> empty(const Layout &layout, Dtype dtype,
@@ -153,6 +155,8 @@ struct Tensor {
     } else {
     }
   }
+  // above functions are internal use to align with pytorch api
+  // NEVER use them alone!
 
  public:
   Layout layout;

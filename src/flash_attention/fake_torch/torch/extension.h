@@ -6,7 +6,13 @@
 
 #include "tensor.h"
 
-#define TORCH_CHECK(...)
+// TODO: may fix this later
+#define TORCH_CHECK(statement, ...) \
+  do {                              \
+    if (!(statement)) {             \
+      throw;                        \
+    }                               \
+  } while (false)
 
 namespace torch {
 template <int N>

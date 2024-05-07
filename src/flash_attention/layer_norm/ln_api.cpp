@@ -128,17 +128,18 @@ layer_norm::BwdFunction &get_parallel_bwd_launcher(
 
 auto dropout_add_ln_fwd(
     const dllm::ContextCompute *context,
-    const at::Tensor<3> &x0,                        // Input: BxSxhidden_size
-    c10::optional<const at::Tensor<3>> &residual_,  // Residual: BxSxhidden_size
+    const at::Tensor<2> &x0,                        // Input: BxSxhidden_size
+    c10::optional<const at::Tensor<2>> &residual_,  // Residual: BxSxhidden_size
     const at::Tensor<1> &gamma,                     // hidden_size
     c10::optional<const at::Tensor<1>> &beta_,      // hidden_size
-    c10::optional<const at::Tensor<2>> &rowscale_,  // BxS
+    c10::optional<const at::Tensor<1>> &rowscale_,  // BxS
     c10::optional<const at::Tensor<1>> &colscale_,  // hidden_size
-    c10::optional<const at::Tensor<2>> &x0_subset_,  // BxS
-    c10::optional<const at::Tensor<2>> &z_subset_,   // BxS
+    c10::optional<const at::Tensor<1>> &x0_subset_,  // BxS
+    c10::optional<const at::Tensor<1>> &z_subset_,   // BxS
     const float dropout_p, const float epsilon, const float rowscale_const,
-    const int64_t z_numrows, c10::optional<at::Generator> gen_,
-    bool residual_in_fp32 = false, bool is_rms_norm = false) {
+    // const int64_t z_numrows, c10::optional<at::Generator> gen_,
+    const int64_t z_numrows, bool residual_in_fp32 = false,
+    bool is_rms_norm = false) {
   auto itype = x0.scalar_type();
   auto rtype = residual_.has_value()
                    ? residual_.value().scalar_type()
@@ -151,7 +152,7 @@ auto dropout_add_ln_fwd(
   TORCH_CHECK(x0.is_cuda());
   TORCH_CHECK(gamma.is_cuda());
 
-  TORCH_CHECK(x0.is_contiguous());
+  // TORCH_CHECK(x0.is_contiguous());
   // c10::IntArrayRef does not own the storage, so we need to construct a
   // vector. Otherwise just constructing IntArrayRef({blah}) will cause
   // uninitialized memory because blah is then deallocated.
@@ -173,48 +174,48 @@ auto dropout_add_ln_fwd(
 
   if (beta_.has_value()) {
     auto beta = beta_.value();
-    TORCH_CHECK(beta.dtype() == wtype);
+    TORCH_CHECK(beta.dtype == wtype);
     TORCH_CHECK(beta.is_cuda());
-    TORCH_CHECK(beta.is_contiguous());
+    // TORCH_CHECK(beta.is_contiguous());
     TORCH_CHECK(beta.sizes() == gamma.sizes());
   }
 
   if (residual_.has_value()) {
     auto residual = residual_.value();
     TORCH_CHECK(residual.is_cuda());
-    TORCH_CHECK(residual.is_contiguous());
+    // TORCH_CHECK(residual.is_contiguous());
     TORCH_CHECK(residual.sizes() == sizes);
   }
 
   if (rowscale_.has_value()) {
     auto rowscale = rowscale_.value();
     TORCH_CHECK(rowscale.is_cuda());
-    TORCH_CHECK(rowscale.is_contiguous());
+    // TORCH_CHECK(rowscale.is_contiguous());
     TORCH_CHECK(rowscale.sizes() == IntArrayRef1D{rows});
-    TORCH_CHECK(rowscale.dtype() == itype);
+    TORCH_CHECK(rowscale.dtype == itype);
   }
 
   if (colscale_.has_value()) {
     auto colscale = colscale_.value();
     TORCH_CHECK(colscale.is_cuda());
-    TORCH_CHECK(colscale.is_contiguous());
+    // TORCH_CHECK(colscale.is_contiguous());
     TORCH_CHECK(colscale.sizes() == IntArrayRef1D{cols});
-    TORCH_CHECK(colscale.dtype() == wtype);
+    TORCH_CHECK(colscale.dtype == wtype);
   }
 
   if (x0_subset_.has_value()) {
     auto x0_subset = x0_subset_.value();
     TORCH_CHECK(x0_subset.is_cuda());
-    TORCH_CHECK(x0_subset.is_contiguous());
+    // TORCH_CHECK(x0_subset.is_contiguous());
     TORCH_CHECK(x0_subset.sizes() == IntArrayRef1D{rows});
-    TORCH_CHECK(x0_subset.dtype() == torch::kInt32);
+    TORCH_CHECK(x0_subset.dtype == torch::kInt32);
 
     TORCH_CHECK(z_subset_.has_value());
     auto z_subset = z_subset_.value();
     TORCH_CHECK(z_subset.is_cuda());
-    TORCH_CHECK(z_subset.is_contiguous());
+    // TORCH_CHECK(z_subset.is_contiguous());
     TORCH_CHECK(z_subset.sizes() == IntArrayRef1D{rows});
-    TORCH_CHECK(z_subset.dtype() == torch::kInt32);
+    TORCH_CHECK(z_subset.dtype == torch::kInt32);
   }
 
   TORCH_CHECK((hidden_size % 8 == 0) && (hidden_size <= 8192));
@@ -241,14 +242,18 @@ auto dropout_add_ln_fwd(
   //     z_subset_.has_value() ? IntArrayRef2D{z_numrows, cols} : sizes,
   //     opts.dtype(otype));
 
-  std::shared_ptr<at::Tensor<2>> x;
-  if (save_x) {
-    x = torch::empty<dllm::CUDA>(sizes, rtype, context);
-  }
-  std::shared_ptr<at::Tensor<3>> dmask;
-  if (dropout_p > 0.f) {
-    dmask = torch::empty<dllm::CUDA>(x0.sizes(), mtype, context);
-  };
+  auto x = [&]() {
+    if (save_x) {
+      return torch::empty<dllm::CUDA>(sizes, rtype, context);
+    }
+    return decltype(torch::empty<dllm::CUDA>(sizes, rtype, context)){};
+  }();
+  auto dmask = [&]() {
+    if (dropout_p > 0.f) {
+      return torch::empty<dllm::CUDA>(x0.sizes(), mtype, context);
+    };
+    return decltype(torch::empty<dllm::CUDA>(x0.sizes(), mtype, context)){};
+  }();
   auto z = torch::empty<dllm::CUDA>(
       z_subset_.has_value()
           ? IntArrayRef2D{static_cast<dllm::TensorIndexType>(z_numrows),
@@ -301,8 +306,8 @@ auto dropout_add_ln_fwd(
       z_subset_.has_value() ? const_cast<void *>(z_subset_.value().data_ptr())
                             : nullptr;
 
-  auto gen = at::get_generator_or_default<at::CUDAGeneratorImpl>(
-      gen_, at::cuda::detail::getDefaultCUDAGenerator());
+  // auto gen = at::get_generator_or_default<at::CUDAGeneratorImpl>(
+  //     gen_, at::cuda::detail::getDefaultCUDAGenerator());
 
   auto round_multiple = [](int x, int m) { return (x + m - 1) / m * m; };
   const int multiple =
@@ -345,8 +350,10 @@ auto dropout_add_ln_fwd(
 
     // See Note [Acquire lock when using random generators]
     {
-      std::lock_guard<std::mutex> lock(gen->mutex_);
-      params.philox_args = gen->philox_cuda_state(counter_offset);
+      // std::lock_guard<std::mutex> lock(gen->mutex_);
+      // params.philox_args = gen->philox_cuda_state(counter_offset);
+      params.philox_args = {context->curandSeed, context->curandOffset.load()};
+      context->curandOffset += counter_offset;
     }
   }
 
@@ -384,18 +391,18 @@ auto dropout_add_ln_fwd(
 
 auto dropout_add_ln_bwd(
     const dllm::ContextCompute *context,
-    const at::Tensor<3> &dz,                         // BxSxhidden_size
+    const at::Tensor<2> &dz,                         // BxSxhidden_size
     c10::optional<const at::Tensor<3>> &dx_,         // BxSxhidden_size
     const at::Tensor<3> &x,                          // BxSxhidden_size
-    c10::optional<const at::Tensor<3>> &x0_,         // BxSxhidden_size
-    c10::optional<const at::Tensor<3>> &dmask_,      // BxSxhidden_size
+    c10::optional<const at::Tensor<2>> &x0_,         // BxSxhidden_size
+    c10::optional<const at::Tensor<2>> &dmask_,      // BxSxhidden_size
     const at::Tensor<2> &mu,                         // BxS, FP32!
     const at::Tensor<2> &rsigma,                     // BxS, FP32!
     const at::Tensor<1> &gamma,                      // hidden_size
-    c10::optional<const at::Tensor<2>> &rowscale_,   // BxS
+    c10::optional<const at::Tensor<1>> &rowscale_,   // BxS
     c10::optional<const at::Tensor<1>> &colscale_,   // hidden_size
-    c10::optional<const at::Tensor<2>> &x0_subset_,  // BxS
-    c10::optional<const at::Tensor<2>> &z_subset_,   // BxS
+    c10::optional<const at::Tensor<1>> &x0_subset_,  // BxS
+    c10::optional<const at::Tensor<1>> &z_subset_,   // BxS
     const float dropout_p, const float rowscale_const, const int64_t x0_numrows,
     const bool has_residual, bool is_rms_norm = false) {
   auto itype = dz.scalar_type();
@@ -409,9 +416,9 @@ auto dropout_add_ln_bwd(
     TORCH_CHECK(dmask_.has_value());
   }
 
-  TORCH_CHECK(dz.dtype() == otype);
-  TORCH_CHECK(mu.dtype() == ctype);
-  TORCH_CHECK(rsigma.dtype() == ctype);
+  TORCH_CHECK(dz.dtype == otype);
+  TORCH_CHECK(mu.dtype == ctype);
+  TORCH_CHECK(rsigma.dtype == ctype);
 
   TORCH_CHECK(x.is_cuda());
   TORCH_CHECK(dz.is_cuda());
@@ -419,15 +426,15 @@ auto dropout_add_ln_bwd(
   TORCH_CHECK(rsigma.is_cuda());
   TORCH_CHECK(gamma.is_cuda());
 
-  TORCH_CHECK(x.is_contiguous());
-  TORCH_CHECK(dz.is_contiguous());
+  // TORCH_CHECK(x.is_contiguous());
+  // TORCH_CHECK(dz.is_contiguous());
 
   auto sizes = x.sizes();
   TORCH_CHECK(sizes.size() == 2);
   auto rows = sizes[0];
   auto cols = sizes[1];
   TORCH_CHECK(dz.dim() == 2);
-  TORCH_CHECK(dz.size(1) == cols);
+  TORCH_CHECK(dz.size<1>() == cols);
   auto hidden_size = gamma.numel();
   TORCH_CHECK(hidden_size == cols);
 
@@ -439,56 +446,56 @@ auto dropout_add_ln_bwd(
 
   if (dx_.has_value()) {
     auto dx = dx_.value();
-    TORCH_CHECK(dx.dtype() == rtype);
+    TORCH_CHECK(dx.dtype == rtype);
     TORCH_CHECK(dx.is_cuda());
-    TORCH_CHECK(dx.is_contiguous());
+    // TORCH_CHECK(dx.is_contiguous());
     TORCH_CHECK(dx.sizes() == sizes);
   }
 
   if (dmask_.has_value()) {
     auto dmask = dmask_.value();
-    TORCH_CHECK(dmask.dtype() == mtype);
+    TORCH_CHECK(dmask.dtype == mtype);
     TORCH_CHECK(dmask.is_cuda());
-    TORCH_CHECK(dmask.is_contiguous());
+    // TORCH_CHECK(dmask.is_contiguous());
     TORCH_CHECK(dmask.sizes() == x0_sizes);
   }
 
   if (rowscale_.has_value()) {
     auto rowscale = rowscale_.value();
     TORCH_CHECK(rowscale.is_cuda());
-    TORCH_CHECK(rowscale.is_contiguous());
-    TORCH_CHECK(rowscale.sizes() == c10::IntArrayRef{rows});
-    TORCH_CHECK(rowscale.dtype() == itype);
+    // TORCH_CHECK(rowscale.is_contiguous());
+    TORCH_CHECK(rowscale.sizes() == IntArrayRef1D{rows});
+    TORCH_CHECK(rowscale.dtype == itype);
   }
 
   if (colscale_.has_value()) {
     auto colscale = colscale_.value();
     TORCH_CHECK(colscale.is_cuda());
-    TORCH_CHECK(colscale.is_contiguous());
-    TORCH_CHECK(colscale.sizes() == c10::IntArrayRef{cols});
-    TORCH_CHECK(colscale.dtype() == wtype);
+    // TORCH_CHECK(colscale.is_contiguous());
+    TORCH_CHECK(colscale.sizes() == IntArrayRef1D{cols});
+    TORCH_CHECK(colscale.dtype == wtype);
 
     TORCH_CHECK(x0_.has_value());
     auto x0 = x0_.value();
     TORCH_CHECK(x0.is_cuda());
-    TORCH_CHECK(x0.is_contiguous());
+    // TORCH_CHECK(x0.is_contiguous());
     TORCH_CHECK(x0.sizes() == x0_sizes);
-    TORCH_CHECK(x0.dtype() == itype);
+    TORCH_CHECK(x0.dtype == itype);
   }
 
   if (x0_subset_.has_value()) {
     auto x0_subset = x0_subset_.value();
     TORCH_CHECK(x0_subset.is_cuda());
-    TORCH_CHECK(x0_subset.is_contiguous());
-    TORCH_CHECK(x0_subset.sizes() == c10::IntArrayRef{rows});
-    TORCH_CHECK(x0_subset.dtype() == torch::kInt32);
+    // TORCH_CHECK(x0_subset.is_contiguous());
+    TORCH_CHECK(x0_subset.sizes() == IntArrayRef1D{rows});
+    TORCH_CHECK(x0_subset.dtype == torch::kInt32);
 
     TORCH_CHECK(z_subset_.has_value());
     auto z_subset = z_subset_.value();
     TORCH_CHECK(z_subset.is_cuda());
-    TORCH_CHECK(z_subset.is_contiguous());
-    TORCH_CHECK(z_subset.sizes() == c10::IntArrayRef{rows});
-    TORCH_CHECK(z_subset.dtype() == torch::kInt32);
+    // TORCH_CHECK(z_subset.is_contiguous());
+    TORCH_CHECK(z_subset.sizes() == IntArrayRef1D{rows});
+    TORCH_CHECK(z_subset.dtype == torch::kInt32);
   }
 
   TORCH_CHECK((hidden_size % 8 == 0) && (hidden_size <= 8192));
@@ -603,7 +610,7 @@ auto dropout_add_ln_bwd(
   params.dz = const_cast<void *>(dz.data_ptr());
   params.dx =
       dx_.has_value() ? const_cast<void *>(dx_.value().data_ptr()) : nullptr;
-  params.dx0 = dx0.data_ptr();
+  params.dx0 = dx0->data_ptr();
   params.dbeta = dbeta->data_ptr();
   params.dgamma = dgamma->data_ptr();
   params.dcolscale = colscale_.has_value() ? dcolscale->data_ptr() : nullptr;
@@ -657,16 +664,16 @@ auto dropout_add_ln_bwd(
 
 auto dropout_add_ln_parallel_residual_fwd(
     const dllm::ContextCompute *context,
-    const at::Tensor<3> &x0,                        // Input: BxSxhidden_size
-    c10::optional<const at::Tensor<3>> &x1_,        // Input: BxSxhidden_size
-    c10::optional<const at::Tensor<3>> &residual_,  // Residual: BxSxhidden_size
+    const at::Tensor<2> &x0,                        // Input: BxSxhidden_size
+    c10::optional<const at::Tensor<2>> &x1_,        // Input: BxSxhidden_size
+    c10::optional<const at::Tensor<2>> &residual_,  // Residual: BxSxhidden_size
     const at::Tensor<1> &gamma0,                    // hidden_size
     c10::optional<const at::Tensor<1>> &beta0_,     // hidden_size
     c10::optional<const at::Tensor<1>> &gamma1_,    // hidden_size
     c10::optional<const at::Tensor<1>> &beta1_,     // hidden_size
     const float dropout_p, const float epsilon,
-    c10::optional<at::Generator> gen_, bool residual_in_fp32 = false,
-    bool is_rms_norm = false) {
+    // c10::optional<at::Generator> gen_, bool residual_in_fp32 = false,
+    bool residual_in_fp32 = false, bool is_rms_norm = false) {
   auto itype = x0.scalar_type();
   auto rtype = residual_.has_value()
                    ? residual_.value().scalar_type()
@@ -679,7 +686,7 @@ auto dropout_add_ln_parallel_residual_fwd(
   TORCH_CHECK(x0.is_cuda());
   TORCH_CHECK(gamma0.is_cuda());
 
-  TORCH_CHECK(x0.is_contiguous());
+  // TORCH_CHECK(x0.is_contiguous());
   const auto sizes = x0.sizes();
   TORCH_CHECK(x0.dim() == 2);
 
@@ -691,38 +698,38 @@ auto dropout_add_ln_parallel_residual_fwd(
   if (x1_.has_value()) {
     auto x1 = x1_.value();
     TORCH_CHECK(x1.is_cuda());
-    TORCH_CHECK(x1.is_contiguous());
+    // TORCH_CHECK(x1.is_contiguous());
     TORCH_CHECK(x1.sizes() == sizes);
   }
 
   if (residual_.has_value()) {
     auto residual = residual_.value();
     TORCH_CHECK(residual.is_cuda());
-    TORCH_CHECK(residual.is_contiguous());
+    // TORCH_CHECK(residual.is_contiguous());
     TORCH_CHECK(residual.sizes() == sizes);
   }
 
   if (beta0_.has_value()) {
     auto beta0 = beta0_.value();
-    TORCH_CHECK(beta0.dtype() == wtype);
+    TORCH_CHECK(beta0.dtype == wtype);
     TORCH_CHECK(beta0.is_cuda());
-    TORCH_CHECK(beta0.is_contiguous());
+    // TORCH_CHECK(beta0.is_contiguous());
     TORCH_CHECK(beta0.sizes() == gamma0.sizes());
   }
 
   if (gamma1_.has_value()) {
     auto gamma1 = gamma1_.value();
-    TORCH_CHECK(gamma1.dtype() == wtype);
+    TORCH_CHECK(gamma1.dtype == wtype);
     TORCH_CHECK(gamma1.is_cuda());
-    TORCH_CHECK(gamma1.is_contiguous());
+    // TORCH_CHECK(gamma1.is_contiguous());
     TORCH_CHECK(gamma1.sizes() == gamma0.sizes());
   }
 
   if (beta1_.has_value()) {
     auto beta1 = beta1_.value();
-    TORCH_CHECK(beta1.dtype() == wtype);
+    TORCH_CHECK(beta1.dtype == wtype);
     TORCH_CHECK(beta1.is_cuda());
-    TORCH_CHECK(beta1.is_contiguous());
+    // TORCH_CHECK(beta1.is_contiguous());
     TORCH_CHECK(beta1.sizes() == gamma0.sizes());
   }
 
@@ -756,9 +763,9 @@ auto dropout_add_ln_parallel_residual_fwd(
 
   auto x = [&]() {
     if (save_x) {
-      return torch::empty(sizes, rtype, context);
+      return torch::empty<dllm::CUDA>(sizes, rtype, context);
     }
-    return decltype(torch::empty(sizes, rtype, context)){};
+    return decltype(torch::empty<dllm::CUDA>(sizes, rtype, context)){};
   }();
   auto [dmask0, dmask1] = [&]() {
     auto dmask0 =
@@ -797,8 +804,8 @@ auto dropout_add_ln_parallel_residual_fwd(
       residual_.has_value() ? const_cast<void *>(residual_.value().data_ptr())
                             : nullptr;
 
-  auto gen = at::get_generator_or_default<at::CUDAGeneratorImpl>(
-      gen_, at::cuda::detail::getDefaultCUDAGenerator());
+  // auto gen = at::get_generator_or_default<at::CUDAGeneratorImpl>(
+  //     gen_, at::cuda::detail::getDefaultCUDAGenerator());
 
   auto round_multiple = [](int x, int m) { return (x + m - 1) / m * m; };
   const int multiple =
@@ -814,12 +821,12 @@ auto dropout_add_ln_parallel_residual_fwd(
   params.x0 = const_cast<void *>(x0.data_ptr());
   params.x1 =
       x1_.has_value() ? const_cast<void *>(x1_.value().data_ptr()) : nullptr;
-  params.x = save_x ? x.data_ptr() : nullptr;
-  params.dmask = dropout_p > 0.f ? dmask0.data_ptr() : nullptr;
+  params.x = save_x ? x->data_ptr() : nullptr;
+  params.dmask = dropout_p > 0.f ? dmask0->data_ptr() : nullptr;
   params.dmask1 =
-      (dropout_p > 0.f && x1_.has_value()) ? dmask1.data_ptr() : nullptr;
-  params.mu = mu.data_ptr();
-  params.rs = rsigma.data_ptr();
+      (dropout_p > 0.f && x1_.has_value()) ? dmask1->data_ptr() : nullptr;
+  params.mu = mu->data_ptr();
+  params.rs = rsigma->data_ptr();
   params.gamma = const_cast<void *>(gamma0.data_ptr());
   params.gamma1 = gamma1_.has_value()
                       ? const_cast<void *>(gamma1_.value().data_ptr())
@@ -830,8 +837,8 @@ auto dropout_add_ln_parallel_residual_fwd(
   params.beta1 = beta1_.has_value()
                      ? const_cast<void *>(beta1_.value().data_ptr())
                      : nullptr;
-  params.z = z0.data_ptr();
-  params.z1 = gamma1_.has_value() ? z1.data_ptr() : nullptr;
+  params.z = z0->data_ptr();
+  params.z1 = gamma1_.has_value() ? z1->data_ptr() : nullptr;
   params.epsilon = epsilon;
   params.dropout_scale = 1.f / (1.f - dropout_p);
   params.inverse_cols = 1.f / float(params.cols);
@@ -849,8 +856,10 @@ auto dropout_add_ln_parallel_residual_fwd(
 
     // See Note [Acquire lock when using random generators]
     {
-      std::lock_guard<std::mutex> lock(gen->mutex_);
-      params.philox_args = gen->philox_cuda_state(counter_offset);
+      // std::lock_guard<std::mutex> lock(gen->mutex_);
+      // params.philox_args = gen->philox_cuda_state(counter_offset);
+      params.philox_args = {context->curandSeed, context->curandOffset.load()};
+      context->curandOffset += counter_offset;
     }
   }
 
@@ -888,7 +897,7 @@ auto dropout_add_ln_parallel_residual_fwd(
 
 auto dropout_add_ln_parallel_residual_bwd(
     const dllm::ContextCompute *context,
-    const at::Tensor<3> &dz0,                     // BxSxhidden_size
+    const at::Tensor<2> &dz0,                     // BxSxhidden_size
     c10::optional<const at::Tensor<3>> &dz1_,     // BxSxhidden_size
     c10::optional<const at::Tensor<3>> &dx_,      // BxSxhidden_size
     const at::Tensor<3> &x,                       // BxSxhidden_size
@@ -911,10 +920,10 @@ auto dropout_add_ln_parallel_residual_bwd(
     TORCH_CHECK(dmask0_.has_value());
   }
 
-  TORCH_CHECK(dz0.dtype() == otype);
-  TORCH_CHECK(dz0.dtype() == otype);
-  TORCH_CHECK(mu.dtype() == ctype);
-  TORCH_CHECK(rsigma.dtype() == ctype);
+  TORCH_CHECK(dz0.dtype == otype);
+  TORCH_CHECK(dz0.dtype == otype);
+  TORCH_CHECK(mu.dtype == ctype);
+  TORCH_CHECK(rsigma.dtype == ctype);
 
   TORCH_CHECK(x.is_cuda());
   TORCH_CHECK(dz0.is_cuda());
@@ -922,54 +931,54 @@ auto dropout_add_ln_parallel_residual_bwd(
   TORCH_CHECK(rsigma.is_cuda());
   TORCH_CHECK(gamma0.is_cuda());
 
-  TORCH_CHECK(x.is_contiguous());
-  TORCH_CHECK(dz0.is_contiguous());
+  // TORCH_CHECK(x.is_contiguous());
+  // TORCH_CHECK(dz0.is_contiguous());
 
   auto sizes = x.sizes();
   TORCH_CHECK(sizes.size() == 2);
   auto rows = sizes[0];
   auto cols = sizes[1];
   TORCH_CHECK(dz0.dim() == 2);
-  TORCH_CHECK(dz0.size(1) == cols);
+  TORCH_CHECK(dz0.size<1>() == cols);
   auto hidden_size = gamma0.numel();
   TORCH_CHECK(hidden_size == cols);
 
   if (dz1_.has_value()) {
     auto &dz1 = dz1_.value();
-    TORCH_CHECK(dz1.dtype() == otype);
+    TORCH_CHECK(dz1.dtype == otype);
     TORCH_CHECK(dz1.is_cuda());
-    TORCH_CHECK(dz1.is_contiguous());
+    // TORCH_CHECK(dz1.is_contiguous());
     TORCH_CHECK(dz1.sizes() == sizes);
 
     TORCH_CHECK(gamma1_.has_value());
     auto &gamma1 = gamma1_.value();
-    TORCH_CHECK(gamma1.dtype() == wtype);
+    TORCH_CHECK(gamma1.dtype == wtype);
     TORCH_CHECK(gamma1.is_cuda());
-    TORCH_CHECK(gamma1.is_contiguous());
+    // TORCH_CHECK(gamma1.is_contiguous());
     TORCH_CHECK(gamma1.sizes() == gamma0.sizes());
   }
 
   if (dx_.has_value()) {
     auto dx = dx_.value();
-    TORCH_CHECK(dx.dtype() == rtype);
+    TORCH_CHECK(dx.dtype == rtype);
     TORCH_CHECK(dx.is_cuda());
-    TORCH_CHECK(dx.is_contiguous());
+    // TORCH_CHECK(dx.is_contiguous());
     TORCH_CHECK(dx.sizes() == sizes);
   }
 
   if (dmask0_.has_value()) {
     auto dmask0 = dmask0_.value();
-    TORCH_CHECK(dmask0.dtype() == mtype);
+    TORCH_CHECK(dmask0.dtype == mtype);
     TORCH_CHECK(dmask0.is_cuda());
-    TORCH_CHECK(dmask0.is_contiguous());
+    // TORCH_CHECK(dmask0.is_contiguous());
     TORCH_CHECK(dmask0.sizes() == sizes);
 
     if (has_x1) {
       TORCH_CHECK(dmask1_.has_value());
       auto dmask1 = dmask1_.value();
-      TORCH_CHECK(dmask1.dtype() == mtype);
+      TORCH_CHECK(dmask1.dtype == mtype);
       TORCH_CHECK(dmask1.is_cuda());
-      TORCH_CHECK(dmask1.is_contiguous());
+      // TORCH_CHECK(dmask1.is_contiguous());
       TORCH_CHECK(dmask1.sizes() == sizes);
     }
   }
