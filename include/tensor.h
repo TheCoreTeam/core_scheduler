@@ -82,6 +82,11 @@ struct Tensor {
 
   const void *data() const { return data_.get(); }
 
+  template <template <typename T> class SmartPointer, typename T>
+  void resetData(SmartPointer<T> &&data) {
+    data_ = std::forward<SmartPointer<T>>(data);
+  }
+
   // following functions are internal use to align with pytorch api
   // NEVER use them alone!
   template <int k>
