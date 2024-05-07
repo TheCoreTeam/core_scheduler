@@ -140,6 +140,8 @@ auto dropout_add_ln_fwd(
     // const int64_t z_numrows, c10::optional<at::Generator> gen_,
     const int64_t z_numrows, bool residual_in_fp32 = false,
     bool is_rms_norm = false) {
+  at::cuda::setCurrentCUDAStream(context->cudaStream);
+
   auto itype = x0.scalar_type();
   auto rtype = residual_.has_value()
                    ? residual_.value().scalar_type()
@@ -405,6 +407,8 @@ auto dropout_add_ln_bwd(
     c10::optional<const at::Tensor<1>> &z_subset_,   // BxS
     const float dropout_p, const float rowscale_const, const int64_t x0_numrows,
     const bool has_residual, bool is_rms_norm = false) {
+  at::cuda::setCurrentCUDAStream(context->cudaStream);
+
   auto itype = dz.scalar_type();
   auto rtype = x.scalar_type();
   auto wtype = gamma.scalar_type();
@@ -674,6 +678,8 @@ auto dropout_add_ln_parallel_residual_fwd(
     const float dropout_p, const float epsilon,
     // c10::optional<at::Generator> gen_, bool residual_in_fp32 = false,
     bool residual_in_fp32 = false, bool is_rms_norm = false) {
+  at::cuda::setCurrentCUDAStream(context->cudaStream);
+
   auto itype = x0.scalar_type();
   auto rtype = residual_.has_value()
                    ? residual_.value().scalar_type()
@@ -909,6 +915,8 @@ auto dropout_add_ln_parallel_residual_bwd(
     c10::optional<const at::Tensor<1>> &gamma1_,  // hidden_size
     const float dropout_p, const bool has_x1, const bool has_residual,
     bool is_rms_norm = false) {
+  at::cuda::setCurrentCUDAStream(context->cudaStream);
+
   auto itype = dz0.scalar_type();
   auto rtype = x.scalar_type();
   auto wtype = gamma0.scalar_type();

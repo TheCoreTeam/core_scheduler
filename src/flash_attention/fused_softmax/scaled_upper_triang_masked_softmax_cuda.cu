@@ -29,8 +29,11 @@ namespace multihead_attn {
 namespace fused_softmax {
 namespace scaled_upper_triang_masked_softmax {
 
-void fwd_cuda(torch::Tensor<3>& softmax_results, torch::Tensor<3> const& input,
+void fwd_cuda(const dllm::ContextCompute* context,
+              torch::Tensor<3>& softmax_results, torch::Tensor<3> const& input,
               float scale_factor) {
+  at::cuda::setCurrentCUDAStream(context->cudaStream);
+
   // input is a 3d tensor with dimensions [attn_batches, seq_len, seq_len]
   // const int attn_batches = input.size(0);
   // const int seq_len = input.size(1);
@@ -59,8 +62,11 @@ void fwd_cuda(torch::Tensor<3>& softmax_results, torch::Tensor<3> const& input,
   // return softmax_results;
 }
 
-void bwd_cuda(torch::Tensor<3>& output_grads_,
+void bwd_cuda(const dllm::ContextCompute* context,
+              torch::Tensor<3>& output_grads_,
               torch::Tensor<3> const& softmax_results_, float scale_factor) {
+  at::cuda::setCurrentCUDAStream(context->cudaStream);
+
   // auto output_grads = output_grads_.contiguous();
   // auto softmax_results = softmax_results_.contiguous();
   auto& output_grads = output_grads_;

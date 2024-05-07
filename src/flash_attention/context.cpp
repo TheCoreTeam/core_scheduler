@@ -24,4 +24,17 @@ cudaDeviceProp* getCurrentDeviceProperties() {
   CHECK_CUDART(cudaGetDevice(&device));
   return &prop.prop.get()[device];
 }
+
+namespace {
+cudaStream_t& _getCurrentCUDAStream() {
+  static thread_local cudaStream_t stream = nullptr;
+  return stream;
+}
+}  // namespace
+
+void setCurrentCUDAStream(cudaStream_t stream) {
+  _getCurrentCUDAStream() = stream;
+}
+
+cudaStream_t getCurrentCUDAStream() { return _getCurrentCUDAStream(); }
 }  // namespace at::cuda
