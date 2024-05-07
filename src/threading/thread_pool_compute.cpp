@@ -24,10 +24,21 @@ void setThreadAffinity(std::thread &th, int coreId) {
 void threadTask(const int localRank, std::queue<TaskCompute> *taskQueue,
                 std::mutex *queueMutex, std::condition_variable *cv,
                 std::mutex *cvMutex, std::atomic<bool> *shutDown) {
-  ContextCompute context;
+  ContextCompute context{.deviceRank = localRank};
   CHECK_CUDART(cudaSetDevice(localRank));
   CHECK_CUDART(
       cudaStreamCreateWithFlags(&context.cudaStream, cudaStreamNonBlocking));
+  CHECK_CUDART(cudaDeviceGetDefaultMemPool(&context.memPool, localRank));
+  uint64_t threshold = UINT64_MAX;
+  CHECK_CUDART(cudaMemPoolSetAttribute(
+      context.memPool, cudaMemPoolAttrReleaseThreshold, &threshold));
+  int enable = 1;
+  CHECK_CUDART(cudaMemPoolSetAttribute(
+      context.memPool, cudaMemPoolReuseFollowEventDependencies, &enable));
+  CHECK_CUDART(cudaMemPoolSetAttribute(
+      context.memPool, cudaMemPoolReuseAllowOpportunistic, &enable));
+  CHECK_CUDART(cudaMemPoolSetAttribute(
+      context.memPool, cudaMemPoolReuseAllowInternalDependencies, &enable));
   CHECK_CUBLAS(cublasCreate_v2(&context.cublasHandle));
   CHECK_CUBLAS(cublasSetStream_v2(context.cublasHandle, context.cudaStream));
   while (!shutDown->load()) {
@@ -53,7 +64,7 @@ void threadTask(const int localRank, std::queue<TaskCompute> *taskQueue,
 void threadTaskLight(const int localRank, std::queue<TaskCompute> *taskQueue,
                      std::mutex *queueMutex, std::condition_variable *cv,
                      std::mutex *cvMutex, std::atomic<bool> *shutDown) {
-  ContextCompute context{};
+  ContextCompute context{.deviceRank = localRank};
   CHECK_CUDART(cudaSetDevice(localRank));
   CHECK_CUDART(
       cudaStreamCreateWithFlags(&context.cudaStream, cudaStreamNonBlocking));
