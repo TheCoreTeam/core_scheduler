@@ -26,6 +26,8 @@ constexpr auto kBFloat16 = dllm::Dtype::R_16BF;
 constexpr auto kInt32 = dllm::Dtype::R_32I;
 constexpr auto kUInt8 = dllm::Dtype::R_8U;
 constexpr auto kChar = dllm::Dtype::R_8U;
+
+constexpr auto kCUDA = dllm::DeviceType::CUDA;
 }  // namespace torch
 
 namespace c10 {

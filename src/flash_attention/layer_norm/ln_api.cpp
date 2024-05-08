@@ -7,7 +7,7 @@
 
 using IntArrayRef1D = std::array<dllm::TensorIndexType, 1>;
 using IntArrayRef2D = std::array<dllm::TensorIndexType, 2>;
-using IntArrayRef3D = std::array<dllm::TensorIndexType, 2>;
+using IntArrayRef3D = std::array<dllm::TensorIndexType, 3>;
 
 /*
 

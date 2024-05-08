@@ -107,6 +107,11 @@ struct Tensor {
     return cute::shape<k>(layout);
   }
 
+  template <int k>
+  constexpr auto stride() const {
+    return cute::stride<k>(layout);
+  }
+
   auto numel() const { return cute::size(layout); }
 
   auto scalar_type() const { return dtype; }
@@ -120,6 +125,14 @@ struct Tensor {
   auto data_ptr() const {
     return reinterpret_cast<T *>(data());
   };
+
+  auto device() const {
+    struct Device {
+      DeviceType deviceType;
+      auto type() const { return deviceType; }
+    } device{.deviceType = deviceType};
+    return device;
+  }
 
   bool is_cuda() const { return deviceType == CUDA; }
 
