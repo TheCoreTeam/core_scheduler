@@ -3,7 +3,6 @@
 #include "logger.h"
 #include "util.h"
 
-
 namespace dllm::compute {
 void reluKernel(cudaStream_t stream, const Tensor1D& input, Tensor1D& output);
 

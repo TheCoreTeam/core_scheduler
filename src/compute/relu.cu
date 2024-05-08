@@ -38,8 +38,9 @@ __inline__ __attribute__((always_inline)) void autoDispatch(Dtype dtype,
 
 void reluKernel(cudaStream_t stream, const Tensor1D& input, Tensor1D& output) {
   const auto size = cute::size(input.layout);
-  const dim3 block(std::min(128, size));
-  const dim3 grid(util::ceilDiv(size, std::min(128, size)));
+  const dim3 block(std::min<std::decay_t<decltype(size)>>(128, size));
+  const dim3 grid(
+      util::ceilDiv(size, std::min<std::decay_t<decltype(size)>>(128, size)));
 
   auto f = [&](auto dummy) {
     using Element = std::remove_const_t<std::decay_t<decltype(dummy)>>;
