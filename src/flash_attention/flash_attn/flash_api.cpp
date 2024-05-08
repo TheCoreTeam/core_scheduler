@@ -448,6 +448,11 @@ auto mha_fwd(
   int seqlen_q = sizes[1];
   int num_heads = sizes[2];
   const int head_size_og = sizes[3];
+  // TODO(Jie): we assume head_size_og is dividable by 8
+  if (head_size_og % 8 != 0) {
+    exit(1);
+  }
+  // TODO(Jie): we assume head_size_og is dividable by 8
   // const int seqlen_k = k.size(1);
   // const int num_heads_k = k.size(2);
   const int seqlen_k = k.size<1>();
@@ -477,6 +482,11 @@ auto mha_fwd(
 
   // Faster to transpose q from (b, 1, (nheads_kv ngroups), d) to (b, ngroups,
   // nheads_kv, d) in this case H/t Daniel Haziza
+  // TODO(Jie): assume seqlen_q != 1 now
+  if (seqlen_q == 1) {
+    exit(1);
+  }
+  // TODO(Jie): assume seqlen_q != 1 now
   const int seqlenq_ngroups_swapped =
       seqlen_q == 1 && num_heads > num_heads_k && window_size_left < 0 &&
       window_size_right < 0 && p_dropout == 0.f && head_size_og % 8 == 0 &&
@@ -650,6 +660,11 @@ auto mha_fwd(
 
   set_params_alibi(params, alibi_slopes_, batch_size, num_heads);
 
+  // TODO(Jie): We assume seqlen_k > 0 is true
+  if (!(seqlen_k > 0)) {
+    exit(1);
+  }
+  // TODO(Jie): We assume seqlen_k > 0 is true
   if (seqlen_k > 0) {
     // auto stream = at::cuda::getCurrentCUDAStream().stream();
     auto stream = context->cudaStream;
@@ -1359,6 +1374,11 @@ auto mha_bwd(
   // }
   auto dq_accum = [&]() {
     if (loop) {
+      // TODO(Jie): We assume deterministic is false
+      if (deterministic != false) {
+        exit(1);
+      }
+      // TODO(Jie): We assume deterministic is false
       if (!deterministic) {
         return torch::empty<dllm::CUDA>(
             IntArrayRef4D{batch_size, seqlen_q_rounded, num_heads,
