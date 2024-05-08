@@ -2,10 +2,11 @@
 #include <cuda_runtime.h>
 
 namespace dllm {
-enum Dtype { R_64F, R_32F, R_16F, R_16BF, R_8U, R_32I };
+enum Dtype { R_64F, R_32F, R_16F, R_16BF, R_8U, R_64I, R_32I };
 
 __inline__ __attribute__((always_inline)) std::size_t toByte(Dtype dtype) {
   switch (dtype) {
+    case R_64I:
     case R_64F:
       return 8;
     case R_32I:
@@ -31,6 +32,8 @@ constexpr Dtype toDtype() {
     return R_16F;
   } else if constexpr (std::is_same_v<T, nv_bfloat16>) {
     return R_16BF;
+  } else if constexpr (std::is_same_v<T, int64_t>) {
+    return R_64I;
   } else if constexpr (std::is_same_v<T, int32_t>) {
     return R_32I;
   } else if constexpr (std::is_same_v<T, uint8_t>) {
@@ -49,6 +52,8 @@ toCudaDataType(Dtype dtype) {
       return CUDA_R_16F;
     case R_16BF:
       return CUDA_R_16BF;
+    case R_64I:
+      return CUDA_R_64I;
     case R_32I:
       return CUDA_R_32I;
     case R_8U:

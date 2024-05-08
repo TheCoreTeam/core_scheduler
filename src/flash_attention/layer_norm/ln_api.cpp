@@ -33,8 +33,8 @@ namespace layer_norm {
 
 // Create registries and provide runtime versions of config hash functions.
 
-FwdRegistry FWD_FUNCS, PARALLEL_FWD_FUNCS;
-BwdRegistry BWD_FUNCS, PARALLEL_BWD_FUNCS;
+// FwdRegistry FWD_FUNCS, PARALLEL_FWD_FUNCS;
+// BwdRegistry BWD_FUNCS, PARALLEL_BWD_FUNCS;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 

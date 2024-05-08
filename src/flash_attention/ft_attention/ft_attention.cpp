@@ -183,7 +183,7 @@ void single_query_attention(
     auto rotary_cos = rotary_cos_.value();
     CHECK_DEVICE(rotary_cos);
     // rotary_embedding_dim = rotary_cos.size(-1) * 2;
-    rotary_embedding_dim = rotary_cos.size<1>() * 2;
+    rotary_embedding_dim = rotary_cos.size<-1>() * 2;
     CHECK_SHAPE(rotary_cos,
                 IntArrayRef2D{batch_size, rotary_embedding_dim / 2});
     // CHECK_CONTIGUOUS(rotary_cos);

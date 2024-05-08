@@ -40,6 +40,19 @@ set(FLASH_ATTENTION_LAYER_NORM_INCLUDE
         ${FLASH_ATTENTION_PATH}/csrc/layer_norm/
 )
 
+add_library(dll_flash_attention_registry SHARED
+        ${CMAKE_CURRENT_SOURCE_DIR}/layer_norm/registry.cpp
+)
+target_include_directories(dll_flash_attention_registry PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/fake_torch
+        ${FLASH_ATTENTION_LAYER_NORM_INCLUDE}
+)
+target_link_libraries(dll_flash_attention_registry PRIVATE CUDA::cudart)
+target_compile_options(dll_flash_attention_registry PRIVATE
+        $<$<CONFIG:Release>:-O3>
+        $<$<CONFIG:Debug>:-O0>
+)
+
 add_library(dllm_flash_attention_plugin SHARED
         ${CMAKE_CURRENT_SOURCE_DIR}/context.cpp
         # ${FLASH_ATTENTION_FLASH_ATTN_SRC}
@@ -57,7 +70,7 @@ target_include_directories(dllm_flash_attention_plugin PRIVATE
         ${FLASH_ATTENTION_LAYER_NORM_INCLUDE}
 )
 
-target_link_libraries(dllm_flash_attention_plugin PRIVATE dllm CUDA::cudart)
+target_link_libraries(dllm_flash_attention_plugin PRIVATE dllm CUDA::cudart dll_flash_attention_registry)
 
 target_compile_options(dllm_flash_attention_plugin PRIVATE
         $<$<CONFIG:Release>:-O3>
@@ -66,4 +79,4 @@ target_compile_options(dllm_flash_attention_plugin PRIVATE
         $<$<COMPILE_LANGUAGE:CXX>:-Wno-deprecated-enum-enum-conversion>
 )
 
-target_compile_definitions(dllm_flash_attention_plugin PRIVATE -DENABLE_BF16)
+target_compile_definitions(dllm_flash_attention_plugin PRIVATE -DENABLE_BF16 -DDLLM_BUILD_FLASH_ATTENTION)

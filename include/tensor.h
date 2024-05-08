@@ -90,6 +90,7 @@ struct Tensor {
     data_ = std::forward<SmartPointer<T>>(data);
   }
 
+#ifdef DLLM_BUILD_FLASH_ATTENTION
   // following functions are internal use to align with pytorch api
   // NEVER use them alone!
   template <std::size_t... I>
@@ -104,12 +105,20 @@ struct Tensor {
 
   template <int k>
   constexpr auto size() const {
-    return cute::shape<k>(layout);
+    if constexpr (k >= 0) {
+      return cute::shape<k>(layout);
+    } else {
+      return cute::shape<Layout::rank + k>(layout);
+    }
   }
 
   template <int k>
   constexpr auto stride() const {
-    return cute::stride<k>(layout);
+    if constexpr (k >= 0) {
+      return cute::stride<k>(layout);
+    } else {
+      return cute::stride<Layout::rank + k>(layout);
+    }
   }
 
   auto numel() const { return cute::size(layout); }
@@ -170,6 +179,7 @@ struct Tensor {
   }
   // above functions are internal use to align with pytorch api
   // NEVER use them alone!
+#endif
 
  public:
   Layout layout;

@@ -85,4 +85,8 @@ constexpr auto Float = dllm::R_32F;
 constexpr auto Half = dllm::R_16F;
 constexpr auto BFloat16 = dllm::R_16BF;
 }  // namespace ScalarType
+
+constexpr auto kFloat32 = dllm::Dtype::R_32F;
+constexpr auto kFloat = dllm::Dtype::R_32F;
+constexpr auto kFloat16 = dllm::Dtype::R_16F;
 }  // namespace at
