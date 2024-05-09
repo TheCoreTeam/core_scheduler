@@ -51,47 +51,42 @@ cublasComputeType_t toCublasComputeType() {
 namespace {
 template <typename Dtype>
 void TestForwardT(const dllm::ContextCompute &context) {
-  auto B = 4, T = 1024, n_head = 32, n_embd = 1024;
-  auto q = at::randn({B, T, n_embd}, at::TensorOptions{}
-                                         .dtype(c10::ScalarType::Half)
-                                         .device(c10::DeviceType::CUDA));
-  auto k = at::randn({B, T, n_embd}, at::TensorOptions{}
-                                         .dtype(c10::ScalarType::Half)
-                                         .device(c10::DeviceType::CUDA));
-  auto v = at::randn({B, T, n_embd}, at::TensorOptions{}
-                                         .dtype(c10::ScalarType::Half)
-                                         .device(c10::DeviceType::CUDA));
-  k = k.view({B, T, n_head, n_embd / n_head});  // (B, T, nh, hs)
-  q = q.view({B, T, n_head, n_embd / n_head});  // (B, T, nh, hs)
-  v = v.view({B, T, n_head, n_embd / n_head});  // (B, T, nh, hs)
-  auto scale = 1.0 / std::sqrt(static_cast<double>(k.size(-1)));
+  auto B = 4, T = 128, n_head = 32, n_embd = 256;
+  // Initialize random tensors for q, k, v
+  auto qkv = torch::randn({B, T, n_embd * 3}, torch::dtype(torch::kFloat16))
+                 .split(n_embd, -1);
+  auto q = qkv[0].view({B, T, n_head, n_embd / n_head});
+  auto k = qkv[1].view({B, T, n_head, n_embd / n_head});
+  auto v = qkv[2].view({B, T, n_head, n_embd / n_head});
+
+  // Transpose for attention calculation
   q = q.transpose(1, 2);
   k = k.transpose(1, 2);
   v = v.transpose(1, 2);
-  auto mask =
-      at::tril(at::ones({1, 1, T, T}, at::TensorOptions{}
-                                          .dtype(c10::ScalarType::Half)
-                                          .device(c10::DeviceType::CUDA)));
-  auto att = at::matmul(q, k.transpose(-1, -1)) * scale;
-  att = att.masked_fill(
-      mask.index({"...", "...",
-                  torch::indexing::Slice(torch::indexing::None, T),
-                  torch::indexing::Slice(torch::indexing::None, T)}) == 0,
-      -std::numeric_limits<float>::infinity());
-  att = torch::nn::functional::softmax(att, -1);
-  att = torch::nn::functional::dropout(
-      att, torch::nn::functional::DropoutFuncOptions{}.p(0.0));
-  auto y_attn = at::matmul(att, v);
+
+  // Create lower triangular mask
+  auto mask = torch::tril(torch::ones({T, T}, torch::dtype(torch::kFloat16)))
+                  .view({1, 1, T, T});
+
+  // Calculate scaled dot product attention
+  auto att =
+      torch::matmul(q, k.transpose(-2, -1)) * (1.0 / std::sqrt(k.size(-1)));
+  att = att.masked_fill(mask == 0, -std::numeric_limits<float>::infinity());
+  att = torch::softmax(att, -1);
+  att = torch::dropout(att, /*p=*/0.0, /*train=*/false);
+
+  // Apply attention to values
+  auto y_attn = torch::matmul(att, v);
   y_attn = y_attn.transpose(1, 2);
 }
 }  // namespace
 
 TEST_F(FlashAttentionTestFixture, TestForwardF16F32F32) {
-  // TestForwardT<nv_half>(context);
+  TestForwardT<nv_half>(context);
 }
 TEST_F(FlashAttentionTestFixture, TestForwardF32F32F32) {
-  // TestForwardT<float>(context);
+  TestForwardT<float>(context);
 }
 TEST_F(FlashAttentionTestFixture, TestForwardF64F64F64) {
-  // TestForwardT<double>(context);
+  TestForwardT<double>(context);
 }
