@@ -1,6 +1,7 @@
 // https://github.com/pytorch/pytorch/blob/main/aten/src/ATen/cuda/detail/UnpackRaw.cuh
 #pragma once
 #include <cstdint>
+#include <tuple>
 // No "#pragma once" because this is a raw definition that can be copied by jit codegen.
 // Eager mode clients should not include this file directly, instead,
 // they should #include <ATen/cuda/PhiloxUtils.cuh>, which has a #pragma once.

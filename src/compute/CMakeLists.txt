@@ -5,6 +5,8 @@ set(DLLM_COMPUTE_SRCS
         "${CMAKE_CURRENT_SOURCE_DIR}/relu.cu"
         "${CMAKE_CURRENT_SOURCE_DIR}/init.cpp"
         "${CMAKE_CURRENT_SOURCE_DIR}/init.cu"
+        ${CMAKE_CURRENT_SOURCE_DIR}/random.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/random.cu
         "${CMAKE_CURRENT_SOURCE_DIR}/fc.cpp"
         "${CMAKE_CURRENT_SOURCE_DIR}/matmul.cpp"
 )

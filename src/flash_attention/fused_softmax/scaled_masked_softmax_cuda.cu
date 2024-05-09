@@ -32,8 +32,11 @@ int get_batch_per_block_cuda(int query_seq_len, int key_seq_len, int batches,
   return get_batch_per_block(query_seq_len, key_seq_len, batches, attn_heads);
 }
 
-void fwd_cuda(torch::Tensor<4>& softmax_results, torch::Tensor<4> const& input,
+void fwd_cuda(const dllm::ContextCompute* context,
+              torch::Tensor<4>& softmax_results, torch::Tensor<4> const& input,
               torch::Tensor<4> const& mask, float scale_factor) {
+  at::cuda::setCurrentCUDAStream(context->cudaStream);
+
   // input is a 4d tensor with dimensions [batches, attn_heads, seq_len,
   // seq_len]
   // const int batches = input.size(0);
@@ -78,8 +81,11 @@ void fwd_cuda(torch::Tensor<4>& softmax_results, torch::Tensor<4> const& input,
   // return softmax_results;
 }
 
-void bwd_cuda(torch::Tensor<4>& input_grads, torch::Tensor<4>& output_grads_,
+void bwd_cuda(const dllm::ContextCompute* context,
+              torch::Tensor<4>& input_grads, torch::Tensor<4>& output_grads_,
               torch::Tensor<4> const& softmax_results_, float scale_factor) {
+  at::cuda::setCurrentCUDAStream(context->cudaStream);
+
   // auto output_grads = output_grads_.contiguous();
   // auto softmax_results = softmax_results_.contiguous();
   auto& output_grads = output_grads_;

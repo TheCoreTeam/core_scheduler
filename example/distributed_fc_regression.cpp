@@ -8,7 +8,7 @@
 
 #include "communication/nccl/all_reduce.h"
 #include "compute/fc.h"
-#include "compute/init.h"
+#include "compute/random.h"
 #include "compute/mse.h"
 #include "logger.h"
 #include "optimizer/sgd.h"
@@ -62,9 +62,9 @@ int main(int argc, char **argv) {
     using Scalar = decltype(x)::Scalar;
     return static_cast<Scalar>(2) * x.array();
   };
-  const int inputDim = 1;
-  const int batchSize = 100;
-  const int sampleNum = 1000 / worldSize;
+  const dllm::TensorIndexType inputDim = 1;
+  const dllm::TensorIndexType batchSize = 100;
+  const dllm::TensorIndexType sampleNum = 1000 / worldSize;
   using Input = Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic>;
   using Output = Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic>;
   std::vector<std::tuple<Input, Output>> data;
@@ -108,7 +108,7 @@ int main(int argc, char **argv) {
     tensor.emplace_back(std::move(tensorX), std::move(tensorY));
   }
 
-  const int outDimW1 = 8;
+  const dllm::TensorIndexType outDimW1 = 8;
   T *ptrW1;
   auto shapeW1 = cute::make_shape(outDimW1, inputDim);
   CHECK_CUDART(cudaMalloc(reinterpret_cast<void **>(&ptrW1),
@@ -142,7 +142,8 @@ int main(int argc, char **argv) {
       ptrDW1Out, layoutDW1Out, dllm::toDtype<T>(), dllm::CUDA);
 
   T *ptrW2;
-  auto shapeW2 = cute::make_shape(1, outDimW1);
+  auto shapeW2 =
+      cute::make_shape(static_cast<dllm::TensorIndexType>(1), outDimW1);
   CHECK_CUDART(cudaMalloc(reinterpret_cast<void **>(&ptrW2),
                           sizeof(T) * cute::size(shapeW2)));
   auto layoutW2 = cute::make_layout(shapeW2, cute::GenRowMajor{});
@@ -150,7 +151,8 @@ int main(int argc, char **argv) {
       ptrW2, layoutW2, dllm::toDtype<T>(), dllm::CUDA);
 
   T *ptrDW2;
-  auto shapeDW2 = cute::make_shape(1, outDimW1);
+  auto shapeDW2 =
+      cute::make_shape(static_cast<dllm::TensorIndexType>(1), outDimW1);
   CHECK_CUDART(cudaMalloc(reinterpret_cast<void **>(&ptrDW2),
                           sizeof(T) * cute::size(shapeDW2)));
   auto layoutDW2 = cute::make_layout(shapeDW2, cute::GenRowMajor{});
@@ -158,7 +160,8 @@ int main(int argc, char **argv) {
       ptrDW2, layoutDW2, dllm::toDtype<T>(), dllm::CUDA);
 
   T *ptrW2Out;
-  auto shapeW2Out = cute::make_shape(batchSize, 1);
+  auto shapeW2Out =
+      cute::make_shape(batchSize, static_cast<dllm::TensorIndexType>(1));
   CHECK_CUDART(cudaMalloc(reinterpret_cast<void **>(&ptrW2Out),
                           sizeof(T) * cute::size(shapeW2Out)));
   auto layoutW2Out = cute::make_layout(shapeW2Out, cute::GenRowMajor{});
@@ -166,7 +169,8 @@ int main(int argc, char **argv) {
       ptrW2Out, layoutW2Out, dllm::toDtype<T>(), dllm::CUDA);
 
   T *ptrDW2Out;
-  auto shapeDW2Out = cute::make_shape(batchSize, 1);
+  auto shapeDW2Out =
+      cute::make_shape(batchSize, static_cast<dllm::TensorIndexType>(1));
   CHECK_CUDART(cudaMalloc(reinterpret_cast<void **>(&ptrDW2Out),
                           sizeof(T) * cute::size(shapeDW2Out)));
   auto layoutDW2Out = cute::make_layout(shapeDW2Out, cute::GenRowMajor{});
@@ -176,12 +180,12 @@ int main(int argc, char **argv) {
   dllm::ThreadPoolCompute threadPool{0, 2};
 
   {
-    auto task = dllm::compute::Init::kaimingNorm(tensorW1);
+    auto task = dllm::compute::Random::kaimingNorm(tensorW1);
     auto future = threadPool.submit(std::move(task));
     tensorW1->future = future;
   }
   {
-    auto task = dllm::compute::Init::kaimingNorm(tensorW2);
+    auto task = dllm::compute::Random::kaimingNorm(tensorW2);
     auto future = threadPool.submit(std::move(task));
     tensorW2->future = future;
   }

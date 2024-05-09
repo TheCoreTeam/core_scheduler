@@ -1,15 +1,15 @@
-#include "compute/init.h"
-
+#include "compute/random.h"
 #include "logger.h"
 
-namespace dllm::compute::Init {
-void kaimingNormKernel(cudaStream_t cudaStream, Tensor2D &y, double stddev);
+namespace dllm::compute::Random {
+void kaimingNormKernel(const ContextCompute *context, Tensor2D &x,
+                       double stddev);
 
-TaskCompute kaimingNorm(const std::shared_ptr<Tensor2D> &y) {
-  double stddev = std::sqrt(2.0f / cute::shape<1>(y->layout));
+TaskCompute kaimingNorm(const std::shared_ptr<Tensor2D> &x) {
+  double stddev = std::sqrt(2.0f / cute::shape<1>(x->layout));
   return TaskCompute{[=](const ContextCompute *context) {
-    kaimingNormKernel(context->cudaStream, *y, stddev);
+    kaimingNormKernel(context, *x, stddev);
     CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
   }};
 }
-}  // namespace dllm::compute::Init
+}  // namespace dllm::compute::Random
