@@ -127,6 +127,7 @@ add_executable(dllm_tests
         main.cpp
         test_fc.cpp
         test_flash_attention.cpp
+        test_relu.cpp
 )
 
 target_include_directories(dllm_tests PRIVATE
@@ -172,24 +173,6 @@ target_link_libraries(dllm_communication_tests PRIVATE
 )
 
 target_compile_options(dllm_communication_tests PRIVATE
-        $<$<CONFIG:Release>:-O3>
-        $<$<CONFIG:Debug>:-O0>
-)
-
-add_executable(dllm_relu_tests
-        main.cpp
-        test_relu.cpp
-)
-
-target_link_libraries(dllm_relu_tests PRIVATE
-        dllm
-        spdlog::spdlog
-        CUDA::cudart
-        Eigen3::Eigen
-        GTest::gtest
-)
-
-target_compile_options(dllm_relu_tests PRIVATE
         $<$<CONFIG:Release>:-O3>
         $<$<CONFIG:Debug>:-O0>
 )
