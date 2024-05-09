@@ -55,3 +55,21 @@ target_compile_options(dllm_relu_tests PRIVATE
         $<$<CONFIG:Release>:-O3>
         $<$<CONFIG:Debug>:-O0>
 )
+
+add_executable(dllm_gelu_tests
+        main.cpp
+        test_gelu.cpp
+)
+
+target_link_libraries(dllm_gelu_tests PRIVATE
+        dllm
+        spdlog::spdlog
+        CUDA::cudart
+        Eigen3::Eigen
+        GTest::gtest
+)
+
+target_compile_options(dllm_gelu_tests PRIVATE
+        $<$<CONFIG:Release>:-O3>
+        $<$<CONFIG:Debug>:-O0>
+)
