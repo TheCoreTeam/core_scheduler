@@ -63,8 +63,8 @@ void backwardKernel(cudaStream_t stream, Tensor1D& dx, const Tensor1D& x,
   const auto size = cute::size(x.layout);
   auto f = [&](auto dummy) {
     using T = std::remove_const_t<std::decay_t<decltype(dummy)>>;
-    dim3 block(std::min(128, size));
-    dim3 grid(util::ceilDiv(size, std::min(128, size)));
+    dim3 block(std::min<decltype(size)>(128, size));
+    dim3 grid(util::ceilDiv(size, std::min<decltype(size)>(128, size)));
     grad<<<grid, block, 0, stream>>>(static_cast<T*>(dx.data()),
                                      static_cast<const T*>(x.data()),
                                      static_cast<const T*>(y.data()), size);

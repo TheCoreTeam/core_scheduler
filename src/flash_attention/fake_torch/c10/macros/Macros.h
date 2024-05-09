@@ -22,5 +22,6 @@ using BFloat16 = nv_bfloat16;
 }  // namespace c10
 
 namespace at::cuda {
-cudaStream_t getCurrentCUDAStream() { return nullptr; }
+cudaStream_t getCurrentCUDAStream();
+void setCurrentCUDAStream(cudaStream_t stream);
 }  // namespace at::cuda

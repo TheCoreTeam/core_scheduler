@@ -1,10 +1,12 @@
 #include <cuda_runtime.h>
-#include <Eigen/Dense>
 #include <gtest/gtest.h>
+
+#include <Eigen/Dense>
 #include <fstream>
+
 #include "compute/relu.h"
-#include "tensor.h"
 #include "logger.h"
+#include "tensor.h"
 
 namespace Eigen::internal {
 template <>
@@ -30,11 +32,11 @@ class TestDLLMRelu : public ::testing::Test {
   }
 
   template <typename Element>
-  void TestRoutine(const int size);
+  void TestRoutine(const dllm::TensorIndexType size);
 };
 
 template <typename Element>
-void TestDLLMRelu::TestRoutine(const int size) {
+void TestDLLMRelu::TestRoutine(const dllm::TensorIndexType size) {
   Eigen::Vector<Element, Eigen::Dynamic> hostInput(size);
   Eigen::Vector<Element, Eigen::Dynamic> hostOutput(size);
   Eigen::Vector<Element, Eigen::Dynamic> hostRef(size);
@@ -52,23 +54,27 @@ void TestDLLMRelu::TestRoutine(const int size) {
   auto tensorOutput = std::make_shared<dllm::Tensor1D>(
       DeviceOutput, layout, dllm::toDtype<Element>(), dllm::CUDA);
 
-  CHECK_CUDART(cudaMemcpy(DeviceInput, hostInput.data(), sizeof(Element) * cute::size(layout),
+  CHECK_CUDART(cudaMemcpy(DeviceInput, hostInput.data(),
+                          sizeof(Element) * cute::size(layout),
                           cudaMemcpyHostToDevice));
-  CHECK_CUDART(cudaMemset(DeviceOutput, 0, sizeof(Element) * cute::size(layout)));
+  CHECK_CUDART(
+      cudaMemset(DeviceOutput, 0, sizeof(Element) * cute::size(layout)));
 
   CHECK_CUDART(cudaDeviceSynchronize());
-  hostRef = hostInput.unaryExpr([](Element x) { return std::max<Element>(0, x); });
+  hostRef =
+      hostInput.unaryExpr([](Element x) { return std::max<Element>(0, x); });
 
   auto tast = dllm::compute::relu(tensorInput, tensorOutput);
   tast(&context);
 
-  CHECK_CUDART(cudaMemcpy(hostOutput.data(), DeviceOutput, sizeof(Element) * cute::size(layout),
+  CHECK_CUDART(cudaMemcpy(hostOutput.data(), DeviceOutput,
+                          sizeof(Element) * cute::size(layout),
                           cudaMemcpyDeviceToHost));
   CHECK_CUDART(cudaDeviceSynchronize());
 
   auto isApprox = hostOutput.isApprox(hostRef);
 
-  if(!isApprox) {
+  if (!isApprox) {
     if constexpr (std::is_same_v<Element, nv_half>) {
       std::ofstream fileOuput("output.txt");
       fileOuput << hostOutput.template cast<float>() << std::endl;
@@ -91,38 +97,20 @@ void TestDLLMRelu::TestRoutine(const int size) {
   CHECK_CUDART(cudaFree(DeviceOutput));
 }
 
-TEST_F(TestDLLMRelu, TestF32_128) {
-  TestRoutine<float>(128);
-}
+TEST_F(TestDLLMRelu, TestF32_128) { TestRoutine<float>(128); }
 
-TEST_F(TestDLLMRelu, TestF32_512) {
-  TestRoutine<float>(512);
-}
+TEST_F(TestDLLMRelu, TestF32_512) { TestRoutine<float>(512); }
 
-TEST_F(TestDLLMRelu, TestF32_1024) {
-  TestRoutine<float>(1024);
-}
+TEST_F(TestDLLMRelu, TestF32_1024) { TestRoutine<float>(1024); }
 
-TEST_F(TestDLLMRelu, TestF64_128) {
-  TestRoutine<double>(128);
-}
+TEST_F(TestDLLMRelu, TestF64_128) { TestRoutine<double>(128); }
 
-TEST_F(TestDLLMRelu, TestF64_512) {
-  TestRoutine<double>(512);
-}
+TEST_F(TestDLLMRelu, TestF64_512) { TestRoutine<double>(512); }
 
-TEST_F(TestDLLMRelu, TestF64_1024) {
-  TestRoutine<double>(1024);
-}
+TEST_F(TestDLLMRelu, TestF64_1024) { TestRoutine<double>(1024); }
 
-TEST_F(TestDLLMRelu, TestF16_128) {
-  TestRoutine<nv_half>(128);
-}
+TEST_F(TestDLLMRelu, TestF16_128) { TestRoutine<nv_half>(128); }
 
-TEST_F(TestDLLMRelu, TestF16_512) {
-  TestRoutine<nv_half>(512);
-}
+TEST_F(TestDLLMRelu, TestF16_512) { TestRoutine<nv_half>(512); }
 
-TEST_F(TestDLLMRelu, TestF16_1024) {
-  TestRoutine<nv_half>(1024);
-}
+TEST_F(TestDLLMRelu, TestF16_1024) { TestRoutine<nv_half>(1024); }
