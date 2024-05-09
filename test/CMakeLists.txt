@@ -33,20 +33,20 @@ function(system)
     endif ()
 endfunction()
 
-if(NOT DEFINED PYTHON_EXECUTABLE)
-    if(WIN32)
+if (NOT DEFINED PYTHON_EXECUTABLE)
+    if (WIN32)
         set(PYTHON_EXECUTABLE "python.exe")
-    else()
+    else ()
         set(PYTHON_EXECUTABLE "python")
-    endif()
-endif()
+    endif ()
+endif ()
 
-if(UNIX)
+if (UNIX)
     system(
             STRIP OUTPUT_VARIABLE PYTHON_EXECUTABLE
             COMMAND bash -c "type -P '${PYTHON_EXECUTABLE}'"
     )
-endif()
+endif ()
 
 system(
         STRIP OUTPUT_VARIABLE PYTHON_VERSION
@@ -56,20 +56,20 @@ system(
 message(STATUS "Use Python version: ${PYTHON_VERSION}")
 message(STATUS "Use Python executable: \"${PYTHON_EXECUTABLE}\"")
 
-if(NOT DEFINED PYTHON_INCLUDE_DIR)
+if (NOT DEFINED PYTHON_INCLUDE_DIR)
     message(STATUS "Auto detecting Python include directory...")
     system(
             STRIP OUTPUT_VARIABLE PYTHON_INCLUDE_DIR
             COMMAND "${PYTHON_EXECUTABLE}" -c "print(__import__('sysconfig').get_path('platinclude'))"
     )
-endif()
+endif ()
 
-if("${PYTHON_INCLUDE_DIR}" STREQUAL "")
+if ("${PYTHON_INCLUDE_DIR}" STREQUAL "")
     message(FATAL_ERROR "Python include directory not found")
-else()
+else ()
     message(STATUS "Detected Python include directory: \"${PYTHON_INCLUDE_DIR}\"")
     include_directories("${PYTHON_INCLUDE_DIR}")
-endif()
+endif ()
 
 system(
         STRIP OUTPUT_VARIABLE PYTHON_SITE_PACKAGES
@@ -121,6 +121,8 @@ foreach (VAR_PATH ${TORCH_LIBRARY_PATH})
     message(STATUS "Detected Torch libraries: \"${TORCH_LIBRARY}\"")
 endforeach ()
 
+find_package(Python COMPONENTS Interpreter Development REQUIRED)
+
 add_executable(dllm_tests
         main.cpp
         test_fc.cpp
@@ -139,6 +141,7 @@ target_link_libraries(dllm_tests PRIVATE
         Eigen3::Eigen
         GTest::gtest
         ${TORCH_LIBRARY}
+        ${Python_LIBRARIES}
 )
 
 target_compile_options(dllm_tests PRIVATE
@@ -165,6 +168,7 @@ target_link_libraries(dllm_communication_tests PRIVATE
         MPI::MPI_CXX
         ${NCCL_LIBRARIES}
         ${TORCH_LIBRARY}
+        ${Python_LIBRARIES}
 )
 
 target_compile_options(dllm_communication_tests PRIVATE
