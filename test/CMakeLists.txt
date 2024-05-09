@@ -128,6 +128,7 @@ add_executable(dllm_tests
         test_fc.cpp
         test_flash_attention.cpp
         test_relu.cpp
+        test_gelu.cpp
 )
 
 target_include_directories(dllm_tests PRIVATE
