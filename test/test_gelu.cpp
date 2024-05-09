@@ -33,11 +33,11 @@ class TestDLLMGelu : public ::testing::Test {
   }
 
   template <typename Element>
-  void TestRoutine(const int size);
+  void TestRoutine(const dllm::TensorIndexType size);
 };
 
 template <typename Element>
-void TestDLLMGelu::TestRoutine(const int size) {
+void TestDLLMGelu::TestRoutine(const dllm::TensorIndexType size) {
   using DataType = Element;
   Eigen::Vector<Element, Eigen::Dynamic> hostInput(size);
   Eigen::Vector<Element, Eigen::Dynamic> hostOutput(size);

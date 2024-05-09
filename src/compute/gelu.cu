@@ -53,8 +53,8 @@ void GeLUKernel(cudaStream_t cudaStream, Tensor1D& output,
   const auto size = cute::size(input.layout);
   auto f = [&](auto dummy) {
     using T = std::remove_const_t<std::decay_t<decltype(dummy)>>;
-    dim3 block(std::min(128, size));
-    dim3 grid(util::ceilDiv(size, std::min(128, size)));
+    dim3 block(std::min<decltype(size)>(128, size));
+    dim3 grid(util::ceilDiv(size, std::min<decltype(size)>(128, size)));
     GeLU<<<grid, block, 0, cudaStream>>>(static_cast<T*>(output.data()),
                                          static_cast<const T*>(input.data()),
                                          size);

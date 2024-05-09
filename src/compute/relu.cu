@@ -3,14 +3,13 @@
 
 namespace dllm::compute {
 template <typename Element>
-__global__ void relu(const Element* __restrict__ input, Element* __restrict__ output, const size_t size) {
-
+__global__ void relu(const Element* __restrict__ input,
+                     Element* __restrict__ output, const size_t size) {
   const auto tid = threadIdx.x + blockIdx.x * blockDim.x;
 
   if (tid < size) {
     output[tid] = std::max<Element>(0, input[tid]);
   }
-
 }
 
 namespace {
@@ -44,10 +43,11 @@ void reluKernel(cudaStream_t stream, const Tensor1D& input, Tensor1D& output) {
 
   auto f = [&](auto dummy) {
     using Element = std::remove_const_t<std::decay_t<decltype(dummy)>>;
-    relu<Element><<<grid, block, 0, stream>>>(static_cast<const Element*>(input.data()),
-                                              static_cast<Element*>(output.data()), size);
+    relu<Element><<<grid, block, 0, stream>>>(
+        static_cast<const Element*>(input.data()),
+        static_cast<Element*>(output.data()), size);
   };
 
   autoDispatch(input.dtype, f);
 }
-} // namespace dllm::compute
+}  // namespace dllm::compute
