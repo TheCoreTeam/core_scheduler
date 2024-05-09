@@ -8,14 +8,14 @@
 namespace dllm::compute{
 namespace {
 template <typename T>
-__global__ void GeLU(T* output, const T* input, std::size_t n) {
+__global__ void GeLU(T* __restrict__ output, const T* __restrict__ input, std::size_t n) {
   auto tid = threadIdx.x + blockIdx.x * blockDim.x;
   if (tid >= n) {
     return;
   }
-  int a=2;
-//  output[tid] = 1;
-  output[tid] = static_cast<T>(0.5) * input[tid] * (static_cast<T>(1) + static_cast<T>(tanhf(static_cast<T>(CUDART_SQRT_2OPI) * (input[tid] + static_cast<T>(0.044715) * input[tid] * input[tid] * input[tid]))));
+
+  constexpr auto inv_sqrt_2 = 0.7071067811865475;
+  output[tid] = float{0.5} * static_cast<float>(input[tid]) * (float{1} + erf(static_cast<float>(input[tid]) * float{inv_sqrt_2}));
 
 }
 

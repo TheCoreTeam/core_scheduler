@@ -261,7 +261,8 @@ void TestDLLMRelu::TestRoutine(const int size) {
     DataType one = static_cast<DataType>(1);
     DataType sqrt_term = static_cast<DataType>(CUDART_SQRT_2OPI);
 
-    hostRef = (half_one * hostInput.array() * (one + (sqrt_term * hostInput.array() + alpha * hostInput.array().cube()).array().tanh())).matrix();
+    constexpr auto inv_sqrt_2 = 0.7071067811865475;
+    hostRef = float{0.5} * hostInput * (float{1} + (hostInput.template cast<float>().array() * float{inv_sqrt_2}).erf()).matrix();
 
   auto tast = dllm::compute::GeLU(tensorOutput,tensorInput);
   tast(&context);
