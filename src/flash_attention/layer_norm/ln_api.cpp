@@ -300,10 +300,13 @@ auto dropout_add_ln_fwd_no_dropout(
         IntArrayRef1D{
             static_cast<dllm::TensorIndexType>(launch_params.workspace_bytes)},
         torch::kChar, context);
+    params.barrier = barrier->data_ptr<int>();
+    params.workspace = workspace->data_ptr();
   }
 
   // Launch the kernel.
   launcher(launch_params, false);
+  CHECK_CUDART(cudaStreamSynchronize(launch_params.stream));
 
   // return {z, x, dmask, mu, rsigma};
   //  return std::make_tuple(mu, rsigma);
