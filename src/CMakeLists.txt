@@ -26,7 +26,7 @@ add_library(dllm_core SHARED
 target_compile_options(dllm_core PRIVATE
         $<$<CONFIG:Release>:-O3>
         $<$<CONFIG:Debug>:-O0>
-        $<$<COMPILE_LANGUAGE:CUDA>:--expt-relaxed-constexpr>
+        $<$<COMPILE_LANGUAGE:CUDA>:--expt-relaxed-constexpr --extended-lambda>
 )
 
 target_include_directories(dllm_core PUBLIC

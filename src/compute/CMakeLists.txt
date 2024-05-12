@@ -13,5 +13,7 @@ set(DLLM_COMPUTE_SRCS
         ${CMAKE_CURRENT_SOURCE_DIR}/matmul.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/nll.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/nll.cu
+        ${CMAKE_CURRENT_SOURCE_DIR}/softmax.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/softmax.cu
 )
 set(DLLM_COMPUTE_SRCS ${DLLM_COMPUTE_SRCS} PARENT_SCOPE)

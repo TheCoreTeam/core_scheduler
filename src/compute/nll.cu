@@ -50,7 +50,7 @@ void nllForwardKernel(cudaStream_t stream, Tensor1D &loss,
     SPDLOG_LOGGER_CRITICAL(&logger(), "Only support int32 for the target");
   }
   const auto size = cute::size(loss.layout);
-  const auto ld = cute::shape<1>(input.layout);
+  const auto ld = cute::stride<0>(input.layout);
   auto f = [&](auto dummy) {
     using T = std::remove_const_t<std::decay_t<decltype(dummy)>>;
     dim3 block(std::min<decltype(size)>(128, size));
