@@ -58,7 +58,7 @@ void TestT(const dllm::ContextCompute &context) {
   auto dtype =
       std::is_same_v<Dtype, nv_half> ? torch::kFloat16 : torch::kBFloat16;
   torch::manual_seed(1);
-  dllm::TensorIndexType B = 1, T = 2, n_head = 1, n_embd = n_head * 8;
+  dllm::TensorIndexType B = 1, T = 2, n_head = 2, n_embd = n_head * 8;
   // Initialize random tensors for q, k, v
   auto qkv = torch::randn({B, T, n_embd * 3}, torch::dtype(torch::kFloat16))
                  .split(n_embd, -1);
@@ -74,18 +74,12 @@ void TestT(const dllm::ContextCompute &context) {
                .view({B, T, n_head, n_embd / n_head})
                .contiguous()
                .requires_grad_(true);
-  std::cout << q.is_leaf() << std::endl;
-  std::cout << k.is_leaf() << std::endl;
-  std::cout << v.is_leaf() << std::endl;
 
   void *randomDevicePtr;
   auto randomShape = cute::make_shape(static_cast<dllm::TensorIndexType>(2));
   auto randomLayout = cute::make_layout(randomShape, cute::GenRowMajor{});
   CHECK_CUDART(
       cudaMalloc(&randomDevicePtr, sizeof(int64_t) * cute::size(randomLayout)));
-  CHECK_CUDART(cudaMemcpy(randomDevicePtr, q.data_ptr(),
-                          sizeof(Dtype) * cute::size(randomLayout),
-                          cudaMemcpyHostToDevice));
   auto randomTensor = std::make_shared<dllm::Tensor1D>(
       randomDevicePtr, randomLayout, dllm::toDtype<int64_t>(), dllm::CUDA);
 
@@ -161,7 +155,7 @@ void TestT(const dllm::ContextCompute &context) {
         randomTensor, outTensor, softmaxTensor, qTensor, kTensor, vTensor, 0.0,
         scale);
     task(&context);
-    task.get_future().wait();
+    outTensor->future->wait();
   }
 
   auto outRef = at::empty_like(y_attn);
@@ -170,6 +164,8 @@ void TestT(const dllm::ContextCompute &context) {
                           sizeof(Dtype) * cute::size(outTensor->layout),
                           cudaMemcpyDeviceToHost));
   CHECK_CUDART(cudaDeviceSynchronize());
+  std::cout << y_attn << std::endl;
+  std::cout << outRef << std::endl;
   ASSERT_TRUE(torch::allclose(y_attn, outRef, 1e-5, 1e-2));
 
   void *dqDevicePtr;
@@ -193,7 +189,7 @@ void TestT(const dllm::ContextCompute &context) {
   auto dvTensor = std::make_shared<dllm::Tensor4D>(
       dvDevicePtr, dvLayout, dllm::toDtype<Dtype>(), dllm::CUDA);
 
-  auto dout = torch::ones_like(outRef) * 1000;
+  auto dout = torch::ones_like(outRef);
   void *doutDevicePtr;
   auto doutShape = cute::make_shape(B, T, n_head, n_embd / n_head);
   auto doutLayout = cute::make_layout(doutShape, cute::GenRowMajor{});
@@ -211,7 +207,7 @@ void TestT(const dllm::ContextCompute &context) {
         dqTensor, dkTensor, dvTensor, doutTensor, randomTensor, outTensor,
         softmaxTensor, qTensor, kTensor, vTensor, 0.0, scale);
     task(&context);
-    task.get_future().wait();
+    dqTensor->future->wait();
   }
 
   auto dq = torch::empty_like(q);
@@ -230,15 +226,15 @@ void TestT(const dllm::ContextCompute &context) {
   CHECK_CUDART(cudaDeviceSynchronize());
 
   y_attn.backward(dout);
-  //  std::cout << torch::allclose(dq, q.grad(), 1e-5, 1e-2) << std::endl;
-  //  std::cout << torch::allclose(dk, k.grad(), 1e-5, 1e-2) << std::endl;
-  //  std::cout << torch::allclose(dv, v.grad(), 1e-5, 1e-2) << std::endl;
-  //  std::cout << dq << std::endl;
-  //  std::cout << q.grad() << std::endl;
-  //  std::cout << dk << std::endl;
-  //  std::cout << k.grad() << std::endl;
-  //  std::cout << dv << std::endl;
-  //  std::cout << v.grad() << std::endl;
+    std::cout << torch::allclose(dq, q.grad(), 1e-5, 1e-2) << std::endl;
+    std::cout << torch::allclose(dk, k.grad(), 1e-5, 1e-2) << std::endl;
+    std::cout << torch::allclose(dv, v.grad(), 1e-5, 1e-2) << std::endl;
+    std::cout << dq << std::endl;
+    std::cout << q.grad() << std::endl;
+    std::cout << dk << std::endl;
+    std::cout << k.grad() << std::endl;
+    std::cout << dv << std::endl;
+    std::cout << v.grad() << std::endl;
   ASSERT_TRUE(torch::allclose(dq, q.grad(), 1e-5, 1e-2));
   ASSERT_TRUE(torch::allclose(dk, k.grad(), 1e-5, 1e-2));
   ASSERT_TRUE(torch::allclose(dv, v.grad(), 1e-5, 1e-2));

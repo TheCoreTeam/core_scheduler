@@ -5,14 +5,6 @@
 namespace dllm::util {
 template <typename Future>
 __inline__ __attribute__((always_inline)) void waitFutureIfValid(
-    const std::shared_ptr<Future> &future) {
-  if (future != nullptr && future->valid()) {
-    future->wait();
-  }
-}
-
-template <typename Future>
-__inline__ __attribute__((always_inline)) void waitFutureIfValid(
     Future &&future) {
   if (future.valid()) {
     future.wait();

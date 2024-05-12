@@ -693,15 +693,28 @@ TaskCompute forward(const std::shared_ptr<dllm::Tensor<1>> &random_state,
   if (!(out->layout.shape() == q->layout.shape()) ||
       !(k->layout.shape() == v->layout.shape())) {
   }
-  return TaskCompute{[=, futureQ = q->future, futureK = k->future,
-                      futureV = v->future](const ContextCompute *context) {
-    util::waitFutureIfValid(futureQ);
-    util::waitFutureIfValid(futureK);
-    util::waitFutureIfValid(futureV);
-    forward(context, *random_state, *out, *softmax_lse, *q, *k, *v, drouput_p,
-            softmax_scale);
-    CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
-  }};
+  auto task = TaskCompute{
+      [=, futureRandom = *random_state->future, futureOut = *out->future,
+       futureSoftmax = *softmax_lse->future, futureQ = *q->future,
+       futureK = *k->future,
+       futureV = *v->future](const ContextCompute *context) {
+        util::waitFutureIfValid(futureRandom);
+        util::waitFutureIfValid(futureOut);
+        util::waitFutureIfValid(futureSoftmax);
+        util::waitFutureIfValid(futureQ);
+        util::waitFutureIfValid(futureK);
+        util::waitFutureIfValid(futureV);
+        forward(context, *random_state, *out, *softmax_lse, *q, *k, *v,
+                drouput_p, softmax_scale);
+        CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
+      }};
+  const auto &future = *random_state->future = task.get_future();
+  *out->future = future;
+  *softmax_lse->future = future;
+  *q->future = future;
+  *k->future = future;
+  *v->future = future;
+  return task;
 }
 }  // namespace dllm::compute::FlashAttention
 
@@ -1865,25 +1878,36 @@ TaskCompute backward(const std::shared_ptr<dllm::Tensor<4>> &dq,
   if (!(out->layout.shape() == q->layout.shape()) ||
       !(k->layout.shape() == v->layout.shape())) {
   }
-  return TaskCompute{[=, futureDout = dout->future, futureDq = dq->future,
-                      futureDk = dk->future, futureDv = dv->future,
-                      futureOut = out->future,
-                      futureSofmax = softmax_lse->future, futureQ = q->future,
-                      futureK = k->future,
-                      futureV = v->future](const ContextCompute *context) {
-    util::waitFutureIfValid(futureDout);
-    util::waitFutureIfValid(futureDq);
-    util::waitFutureIfValid(futureDk);
-    util::waitFutureIfValid(futureDv);
-    util::waitFutureIfValid(futureOut);
-    util::waitFutureIfValid(futureSofmax);
-    util::waitFutureIfValid(futureQ);
-    util::waitFutureIfValid(futureK);
-    util::waitFutureIfValid(futureV);
-    backward(context, *dout, dq, dk, dv, *random_state, *out, *softmax_lse, *q,
-             *k, *v, drouput_p, softmax_scale);
-    CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
-  }};
+  auto task = TaskCompute{
+      [=, futureDq = *dq->future, futureDk = *dk->future,
+       futureDv = *dv->future, futureDout = *dout->future,
+       futureOut = *out->future, futureSofmax = *softmax_lse->future,
+       futureQ = *q->future, futureK = *k->future,
+       futureV = *v->future](const ContextCompute *context) {
+        util::waitFutureIfValid(futureDout);
+        util::waitFutureIfValid(futureDq);
+        util::waitFutureIfValid(futureDk);
+        util::waitFutureIfValid(futureDv);
+        util::waitFutureIfValid(futureOut);
+        util::waitFutureIfValid(futureSofmax);
+        util::waitFutureIfValid(futureQ);
+        util::waitFutureIfValid(futureK);
+        util::waitFutureIfValid(futureV);
+        backward(context, *dout, dq, dk, dv, *random_state, *out, *softmax_lse,
+                 *q, *k, *v, drouput_p, softmax_scale);
+        CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
+      }};
+  const auto &future = *dq->future = task.get_future();
+  *dk->future = future;
+  *dv->future = future;
+  *dout->future = future;
+  *random_state->future = future;
+  *out->future = future;
+  *softmax_lse->future = future;
+  *q->future = future;
+  *k->future = future;
+  *v->future = future;
+  return task;
 }
 }  // namespace dllm::compute::FlashAttention
 

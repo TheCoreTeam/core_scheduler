@@ -5,8 +5,8 @@
 #include <vector>
 
 #include "compute/fc.h"
-#include "compute/random.h"
 #include "compute/mse.h"
+#include "compute/random.h"
 #include "logger.h"
 #include "optimizer/sgd.h"
 #include "threading/thread_pool_compute.h"
@@ -19,7 +19,7 @@ void printTensor(const dllm::Tensor1D &tensor) {
         using T = float;
         const auto size = cute::size(tensor.layout);
         Eigen::Vector<T, Eigen::Dynamic> buffer(size);
-        dllm::util::waitFutureIfValid(tensor.future);
+        dllm::util::waitFutureIfValid(*tensor.future);
         CHECK_CUDART(cudaMemcpy(buffer.data(), tensor.data(), sizeof(T) * size,
                                 cudaMemcpyDeviceToHost));
         CHECK_CUDART(cudaDeviceSynchronize());
@@ -164,13 +164,11 @@ int main() {
 
   {
     auto task = dllm::compute::Random::kaimingNorm(tensorW1);
-    auto future = threadPool.submit(std::move(task));
-    tensorW1->future = future;
+    threadPool.submit(std::move(task));
   }
   {
     auto task = dllm::compute::Random::kaimingNorm(tensorW2);
-    auto future = threadPool.submit(std::move(task));
-    tensorW2->future = future;
+    threadPool.submit(std::move(task));
   }
 
   const int epoch = 10;
@@ -179,62 +177,54 @@ int main() {
       {
         auto task = dllm::compute::FcNoBias::forward(
             tensorW1Out, tensorX, tensorW1, CUBLAS_COMPUTE_32F_PEDANTIC);
-        auto future = threadPool.submit(std::move(task));
-        tensorW1Out->future = future;
+        threadPool.submit(std::move(task));
       }
       {
         auto task = dllm::compute::FcNoBias::forward(
             tensorW2Out, tensorW1Out, tensorW2, CUBLAS_COMPUTE_32F_PEDANTIC);
-        auto future = threadPool.submit(std::move(task));
-        tensorW2Out->future = future;
+        threadPool.submit(std::move(task));
       }
       {
         auto task = dllm::compute::Mse::backward(
             dllm::util::flatten<1>(tensorDW2Out),
             dllm::util::toConstSharedPtr(dllm::util::flatten<1>(tensorW2Out)),
             dllm::util::toConstSharedPtr(dllm::util::flatten<1>(tensorY)));
-        auto future = threadPool.submit(std::move(task));
-        tensorDW2Out->future = future;
+        threadPool.submit(std::move(task));
       }
       {
         auto task = dllm::compute::FcNoBias::backwardW(
             tensorDW2, dllm::util::toConstSharedPtr(tensorDW2Out),
             dllm::util::toConstSharedPtr(tensorW1Out),
             CUBLAS_COMPUTE_32F_PEDANTIC);
-        auto future = threadPool.submit(std::move(task));
-        tensorDW2->future = future;
+        threadPool.submit(std::move(task));
       }
       {
         auto task = dllm::compute::FcNoBias::backwardX(
             tensorDW1Out, dllm::util::toConstSharedPtr(tensorDW2Out),
             dllm::util::toConstSharedPtr(tensorW2),
             CUBLAS_COMPUTE_32F_PEDANTIC);
-        auto future = threadPool.submit(std::move(task));
-        tensorDW1Out->future = future;
+        threadPool.submit(std::move(task));
       }
       {
         auto task = dllm::compute::FcNoBias::backwardW(
             tensorDW1, dllm::util::toConstSharedPtr(tensorDW1Out),
             dllm::util::toConstSharedPtr(tensorW1Out),
             CUBLAS_COMPUTE_32F_PEDANTIC);
-        auto future = threadPool.submit(std::move(task));
-        tensorDW1->future = future;
+        threadPool.submit(std::move(task));
       }
       {
         auto task = dllm::optimizer::Sgd::step(
             dllm::util::flatten<1>(tensorW2),
             dllm::util::toConstSharedPtr(dllm::util::flatten<1>(tensorDW2)),
             lr);
-        auto future = threadPool.submit(std::move(task));
-        tensorW2->future = future;
+        threadPool.submit(std::move(task));
       }
       {
         auto task = dllm::optimizer::Sgd::step(
             dllm::util::flatten<1>(tensorW1),
             dllm::util::toConstSharedPtr(dllm::util::flatten<1>(tensorDW1)),
             lr);
-        auto future = threadPool.submit(std::move(task));
-        tensorW1->future = future;
+        threadPool.submit(std::move(task));
       }
       tensorW2->future->wait();
       tensorW1->future->wait();
@@ -255,14 +245,12 @@ int main() {
   {
     auto task = dllm::compute::FcNoBias::forward(tensorW1Out, tensorX, tensorW1,
                                                  CUBLAS_COMPUTE_32F_PEDANTIC);
-    auto future = threadPool.submit(std::move(task));
-    tensorW1Out->future = future;
+    threadPool.submit(std::move(task));
   }
   {
     auto task = dllm::compute::FcNoBias::forward(
         tensorW2Out, tensorW1Out, tensorW2, CUBLAS_COMPUTE_32F_PEDANTIC);
-    auto future = threadPool.submit(std::move(task));
-    tensorW2Out->future = future;
+    threadPool.submit(std::move(task));
   }
   tensorW2Out->future->wait();
 

@@ -11,11 +11,13 @@ TaskCompute relu(const std::shared_ptr<const Tensor1D>& input,
   if (output->layout.shape<0>() != input->layout.shape<0>()) {
     SPDLOG_LOGGER_CRITICAL(&logger(), "Input data dim not same");
   }
-  return TaskCompute{
-      [=, futureInput = input->future](const ContextCompute* context) {
+  auto task = TaskCompute{
+      [=, futureInput = *input->future](const ContextCompute* context) {
         util::waitFutureIfValid(futureInput);
         reluKernel(context->cudaStream, *input, *output);
         CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
       }};
+  *input->future = task.get_future();
+  return task;
 }
 }  // namespace dllm::compute

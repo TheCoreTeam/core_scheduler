@@ -110,13 +110,11 @@ ThreadPoolCompute::~ThreadPoolCompute() {
   }
 }
 
-std::shared_ptr<FutureCompute> ThreadPoolCompute::submit(TaskCompute &&task) {
-  auto future = task.get_future();
+void ThreadPoolCompute::submit(TaskCompute &&task) {
   std::unique_lock lock{queueMutex};
   taskQueue.push(std::move(task));
   lock.unlock();
   cv.notify_one();
-  return std::make_shared<FutureCompute>(std::move(future));
 }
 
 ThreadPoolCompute::ThreadPoolCompute(int localRank, int threadNum,

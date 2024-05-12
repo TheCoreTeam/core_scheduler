@@ -61,13 +61,11 @@ ThreadStreamNccl::~ThreadStreamNccl() {
   thread.join();
 }
 
-std::shared_ptr<FutureNccl> ThreadStreamNccl::submit(TaskNccl &&task) {
-  auto future = task.get_future();
+void ThreadStreamNccl::submit(TaskNccl &&task) {
   std::unique_lock lock{queueMutex};
   taskQueue.push(std::move(task));
   lock.unlock();
   cv.notify_one();
-  return std::make_shared<FutureNccl>(std::move(future));
 }
 
 ThreadStreamNccl::ThreadStreamNccl(const ncclUniqueId id,

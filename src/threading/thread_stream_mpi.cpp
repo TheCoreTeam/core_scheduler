@@ -51,13 +51,11 @@ ThreadStreamMpi::~ThreadStreamMpi() {
   thread.join();
 }
 
-std::shared_ptr<FutureMpi> ThreadStreamMpi::submit(TaskMpi &&task) {
-  auto future = task.get_future();
+void ThreadStreamMpi::submit(TaskMpi &&task) {
   std::unique_lock lock{queueMutex};
   taskQueue.push(std::move(task));
   lock.unlock();
   cv.notify_one();
-  return std::make_shared<FutureMpi>(std::move(future));
 }
 
 ThreadStreamMpi::ThreadStreamMpi(const ContextMpi context,

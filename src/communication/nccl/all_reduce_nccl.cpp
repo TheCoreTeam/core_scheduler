@@ -20,8 +20,10 @@ TaskNccl AllReduce<NCCL>::run(const std::shared_ptr<const Tensor1D> &tensorSend,
     SPDLOG_LOGGER_CRITICAL(&logger(),
                            "sendbuff's dtype is different from the recvbuff's");
   }
-  return TaskNccl{[=, futureSend =
-                          tensorSend->future](const ContextNccl *context) {
+  auto task = TaskNccl{[=, futureReceive = *tensorReceive->future,
+                        futureSend =
+                            *tensorSend->future](const ContextNccl *context) {
+    util::waitFutureIfValid(futureReceive);
     util::waitFutureIfValid(futureSend);
     CHECK_NCCL(ncclAllReduce(
         tensorSend->data(), tensorReceive->data(),
@@ -29,6 +31,9 @@ TaskNccl AllReduce<NCCL>::run(const std::shared_ptr<const Tensor1D> &tensorSend,
         util::toNcclRedOp(operation), context->ncclComm, context->cudaStream));
     CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
   }};
+  const auto &future = *tensorSend->future = task.get_future();
+  *tensorReceive->future = future;
+  return task;
 }
 
 TaskNccl AllReduce<NCCL>::runInplace(const std::shared_ptr<Tensor1D> &tensor,
@@ -36,14 +41,17 @@ TaskNccl AllReduce<NCCL>::runInplace(const std::shared_ptr<Tensor1D> &tensor,
   if (tensor->deviceType != CUDA) {
     SPDLOG_LOGGER_CRITICAL(&logger(), "NCCL backend only supports CUDA tensor");
   }
-  return TaskNccl{[=, future = tensor->future](const ContextNccl *context) {
-    // Be careful: possible deadlock
-    util::waitFutureIfValid(future);
-    CHECK_NCCL(ncclAllReduce(
-        tensor->data(), tensor->data(), cute::size(tensor->layout),
-        util::toNcclDataType(tensor->dtype), util::toNcclRedOp(operation),
-        context->ncclComm, context->cudaStream));
-    CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
-  }};
+  auto task =
+      TaskNccl{[=, future = *tensor->future](const ContextNccl *context) {
+        // Be careful: possible deadlock
+        util::waitFutureIfValid(future);
+        CHECK_NCCL(ncclAllReduce(
+            tensor->data(), tensor->data(), cute::size(tensor->layout),
+            util::toNcclDataType(tensor->dtype), util::toNcclRedOp(operation),
+            context->ncclComm, context->cudaStream));
+        CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
+      }};
+  *tensor->future = task.get_future();
+  return task;
 }
 }  // namespace dllm::communication

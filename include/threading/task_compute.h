@@ -5,5 +5,5 @@
 
 namespace dllm {
 using TaskCompute = std::packaged_task<void(const ContextCompute *)>;
-using FutureCompute = std::future<void>;
+using TaskFuture = std::shared_future<void>;
 }  // namespace dllm

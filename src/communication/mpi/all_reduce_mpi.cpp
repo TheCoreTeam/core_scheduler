@@ -31,12 +31,18 @@ TaskMpi AllReduce<MPI>::run(const std::shared_ptr<const Tensor1D> &tensorSend,
     }
   }();
 
-  return TaskMpi{[=, future = tensorSend->future](const ContextMpi *context) {
-    util::waitFutureIfValid(future);
-    CHECK_MPI(MPI_Allreduce(tensorSend->data(), tensorReceive->data(),
-                            cute::size(tensorSend->layout), datatype,
-                            util::toMpiOp(operation), context->mpiComm));
-  }};
+  auto task =
+      TaskMpi{[=, futureReceive = *tensorReceive->future,
+               futureSend = *tensorSend->future](const ContextMpi *context) {
+        util::waitFutureIfValid(futureSend);
+        util::waitFutureIfValid(futureSend);
+        CHECK_MPI(MPI_Allreduce(tensorSend->data(), tensorReceive->data(),
+                                cute::size(tensorSend->layout), datatype,
+                                util::toMpiOp(operation), context->mpiComm));
+      }};
+  const auto &future = *tensorReceive->future = task.get_future();
+  *tensorSend->future = future;
+  return task;
 }
 
 TaskMpi AllReduce<MPI>::runInplace(const std::shared_ptr<Tensor1D> &tensor,
@@ -54,12 +60,14 @@ TaskMpi AllReduce<MPI>::runInplace(const std::shared_ptr<Tensor1D> &tensor,
     }
   }();
 
-  return TaskMpi{[=, future = tensor->future](const ContextMpi *context) {
+  auto task = TaskMpi{[=, future = *tensor->future](const ContextMpi *context) {
     // Be careful: possible deadlock
     util::waitFutureIfValid(future);
     CHECK_MPI(MPI_Allreduce(MPI_IN_PLACE, tensor->data(),
                             cute::size(tensor->layout), datatype,
                             util::toMpiOp(operation), context->mpiComm));
   }};
+  *tensor->future = task.get_future();
+  return task;
 }
 }  // namespace dllm::communication

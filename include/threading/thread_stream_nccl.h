@@ -18,9 +18,9 @@ struct ThreadStreamNccl {
 
   ~ThreadStreamNccl();
 
-  std::shared_ptr<FutureNccl> submit(TaskNccl &&task);
+  void submit(TaskNccl &&task);
 
-  std::shared_ptr<FutureNccl> submit(const TaskNccl &task) = delete;
+  void submit(const TaskNccl &task) = delete;
 
  private:
   std::thread thread{};

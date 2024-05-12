@@ -20,7 +20,6 @@ __global__ void GeLU(T* __restrict__ output, const T* __restrict__ input,
   using TargetType = std::conditional_t<useDouble, double, float>;
   TargetType inputElement = input[tid];
 
-  constexpr auto inv_sqrt_2 = 0.7071067811865475;
   output[tid] = static_cast<TargetType>(0.5) * inputElement *
                 (static_cast<TargetType>(1.) +
                  erf(inputElement * static_cast<TargetType>(CUDART_SQRT_HALF)));

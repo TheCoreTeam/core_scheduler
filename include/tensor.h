@@ -65,21 +65,24 @@ struct Tensor {
   }
 
   Tensor(const void *data, Layout layout, Dtype dtype, DeviceType deviceType,
-         std::shared_ptr<FutureCompute> future = {})
+         const std::shared_ptr<TaskFuture> &future =
+             std::make_shared<TaskFuture>())
       : data_{std::shared_ptr<const void>{data, [](const void *) {}}},
         layout{layout},
         dtype{dtype},
         deviceType{deviceType},
-        future{std::move(future)} {}
+        future{future} {}
 
   template <template <typename T> class SmartPointer, typename T>
   Tensor(SmartPointer<T> &&data, Layout layout, Dtype dtype,
-         DeviceType deviceType, std::shared_ptr<FutureCompute> future = {})
+         DeviceType deviceType,
+         const std::shared_ptr<TaskFuture> &future =
+             std::make_shared<TaskFuture>())
       : data_{std::forward<SmartPointer<T>>(data)},
         layout{layout},
         dtype{dtype},
         deviceType{deviceType},
-        future{std::move(future)} {}
+        future{future} {}
 
   void *data() { return const_cast<void *>(data_.get()); }
 
@@ -185,7 +188,7 @@ struct Tensor {
   Layout layout;
   Dtype dtype;
   DeviceType deviceType;
-  std::shared_ptr<FutureCompute> future;
+  std::shared_ptr<TaskFuture> future;
 
  private:
   std::shared_ptr<const void> data_;
