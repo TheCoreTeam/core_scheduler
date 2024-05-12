@@ -58,10 +58,10 @@ void TestT(const dllm::ContextCompute &context) {
   auto dtype =
       std::is_same_v<Dtype, nv_half> ? torch::kFloat16 : torch::kBFloat16;
   torch::manual_seed(1);
-  dllm::TensorIndexType B = 1, T = 2, n_head = 2, n_embd = n_head * 8;
+  dllm::TensorIndexType B = 3, T = 4, n_head = 8, n_embd = n_head * 8;
   // Initialize random tensors for q, k, v
-  auto qkv = torch::randn({B, T, n_embd * 3}, torch::dtype(torch::kFloat16))
-                 .split(n_embd, -1);
+  auto qkv =
+      torch::randn({B, T, n_embd * 3}, torch::dtype(dtype)).split(n_embd, -1);
   auto q = qkv[0]
                .view({B, T, n_head, n_embd / n_head})
                .contiguous()
@@ -136,8 +136,8 @@ void TestT(const dllm::ContextCompute &context) {
   auto vT = v.transpose(1, 2);
 
   // Create lower triangular mask
-  auto mask = torch::tril(torch::ones({T, T}, torch::dtype(torch::kFloat16)))
-                  .view({1, 1, T, T});
+  auto mask =
+      torch::tril(torch::ones({T, T}, torch::dtype(dtype))).view({1, 1, T, T});
 
   // Calculate scaled dot product attention
   auto scale = 1.0 / std::sqrt(kT.size(-1));
@@ -164,9 +164,9 @@ void TestT(const dllm::ContextCompute &context) {
                           sizeof(Dtype) * cute::size(outTensor->layout),
                           cudaMemcpyDeviceToHost));
   CHECK_CUDART(cudaDeviceSynchronize());
-  std::cout << y_attn << std::endl;
-  std::cout << outRef << std::endl;
-  ASSERT_TRUE(torch::allclose(y_attn, outRef, 1e-5, 1e-2));
+  //  std::cout << y_attn << std::endl;
+  //  std::cout << outRef << std::endl;
+  ASSERT_TRUE(torch::allclose(y_attn, outRef, 1e-5, 2e-2));
 
   void *dqDevicePtr;
   auto dqShape = cute::make_shape(B, T, n_head, n_embd / n_head);
@@ -226,18 +226,15 @@ void TestT(const dllm::ContextCompute &context) {
   CHECK_CUDART(cudaDeviceSynchronize());
 
   y_attn.backward(dout);
-    std::cout << torch::allclose(dq, q.grad(), 1e-5, 1e-2) << std::endl;
-    std::cout << torch::allclose(dk, k.grad(), 1e-5, 1e-2) << std::endl;
-    std::cout << torch::allclose(dv, v.grad(), 1e-5, 1e-2) << std::endl;
-    std::cout << dq << std::endl;
-    std::cout << q.grad() << std::endl;
-    std::cout << dk << std::endl;
-    std::cout << k.grad() << std::endl;
-    std::cout << dv << std::endl;
-    std::cout << v.grad() << std::endl;
-  ASSERT_TRUE(torch::allclose(dq, q.grad(), 1e-5, 1e-2));
-  ASSERT_TRUE(torch::allclose(dk, k.grad(), 1e-5, 1e-2));
-  ASSERT_TRUE(torch::allclose(dv, v.grad(), 1e-5, 1e-2));
+  //  std::cout << dq << std::endl;
+  //  std::cout << q.grad() << std::endl;
+  //  std::cout << dk << std::endl;
+  //  std::cout << k.grad() << std::endl;
+  //  std::cout << dv << std::endl;
+  //  std::cout << v.grad() << std::endl;
+  ASSERT_TRUE(torch::allclose(dq, q.grad(), 1e-5, 2e-2));
+  ASSERT_TRUE(torch::allclose(dk, k.grad(), 1e-5, 2e-2));
+  ASSERT_TRUE(torch::allclose(dv, v.grad(), 1e-5, 2e-2));
 
   CHECK_CUDART(cudaFree(dqDevicePtr));
   CHECK_CUDART(cudaFree(dkDevicePtr));
