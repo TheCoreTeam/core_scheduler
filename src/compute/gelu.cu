@@ -5,7 +5,7 @@
 #include "compute/gelu.h"
 #include "util.h"
 
-namespace dllm::compute {
+namespace dllm::compute::GeLU {
 namespace {
 template <typename T>
 __global__ void GeLU(T* __restrict__ output, const T* __restrict__ input,
@@ -47,8 +47,8 @@ __inline__ __attribute__((always_inline)) void autoDispatch(Dtype dtype,
 }
 }  // namespace
 
-void GeLUKernel(cudaStream_t cudaStream, Tensor1D& output,
-                const Tensor1D& input) {
+void forwardKernel(cudaStream_t cudaStream, Tensor1D& output,
+                   const Tensor1D& input) {
   const auto size = cute::size(input.layout);
   auto f = [&](auto dummy) {
     using T = std::remove_const_t<std::decay_t<decltype(dummy)>>;
@@ -60,4 +60,4 @@ void GeLUKernel(cudaStream_t cudaStream, Tensor1D& output,
   };
   autoDispatch(output.dtype, f);
 }
-}  // namespace dllm::compute
+}  // namespace dllm::compute::GeLU
