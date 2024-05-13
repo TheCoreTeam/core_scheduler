@@ -4,6 +4,9 @@
 #include "ATen/cuda/CUDAContext.h"
 #include "ln.h"
 #include "threading/context_compute.h"
+#include "threading/task_compute.h"
+#include "logger.h"
+#include "util.h"
 
 using IntArrayRef1D = std::array<dllm::TensorIndexType, 1>;
 using IntArrayRef2D = std::array<dllm::TensorIndexType, 2>;
@@ -126,7 +129,7 @@ layer_norm::BwdFunction &get_parallel_bwd_launcher(
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-auto dropout_add_ln_fwd_no_dropout(
+void dropout_add_ln_fwd_no_dropout(
     const dllm::ContextCompute *context,
     at::Tensor<2> &z,            // Input: BxSxhidden_size
     at::Tensor<1> &mu,           // Input: FP32
@@ -311,6 +314,35 @@ auto dropout_add_ln_fwd_no_dropout(
   // return {z, x, dmask, mu, rsigma};
   //  return std::make_tuple(mu, rsigma);
 }
+
+namespace dllm::flash_attn::layer_norm {
+
+dllm::TaskCompute forward(
+    std::shared_ptr<dllm::Tensor<2>> z,            // Input: BxSxhidden_size
+    std::shared_ptr<dllm::Tensor<1>> mu,           // Input: FP32
+    std::shared_ptr<dllm::Tensor<1>> rsigma,       // Input: FP32
+    const std::shared_ptr<const dllm::Tensor<2>> x0,     // Input: BxSxhidden_size
+    const std::shared_ptr<const dllm::Tensor<1>> gamma,  // hidden_size  // weight
+    const std::shared_ptr<const dllm::Tensor<1>> beta,   // hidden_size  // bias
+    const float epsilon          // epsilon
+) {
+
+  auto task = dllm::TaskCompute{
+      [=, futureX0 = *x0->future,
+          futureGamma = *gamma->future,
+          futureBeta = *beta->future](const dllm::ContextCompute* context) {
+        dllm::util::waitFutureIfValid(futureX0);
+        dllm::util::waitFutureIfValid(futureGamma);
+        dllm::util::waitFutureIfValid(futureBeta);
+        dropout_add_ln_fwd_no_dropout(context, *z, *mu, *rsigma, *x0, *gamma, *beta, epsilon);
+        CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
+      }};
+
+  return task;
+}
+
+} // namespace dllm::flash_attn::layer_norm
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
