@@ -37,7 +37,7 @@ TaskNccl AllReduce<NCCL>::run(const std::shared_ptr<const Tensor1D> &tensorSend,
 }
 
 TaskNccl AllReduce<NCCL>::runInplace(const std::shared_ptr<Tensor1D> &tensor,
-                                     Operation operation) {
+                                     const Operation operation) {
   if (tensor->deviceType != CUDA) {
     SPDLOG_LOGGER_CRITICAL(&logger(), "NCCL backend only supports CUDA tensor");
   }

@@ -20,13 +20,13 @@ __global__ void step(T *__restrict w, T *__restrict m, T *__restrict v,
   }
   const auto g_t = dw[tid];
   auto theta_t = w[tid] - lr * weigt_decay * w[tid];
-  const auto m_t = beta1 * m[tid] + (static_cast<T>(1) - beta2) * g_t;
+  const auto m_t = beta1 * m[tid] + (static_cast<T>(1) - beta1) * g_t;
   m[tid] = m_t;
   const auto v_t = beta2 * v[tid] + (static_cast<T>(1) - beta2) * g_t * g_t;
   v[tid] = v_t;
   const auto m_hat_t = m_t * inv_one_minus_beta1_pow_t;
   const auto v_hat_t = v_t * inv_one_minus_beta2_pow_t;
-  w[tid] = w[tid] - lr * m_hat_t / (std::sqrt(v_hat_t) + eps);
+  w[tid] = theta_t - lr * m_hat_t / (std::sqrt(v_hat_t) + eps);
 }
 
 template <typename T>
@@ -42,14 +42,14 @@ __global__ void step(T *__restrict w, T *__restrict m, T *__restrict v,
   }
   const auto g_t = dw[tid];
   auto theta_t = w[tid] - lr * weigt_decay * w[tid];
-  const auto m_t = beta1 * m[tid] + (static_cast<T>(1) - beta2) * g_t;
+  const auto m_t = beta1 * m[tid] + (static_cast<T>(1) - beta1) * g_t;
   m[tid] = m_t;
   const auto v_t = beta2 * v[tid] + (static_cast<T>(1) - beta2) * g_t * g_t;
   v[tid] = v_t;
   const auto m_hat_t = m_t * inv_one_minus_beta1_pow_t;
   const auto v_hat_t = v_t * inv_one_minus_beta2_pow_t;
   const auto v_hat_max_t = std::max(vMax[tid], v_hat_t);
-  w[tid] = w[tid] - lr * m_hat_t / (std::sqrt(v_hat_max_t) + eps);
+  w[tid] = theta_t - lr * m_hat_t / (std::sqrt(v_hat_max_t) + eps);
 }
 
 template <typename Fn>
@@ -75,44 +75,45 @@ __inline__ __attribute__((always_inline)) void autoDispatch(Dtype dtype,
 }  // namespace
 
 template <bool amsgrad>
-void stepKernel(cudaStream_t stream, const Tensor1D &dw,
-                const typename AdamW<amsgrad>::State &state);
+void stepKernel(cudaStream_t stream,
+                const typename AdamW<amsgrad>::State &state, Tensor1D &w,
+                const Tensor1D &dw);
 
 template <>
-void stepKernel<false>(cudaStream_t stream, const Tensor1D &dw,
-                       const AdamW<false>::State &state) {
-  const auto size = cute::size(state.w->layout);
+void stepKernel<false>(cudaStream_t stream, const AdamW<false>::State &state,
+                       Tensor1D &w, const Tensor1D &dw) {
+  const auto size = cute::size(w.layout);
   auto f = [&](auto dummy) {
     using T = std::remove_const_t<std::decay_t<decltype(dummy)>>;
     dim3 block(std::min<decltype(size)>(128, size));
     dim3 grid(util::ceilDiv(size, std::min<decltype(size)>(128, size)));
     step<T><<<grid, block, 0, stream>>>(
-        static_cast<T *>(state.w->data()), static_cast<T *>(state.m->data()),
+        static_cast<T *>(w.data()), static_cast<T *>(state.m->data()),
         static_cast<T *>(state.v->data()), static_cast<const T *>(dw.data()),
         state.lr, state.beta1, state.beta2,
         1. / (1. - std::pow(state.beta1, state.t)),
         1. / (1. - std::pow(state.beta2, state.t)), state.eps,
         state.weight_decay, size);
   };
-  autoDispatch(state.w->dtype, f);
+  autoDispatch(w.dtype, f);
 }
 
 template <>
-void stepKernel<true>(cudaStream_t stream, const Tensor1D &dw,
-                      const AdamW<true>::State &state) {
-  const auto size = cute::size(state.w->layout);
+void stepKernel<true>(cudaStream_t stream, const AdamW<true>::State &state,
+                      Tensor1D &w, const Tensor1D &dw) {
+  const auto size = cute::size(w.layout);
   auto f = [&](auto dummy) {
     using T = std::remove_const_t<std::decay_t<decltype(dummy)>>;
     dim3 block(std::min<decltype(size)>(128, size));
     dim3 grid(util::ceilDiv(size, std::min<decltype(size)>(128, size)));
     step<T><<<grid, block, 0, stream>>>(
-        static_cast<T *>(state.w->data()), static_cast<T *>(state.m->data()),
+        static_cast<T *>(w.data()), static_cast<T *>(state.m->data()),
         static_cast<T *>(state.v->data()), static_cast<T *>(state.vMax->data()),
         static_cast<const T *>(dw.data()), state.lr, state.beta1, state.beta2,
         1. / (1. - std::pow(state.beta1, state.t)),
         1. / (1. - std::pow(state.beta2, state.t)), state.eps,
         state.weight_decay, size);
   };
-  autoDispatch(state.w->dtype, f);
+  autoDispatch(w.dtype, f);
 }
 }  // namespace dllm::optimizer

@@ -133,6 +133,7 @@ endif ()
 
 add_executable(dllm_tests
         main.cpp
+        test_adamw.cpp
         test_fc.cpp
         test_relu.cpp
         test_gelu.cpp

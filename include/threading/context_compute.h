@@ -1,9 +1,6 @@
 #pragma once
 #include <cublas_v2.h>
 #include <cuda_runtime.h>
-#include <curand_kernel.h>
-
-#include <mutex>
 
 namespace dllm {
 struct ContextCompute {

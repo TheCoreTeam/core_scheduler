@@ -184,14 +184,14 @@ struct Tensor {
   // NEVER use them alone!
 #endif
 
+private:
+  std::shared_ptr<const void> data_;
+
  public:
   Layout layout;
   Dtype dtype;
   DeviceType deviceType;
   std::shared_ptr<TaskFuture> future;
-
- private:
-  std::shared_ptr<const void> data_;
 };
 
 template <template <int> class T, int N>
