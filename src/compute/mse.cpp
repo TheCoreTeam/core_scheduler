@@ -21,10 +21,12 @@ TaskCompute forward(const std::shared_ptr<Tensor1D> &error,
       TaskCompute{[error = error, x = x, y = y, errorFuture = *error->future,
                    xFuture = *x->future, yFuture = *y->future](
                       const ContextCompute *context) mutable {
-        util::FutureGuard errorGuard{errorFuture};
-        util::FutureGuard xGuard{xFuture};
-        util::FutureGuard yGuard{yFuture};
-        forwardKernel(context->cudaStream, *error, *x, *y);
+        {
+          util::FutureGuard errorGuard{errorFuture};
+          util::FutureGuard xGuard{xFuture};
+          util::FutureGuard yGuard{yFuture};
+          forwardKernel(context->cudaStream, *error, *x, *y);
+        }
         CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
         error.reset();
         x.reset();
@@ -46,10 +48,12 @@ TaskCompute backward(const std::shared_ptr<Tensor1D> &dx,
   auto task = TaskCompute{
       [dx = dx, x = x, y = y, dxFuture = *dx->future, xFuture = *x->future,
        yFuture = *y->future](const ContextCompute *context) mutable {
-        util::FutureGuard dxGuard{dxFuture};
-        util::FutureGuard xGuard{xFuture};
-        util::FutureGuard yGuard{yFuture};
-        backwardKernel(context->cudaStream, *dx, *x, *y);
+        {
+          util::FutureGuard dxGuard{dxFuture};
+          util::FutureGuard xGuard{xFuture};
+          util::FutureGuard yGuard{yFuture};
+          backwardKernel(context->cudaStream, *dx, *x, *y);
+        }
         CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
         dx.reset();
         x.reset();

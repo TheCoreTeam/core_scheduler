@@ -15,9 +15,11 @@ TaskCompute forward(const std::shared_ptr<const Tensor1D>& input,
   auto task = TaskCompute{
       [input = input, output = output, inputFuture = *input->future,
        outputFuture = *output->future](const ContextCompute* context) mutable {
-        util::FutureGuard inputGuard{inputFuture};
-        util::FutureGuard outputGuard{outputFuture};
-        forwardKernel(context->cudaStream, *input, *output);
+        {
+          util::FutureGuard inputGuard{inputFuture};
+          util::FutureGuard outputGuard{outputFuture};
+          forwardKernel(context->cudaStream, *input, *output);
+        }
         CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
         input.reset();
         output.reset();

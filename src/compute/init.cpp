@@ -9,9 +9,11 @@ void kaimingNormKernel(const ContextCompute *context, Tensor2D &x,
 TaskCompute kaimingNorm(const std::shared_ptr<Tensor2D> &x) {
   auto task = TaskCompute{
       [x = x, future = *x->future](const ContextCompute *context) mutable {
-        const double stddev = std::sqrt(2.0f / cute::shape<1>(x->layout));
-        util::FutureGuard guard{future};
-        kaimingNormKernel(context, *x, stddev);
+        {
+          const double stddev = std::sqrt(2.0f / cute::shape<1>(x->layout));
+          util::FutureGuard guard{future};
+          kaimingNormKernel(context, *x, stddev);
+        }
         CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
         x.reset();
       }};

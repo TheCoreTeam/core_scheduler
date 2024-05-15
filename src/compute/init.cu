@@ -7,8 +7,8 @@ namespace dllm::compute::Random {
 namespace {
 template <typename T>
 __global__ void kaimingNorm(T* y, const unsigned long curandSeed,
-                            const unsigned long curandOffset, double stddev,
-                            std::size_t n) {
+                            const unsigned long curandOffset,
+                            const double stddev, const std::size_t n) {
   auto tid = threadIdx.x + blockIdx.x * blockDim.x;
   if (tid >= n) {
     return;

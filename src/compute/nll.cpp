@@ -21,10 +21,12 @@ TaskCompute forward(const std::shared_ptr<Tensor1D> &loss,
       [loss = loss, input = input, target = target, lossFuture = *loss->future,
        inputFuture = *input->future,
        targetFuture = *target->future](const ContextCompute *context) mutable {
-        util::FutureGuard lossGuard{lossFuture};
-        util::FutureGuard inputGuard{inputFuture};
-        util::FutureGuard targetGuard{targetFuture};
-        nllForwardKernel(context->cudaStream, *loss, *input, *target);
+        {
+          util::FutureGuard lossGuard{lossFuture};
+          util::FutureGuard inputGuard{inputFuture};
+          util::FutureGuard targetGuard{targetFuture};
+          nllForwardKernel(context->cudaStream, *loss, *input, *target);
+        }
         CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
         loss.reset();
         input.reset();

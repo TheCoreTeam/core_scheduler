@@ -8,9 +8,11 @@ TaskCudart memcpyFromHost(const std::shared_ptr<Tensor1D>& dst,
   auto task = TaskCudart{[dst = dst, src = src, future = *dst->future](
                              const ContextCudart* context) mutable {
     const auto size = cute::size(dst->layout);
-    util::FutureGuard guard{future};
-    CHECK_CUDART(cudaMemcpyAsync(dst->data(), src, toByte(dst->dtype) * size,
-                                 cudaMemcpyHostToDevice, context->cudaStream));
+    {
+      util::FutureGuard guard{future};
+      CHECK_CUDART(cudaMemcpyAsync(dst->data(), src, toByte(dst->dtype) * size,
+                                   cudaMemcpyHostToDevice, context->cudaStream));
+    }
     CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
     dst.reset();
   }};
@@ -22,9 +24,12 @@ TaskCudart memcpyToHost(void* dst, const std::shared_ptr<const Tensor1D>& src) {
   auto task = TaskCudart{[src = src, dst = dst, future = *src->future](
                              const ContextCudart* context) mutable {
     const auto size = cute::size(src->layout);
-    util::FutureGuard guard{future};
-    CHECK_CUDART(cudaMemcpyAsync(dst, src->data(), toByte(src->dtype) * size,
-                                 cudaMemcpyDeviceToHost, context->cudaStream));
+    {
+      util::FutureGuard guard{future};
+      CHECK_CUDART(cudaMemcpyAsync(dst, src->data(), toByte(src->dtype) * size,
+                                   cudaMemcpyDeviceToHost,
+                                   context->cudaStream));
+    }
     CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
     src.reset();
   }};

@@ -39,6 +39,7 @@ int main() {
   // x (N x 1) -> FC1 -> f1 (N x 8) -> FC2 -> f2 (N x 1) -> MSE
   // FC1.w (8 x 1)
   // FC2.w (1 x 8)
+  srand(1);
   using T = float;
   const double lr = 1e-3;
   auto f = [](auto x) {
@@ -226,8 +227,8 @@ int main() {
             lr);
         threadPool.submit(std::move(task));
       }
-      tensorW2->future->wait();
-      tensorW1->future->wait();
+      { dllm::util::FutureGuard{tensorW2->future}; }
+      { dllm::util::FutureGuard{tensorW1->future}; }
     }
   }
 
@@ -252,7 +253,7 @@ int main() {
         tensorW2Out, tensorW1Out, tensorW2, CUBLAS_COMPUTE_32F_PEDANTIC);
     threadPool.submit(std::move(task));
   }
-  tensorW2Out->future->wait();
+  { dllm::util::FutureGuard{tensorW2Out->future}; }
 
   CHECK_CUDART(cudaMemcpy(yTestRef.data(), tensorW2Out->data(),
                           sizeof(T) * yTest.size(), cudaMemcpyDeviceToHost));

@@ -10,7 +10,17 @@ struct FutureGuard {
       future.wait();
     }
   }
+
+  explicit FutureGuard(const std::shared_ptr<TaskFuture> &future)
+      : future{*future} {
+    if (future->valid()) {
+      future->wait();
+    }
+  }
+
   ~FutureGuard() { future = {}; }
+
+  void reset() const { future = {}; }
 };
 
 template <typename Future>

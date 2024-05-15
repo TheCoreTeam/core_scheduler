@@ -12,19 +12,21 @@ TaskCompute forward(const std::shared_ptr<Tensor2D> &y,
                     const std::shared_ptr<const Tensor2D> &w,
                     const cublasComputeType_t computeType) {
   // y: Batch x Sequence x Feature -> (Batch * Sequence) x Feature
-  auto task = TaskCompute{
-      [computeType = computeType, x = x, w = w, y = y, yFuture = *y->future,
-       xFuture = *x->future,
-       wFuture = *w->future](const ContextCompute *context) mutable {
-        util::FutureGuard yGuard{yFuture};
-        util::FutureGuard xGuard{xFuture};
-        util::FutureGuard wGuard{wFuture};
-        RowMajorNTMatmulNoBias(context->cublasHandle, *x, *w, *y, computeType);
-        CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
-        x.reset();
-        w.reset();
-        y.reset();
-      }};
+  auto task = TaskCompute{[computeType = computeType, x = x, w = w, y = y,
+                           yFuture = *y->future, xFuture = *x->future,
+                           wFuture = *w->future](
+                              const ContextCompute *context) mutable {
+    {
+      util::FutureGuard yGuard{yFuture};
+      util::FutureGuard xGuard{xFuture};
+      util::FutureGuard wGuard{wFuture};
+      RowMajorNTMatmulNoBias(context->cublasHandle, *x, *w, *y, computeType);
+    }
+    CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
+    x.reset();
+    w.reset();
+    y.reset();
+  }};
   const auto &future = *y->future = task.get_future();
   *x->future = future;
   *w->future = future;
@@ -42,10 +44,12 @@ TaskCompute backwardW(const std::shared_ptr<Tensor2D> &dw,
                            dwFuture = *dw->future, dyFuture = *dy->future,
                            xFuture = *x->future](
                               const ContextCompute *context) mutable {
-    util::FutureGuard dwGuard{dwFuture};
-    util::FutureGuard dyGuard{dyFuture};
-    util::FutureGuard xGuard{xFuture};
-    RowMajorTNMatmulNoBias(context->cublasHandle, *dy, *x, *dw, computeType);
+    {
+      util::FutureGuard dwGuard{dwFuture};
+      util::FutureGuard dyGuard{dyFuture};
+      util::FutureGuard xGuard{xFuture};
+      RowMajorTNMatmulNoBias(context->cublasHandle, *dy, *x, *dw, computeType);
+    }
     CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
     dy.reset();
     x.reset();
@@ -68,10 +72,12 @@ TaskCompute backwardX(const std::shared_ptr<Tensor2D> &dx,
                            dxFuture = *dx->future, dyFuture = *dy->future,
                            wFuture = *w->future](
                               const ContextCompute *context) mutable {
-    util::FutureGuard dxGuard{dxFuture};
-    util::FutureGuard dyGuard{dyFuture};
-    util::FutureGuard wGuard{wFuture};
-    RowMajorNNMatmulNoBias(context->cublasHandle, *dy, *w, *dx, computeType);
+    {
+      util::FutureGuard dxGuard{dxFuture};
+      util::FutureGuard dyGuard{dyFuture};
+      util::FutureGuard wGuard{wFuture};
+      RowMajorNNMatmulNoBias(context->cublasHandle, *dy, *w, *dx, computeType);
+    }
     CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
     dy.reset();
     w.reset();

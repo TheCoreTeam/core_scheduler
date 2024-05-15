@@ -99,9 +99,8 @@ void TestThreadPoolComputeAllReduceT(dllm::ThreadStreamMpi &threadStreamMpi,
   auto task =
       dllm::communication::AllReduce<dllm::communication::MPI>::runInplace(
           tensorX, dllm::communication::SUM);
-  tensorX.reset();
-  auto future = threadStreamMpi.submit(std::move(task));
-  future->wait();
+  threadStreamMpi.submit(std::move(task));
+  tensorX->future->wait();
 
   Eigen::Vector<T, Eigen::Dynamic> accumulator(m);
   if (contextMpi.mpiRank == 0) {
@@ -182,9 +181,8 @@ void TestNcclAllReduceT(const dllm::ContextCompute &context,
   auto task =
       dllm::communication::AllReduce<dllm::communication::NCCL>::runInplace(
           tensorX, dllm::communication::SUM);
-  tensorX.reset();
   task(&contextNccl);
-  task.get_future().wait();
+  tensorX->future->wait();
 
   CHECK_CUDART(cudaMemcpy(x.data(), xDev, sizeof(T) * cute::size(layoutX),
                           cudaMemcpyDeviceToHost));
@@ -267,9 +265,8 @@ void TestThreadStreamNcclAllReduceT(dllm::ThreadStreamNccl &threadStreamNccl,
   auto task =
       dllm::communication::AllReduce<dllm::communication::NCCL>::runInplace(
           tensorX, dllm::communication::SUM);
-  tensorX.reset();
-  auto future = threadStreamNccl.submit(std::move(task));
-  future->wait();
+  threadStreamNccl.submit(std::move(task));
+  tensorX->future->wait();
   CHECK_CUDART(cudaMemcpy(x.data(), xDev, sizeof(T) * cute::size(layoutX),
                           cudaMemcpyDeviceToHost));
   CHECK_CUDART(cudaDeviceSynchronize());
