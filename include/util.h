@@ -3,6 +3,16 @@
 #include "threading/task_compute.h"
 
 namespace dllm::util {
+struct FutureGuard {
+  TaskFuture &future;
+  explicit FutureGuard(TaskFuture &future) : future{future} {
+    if (future.valid()) {
+      future.wait();
+    }
+  }
+  ~FutureGuard() { future = {}; }
+};
+
 template <typename Future>
 __inline__ __attribute__((always_inline)) void waitFutureIfValid(
     Future &&future) {

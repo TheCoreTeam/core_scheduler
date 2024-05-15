@@ -8,6 +8,7 @@
 #include "memory/cuda_memcpy.h"
 #include "optimizer/adamw.h"
 #include "tensor.h"
+#include "threading/thread_pool_compute.h"
 #include "threading/thread_stream_cudart.h"
 
 namespace Eigen::internal {
@@ -70,6 +71,7 @@ void TestDLLMAdamW::TestRoutine(const dllm::TensorIndexType size) {
   CHECK_CUDART(cudaDeviceSynchronize());
 
   dllm::ThreadStreamCudart h2d{0}, d2h{0};
+  dllm::ThreadPoolCompute tp{0, 1};
 
   using AdamW = dllm::optimizer::AdamW<>;
   using State = AdamW::State;
@@ -77,7 +79,7 @@ void TestDLLMAdamW::TestRoutine(const dllm::TensorIndexType size) {
   {
     auto task =
         dllm::optimizer::AdamW<>::init<dllm::R_32F, dllm::CUDA>(state, layout);
-    task(&context);
+    tp.submit(std::move(task));
   }
 
   {
@@ -98,8 +100,24 @@ void TestDLLMAdamW::TestRoutine(const dllm::TensorIndexType size) {
   }
   {
     auto task = dllm::optimizer::AdamW<false>::step(state, xTensor, dxTensor);
-    task(&context);
+    tp.submit(std::move(task));
   }
+  {
+    auto task = dllm::memory::memcpyToHost(xHostRef.data(), xTensor);
+    d2h.submit(std::move(task));
+  }
+  {
+    auto task = dllm::memory::memcpyToHost(mHostRef.data(), state->m);
+    d2h.submit(std::move(task));
+  }
+  {
+    auto task = dllm::memory::memcpyToHost(vHostRef.data(), state->v);
+    d2h.submit(std::move(task));
+  }
+
+  xTensor->future->wait();
+  state->m->future->wait();
+  state->v->future->wait();
 
   xHost = xHost - lr * weight_decay * xHost;
   mHost = beta1 * mHost + (1 - beta1) * dxHost;
@@ -107,22 +125,6 @@ void TestDLLMAdamW::TestRoutine(const dllm::TensorIndexType size) {
   auto m_hat = mHost / (1 - std::pow(beta1, t + 1));
   auto v_hat = vHost / (1 - std::pow(beta2, t + 1));
   xHost = xHost - lr * m_hat / (v_hat.sqrt() + eps);
-
-  {
-    auto task = dllm::memory::memcpyToHost(xHostRef.data(), xTensor);
-    d2h.submit(std::move(task));
-    xTensor->future->wait();
-  }
-  {
-    auto task = dllm::memory::memcpyToHost(mHostRef.data(), state->m);
-    d2h.submit(std::move(task));
-    state->m->future->wait();
-  }
-  {
-    auto task = dllm::memory::memcpyToHost(vHostRef.data(), state->v);
-    d2h.submit(std::move(task));
-    state->v->future->wait();
-  }
 
   ASSERT_NEAR((xHost - xHostRef).matrix().norm(), 0, 1e-4);
   ASSERT_NEAR((mHost - mHostRef).matrix().norm(), 0, 1e-4);

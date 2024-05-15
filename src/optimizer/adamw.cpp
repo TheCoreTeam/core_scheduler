@@ -23,15 +23,17 @@ TaskCompute AdamW<false>::init(std::shared_ptr<State> &state,
       std::make_shared<Tensor1D>(nullptr, layout, dtype, deviceType), lr, beta1,
       beta2, eps, weight_decay, t);
   const auto size = cute::size(layout);
-  auto task = TaskCompute{[=](const ContextCompute *context) {
-    state->m->resetData(memory::mallocFromMemPool(size, dtype, context));
-    state->v->resetData(memory::mallocFromMemPool(size, dtype, context));
-    CHECK_CUDART(cudaMemsetAsync(state->m->data(), 0, toByte(dtype) * size,
-                                 context->cudaStream));
-    CHECK_CUDART(cudaMemsetAsync(state->v->data(), 0, toByte(dtype) * size,
-                                 context->cudaStream));
-    CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
-  }};
+  auto task = TaskCompute{
+      [size = size, state = state](const ContextCompute *context) mutable {
+        state->m->resetData(memory::mallocFromMemPool(size, dtype, context));
+        state->v->resetData(memory::mallocFromMemPool(size, dtype, context));
+        CHECK_CUDART(cudaMemsetAsync(state->m->data(), 0, toByte(dtype) * size,
+                                     context->cudaStream));
+        CHECK_CUDART(cudaMemsetAsync(state->v->data(), 0, toByte(dtype) * size,
+                                     context->cudaStream));
+        CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
+        state.reset();
+      }};
   const auto &future = *state->m->future = task.get_future();
   *state->v->future = future;
   return task;
@@ -46,16 +48,20 @@ TaskCompute AdamW<false>::step(const std::shared_ptr<State> &state,
                                const std::shared_ptr<const Tensor1D> &dw) {
   state->t++;
   // TODO(Jie): necessary check
-  auto task = TaskCompute{[=, wFuture = *w->future, mFuture = *state->m->future,
-                           vFuture = *state->v->future, dwFuture = *dw->future](
-                              const ContextCompute *context) {
-    util::waitFutureIfValid(wFuture);
-    util::waitFutureIfValid(mFuture);
-    util::waitFutureIfValid(vFuture);
-    util::waitFutureIfValid(dwFuture);
-    stepKernel<false>(context->cudaStream, *state, *w, *dw);
-    CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
-  }};
+  auto task = TaskCompute{
+      [state = state, w = w, dw = dw, wFuture = *w->future,
+       mFuture = *state->m->future, vFuture = *state->v->future,
+       dwFuture = *dw->future](const ContextCompute *context) mutable {
+        util::FutureGuard wGuard{wFuture};
+        util::FutureGuard mGuard{mFuture};
+        util::FutureGuard vGuard{vFuture};
+        util::FutureGuard dwGuard{dwFuture};
+        stepKernel<false>(context->cudaStream, *state, *w, *dw);
+        CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
+        state.reset();
+        w.reset();
+        dw.reset();
+      }};
   const auto &future = *w->future = task.get_future();
   *state->m->future = future;
   *state->v->future = future;
@@ -72,22 +78,24 @@ TaskCompute AdamW<true>::init(std::shared_ptr<State> &state,
   if (state != nullptr) {
     SPDLOG_LOGGER_CRITICAL(&logger(), "The state must be a null ptr");
   }
-  auto task = TaskCompute{[=](const ContextCompute *context) {
-    const auto size = cute::size(layout);
-    state->m->resetData(memory::mallocFromMemPool(size, dtype, context));
-    state->v->resetData(memory::mallocFromMemPool(size, dtype, context));
-    state->vMax->resetData(memory::mallocFromMemPool(size, dtype, context));
-    CHECK_CUDART(cudaMemsetAsync(state->m->data(), 0,
-                                 toByte(dtype) * cute::size(layout),
-                                 context->cudaStream));
-    CHECK_CUDART(cudaMemsetAsync(state->v->data(), 0,
-                                 toByte(dtype) * cute::size(layout),
-                                 context->cudaStream));
-    CHECK_CUDART(cudaMemsetAsync(state->vMax->data(), 0,
-                                 toByte(dtype) * cute::size(layout),
-                                 context->cudaStream));
-    CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
-  }};
+  auto task = TaskCompute{
+      [layout = layout, state = state](const ContextCompute *context) mutable {
+        const auto size = cute::size(layout);
+        state->m->resetData(memory::mallocFromMemPool(size, dtype, context));
+        state->v->resetData(memory::mallocFromMemPool(size, dtype, context));
+        state->vMax->resetData(memory::mallocFromMemPool(size, dtype, context));
+        CHECK_CUDART(cudaMemsetAsync(state->m->data(), 0,
+                                     toByte(dtype) * cute::size(layout),
+                                     context->cudaStream));
+        CHECK_CUDART(cudaMemsetAsync(state->v->data(), 0,
+                                     toByte(dtype) * cute::size(layout),
+                                     context->cudaStream));
+        CHECK_CUDART(cudaMemsetAsync(state->vMax->data(), 0,
+                                     toByte(dtype) * cute::size(layout),
+                                     context->cudaStream));
+        CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
+        state.reset();
+      }};
   state = std::make_shared<State>(
       std::make_shared<Tensor1D>(nullptr, layout, dtype, deviceType),
       std::make_shared<Tensor1D>(nullptr, layout, dtype, deviceType),
@@ -104,17 +112,20 @@ TaskCompute AdamW<true>::step(const std::shared_ptr<State> &state,
                               const std::shared_ptr<const Tensor1D> &dw) {
   state->t++;
   // TODO(Jie): necessary check
-  auto task = TaskCompute{
-      [=, wFuture = *w->future, mFuture = *state->m->future,
-       vFuture = *state->v->future, vMaxFuture = *state->vMax->future,
-       dwFuture = *dw->future](const ContextCompute *context) {
-        util::waitFutureIfValid(wFuture);
-        util::waitFutureIfValid(mFuture);
-        util::waitFutureIfValid(vFuture);
-        util::waitFutureIfValid(vMaxFuture);
-        util::waitFutureIfValid(dwFuture);
+  auto task =
+      TaskCompute{[state = state, w = w, dw = dw, wFuture = *w->future,
+                   mFuture = *state->m->future, vFuture = *state->v->future,
+                   vMaxFuture = *state->vMax->future, dwFuture = *dw->future](
+                      const ContextCompute *context) mutable {
+        util::FutureGuard{wFuture};
+        util::FutureGuard{mFuture};
+        util::FutureGuard{vMaxFuture};
+        util::FutureGuard{dwFuture};
         stepKernel<true>(context->cudaStream, *state, *w, *dw);
         CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
+        state.reset();
+        w.reset();
+        dw.reset();
       }};
   const auto &future = *w->future = task.get_future();
   *state->m->future = future;

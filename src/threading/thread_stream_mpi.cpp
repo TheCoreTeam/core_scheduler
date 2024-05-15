@@ -8,7 +8,7 @@
 
 namespace dllm {
 namespace {
-void setThreadAffinity(std::thread &th, int coreId) {
+void setThreadAffinity(std::thread &th, const int coreId) {
   cpu_set_t cpuset;
   CPU_ZERO(&cpuset);
   CPU_SET(coreId, &cpuset);
@@ -22,7 +22,7 @@ void setThreadAffinity(std::thread &th, int coreId) {
 
 void threadTask(const ContextMpi context, std::queue<TaskMpi> *taskQueue,
                 std::mutex *queueMutex, std::condition_variable *cv,
-                std::mutex *cvMutex, std::atomic<bool> *shutDown) {
+                std::mutex *cvMutex, const std::atomic<bool> *shutDown) {
   while (!shutDown->load()) {
     TaskMpi task;
     std::unique_lock lock{*queueMutex};
@@ -39,6 +39,9 @@ void threadTask(const ContextMpi context, std::queue<TaskMpi> *taskQueue,
                [&] { return shutDown->load() || !taskQueue->empty(); });
     }
   }
+  std::unique_lock lock{*queueMutex};
+  *taskQueue = {};
+  lock.unlock();
 }
 }  // namespace
 

@@ -10,7 +10,7 @@
 
 namespace dllm {
 namespace {
-void setThreadAffinity(std::thread &th, int coreId) {
+void setThreadAffinity(std::thread &th, const int coreId) {
   cpu_set_t cpuset;
   CPU_ZERO(&cpuset);
   CPU_SET(coreId, &cpuset);
@@ -24,7 +24,7 @@ void setThreadAffinity(std::thread &th, int coreId) {
 
 void threadTask(const int localRank, std::queue<TaskCompute> *taskQueue,
                 std::mutex *queueMutex, std::condition_variable *cv,
-                std::mutex *cvMutex, std::atomic<bool> *shutDown) {
+                std::mutex *cvMutex, const std::atomic<bool> *shutDown) {
   ContextCompute context{.deviceRank = localRank};
   {
     int init = false;
@@ -43,13 +43,15 @@ void threadTask(const int localRank, std::queue<TaskCompute> *taskQueue,
   uint64_t threshold = UINT64_MAX;
   CHECK_CUDART(cudaMemPoolSetAttribute(
       context.memPool, cudaMemPoolAttrReleaseThreshold, &threshold));
-  int enable = 1;
-  CHECK_CUDART(cudaMemPoolSetAttribute(
-      context.memPool, cudaMemPoolReuseFollowEventDependencies, &enable));
-  CHECK_CUDART(cudaMemPoolSetAttribute(
-      context.memPool, cudaMemPoolReuseAllowOpportunistic, &enable));
-  CHECK_CUDART(cudaMemPoolSetAttribute(
-      context.memPool, cudaMemPoolReuseAllowInternalDependencies, &enable));
+  {
+    int enable = 1;
+    CHECK_CUDART(cudaMemPoolSetAttribute(
+        context.memPool, cudaMemPoolReuseFollowEventDependencies, &enable));
+    CHECK_CUDART(cudaMemPoolSetAttribute(
+        context.memPool, cudaMemPoolReuseAllowOpportunistic, &enable));
+    CHECK_CUDART(cudaMemPoolSetAttribute(
+        context.memPool, cudaMemPoolReuseAllowInternalDependencies, &enable));
+  }
   CHECK_CUBLAS(cublasCreate_v2(&context.cublasHandle));
   CHECK_CUBLAS(cublasSetStream_v2(context.cublasHandle, context.cudaStream));
   while (!shutDown->load()) {
@@ -62,39 +64,17 @@ void threadTask(const int localRank, std::queue<TaskCompute> *taskQueue,
     lock.unlock();
     if (task.valid()) {
       task(&context);
+      task = {};
     } else {
       std::unique_lock<std::mutex> uniqueLock{*cvMutex};
       cv->wait(uniqueLock,
                [&] { return shutDown->load() || !taskQueue->empty(); });
     }
   }
+  std::unique_lock lock{*queueMutex};
+  *taskQueue = {};
+  lock.unlock();
   CHECK_CUBLAS(cublasDestroy_v2(context.cublasHandle));
-  CHECK_CUDART(cudaStreamDestroy(context.cudaStream));
-}
-
-void threadTaskLight(const int localRank, std::queue<TaskCompute> *taskQueue,
-                     std::mutex *queueMutex, std::condition_variable *cv,
-                     std::mutex *cvMutex, std::atomic<bool> *shutDown) {
-  ContextCompute context{.deviceRank = localRank};
-  CHECK_CUDART(cudaSetDevice(localRank));
-  CHECK_CUDART(
-      cudaStreamCreateWithFlags(&context.cudaStream, cudaStreamNonBlocking));
-  while (!shutDown->load()) {
-    TaskCompute task;
-    std::unique_lock lock{*queueMutex};
-    if (!taskQueue->empty()) {
-      task = std::move(taskQueue->front());
-      taskQueue->pop();
-    }
-    lock.unlock();
-    if (task.valid()) {
-      task(&context);
-    } else {
-      std::unique_lock<std::mutex> uniqueLock{*cvMutex};
-      cv->wait(uniqueLock,
-               [&] { return shutDown->load() || !taskQueue->empty(); });
-    }
-  }
   CHECK_CUDART(cudaStreamDestroy(context.cudaStream));
 }
 }  // namespace
@@ -117,7 +97,7 @@ void ThreadPoolCompute::submit(TaskCompute &&task) {
   cv.notify_one();
 }
 
-ThreadPoolCompute::ThreadPoolCompute(int localRank, int threadNum,
+ThreadPoolCompute::ThreadPoolCompute(const int localRank, const int threadNum,
                                      const std::vector<int> &bindingMap) {
   if (!bindingMap.empty() && bindingMap.size() != threadNum) {
     SPDLOG_LOGGER_CRITICAL(&logger(), "bindingMap size incorrect");

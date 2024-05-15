@@ -37,12 +37,16 @@ void threadTask(const int deviceRank, std::queue<TaskCudart> *taskQueue,
     lock.unlock();
     if (task.valid()) {
       task(&context);
+      task = {};
     } else {
       std::unique_lock<std::mutex> uniqueLock{*cvMutex};
       cv->wait(uniqueLock,
                [&] { return shutDown->load() || !taskQueue->empty(); });
     }
   }
+  std::unique_lock lock{*queueMutex};
+  *taskQueue = {};
+  lock.unlock();
   CHECK_CUDART(cudaStreamDestroy(context.cudaStream));
 }
 }  // namespace
