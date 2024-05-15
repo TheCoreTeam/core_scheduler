@@ -18,13 +18,17 @@ TaskCompute forward(const std::shared_ptr<Tensor1D> &error,
     SPDLOG_LOGGER_CRITICAL(&logger(), "Input data dim not same");
   }
   auto task =
-      TaskCompute{[=, futureError = *error->future, futureX = *x->future,
-                   futureY = *y->future](const ContextCompute *context) {
-        util::waitFutureIfValid(futureError);
-        util::waitFutureIfValid(futureX);
-        util::waitFutureIfValid(futureY);
+      TaskCompute{[error = error, x = x, y = y, errorFuture = *error->future,
+                   xFuture = *x->future, yFuture = *y->future](
+                      const ContextCompute *context) mutable {
+        util::FutureGuard errorGuard{errorFuture};
+        util::FutureGuard xGuard{xFuture};
+        util::FutureGuard yGuard{yFuture};
         forwardKernel(context->cudaStream, *error, *x, *y);
         CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
+        error.reset();
+        x.reset();
+        y.reset();
       }};
   const auto &future = *error->future = task.get_future();
   *x->future = future;
@@ -39,14 +43,17 @@ TaskCompute backward(const std::shared_ptr<Tensor1D> &dx,
       x->layout.shape<0>() != dx->layout.shape<0>()) {
     SPDLOG_LOGGER_CRITICAL(&logger(), "Input data dim not same");
   }
-  auto task =
-      TaskCompute{[=, futureDx = *dx->future, futureX = *x->future,
-                   futureY = *y->future](const ContextCompute *context) {
-        util::waitFutureIfValid(futureDx);
-        util::waitFutureIfValid(futureX);
-        util::waitFutureIfValid(futureY);
+  auto task = TaskCompute{
+      [dx = dx, x = x, y = y, dxFuture = *dx->future, xFuture = *x->future,
+       yFuture = *y->future](const ContextCompute *context) mutable {
+        util::FutureGuard dxGuard{dxFuture};
+        util::FutureGuard xGuard{xFuture};
+        util::FutureGuard yGuard{yFuture};
         backwardKernel(context->cudaStream, *dx, *x, *y);
         CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
+        dx.reset();
+        x.reset();
+        y.reset();
       }};
   const auto &future = *dx->future = task.get_future();
   *x->future = future;

@@ -13,10 +13,14 @@ TaskCompute forward(const std::shared_ptr<const Tensor1D>& input,
     SPDLOG_LOGGER_CRITICAL(&logger(), "Input data dim not same");
   }
   auto task = TaskCompute{
-      [=, futureInput = *input->future](const ContextCompute* context) {
-        util::waitFutureIfValid(futureInput);
+      [input = input, output = output, inputFuture = *input->future,
+       outputFuture = *output->future](const ContextCompute* context) mutable {
+        util::FutureGuard inputGuard{inputFuture};
+        util::FutureGuard outputGuard{outputFuture};
         forwardKernel(context->cudaStream, *input, *output);
         CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
+        input.reset();
+        output.reset();
       }};
   *input->future = task.get_future();
   return task;
