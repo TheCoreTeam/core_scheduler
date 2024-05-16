@@ -164,6 +164,7 @@ add_executable(dllm_communication_tests
         main_communication.cpp
         test_all_reduce.cpp
         test_all_gather.cpp
+        test_all_to_all.cpp
 )
 
 target_include_directories(dllm_communication_tests PRIVATE

@@ -14,20 +14,23 @@
 
 class AllGatherMPITestFixture : public ::testing::Test {
  protected:
-  dllm::ContextCompute context{};
-  int rank;
-  dllm::ContextMpi contextMpi;
-
-  void SetUp() override {
-    CHECK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &contextMpi.mpiRank));
-    contextMpi.mpiComm = MPI_COMM_WORLD;
-  }
+  dllm::ContextMpi contextMpi{
+      [] {
+        int rank;
+        CHECK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &rank));
+        return rank;
+      }(),
+      [] {
+        int commSize;
+        CHECK_MPI(MPI_Comm_size(MPI_COMM_WORLD, &commSize));
+        return commSize;
+      }(),
+      MPI_COMM_WORLD};
 };
 
 namespace {
 template <typename T>
-void TestAllGatherT(const dllm::ContextCompute &context,
-                    const dllm::ContextMpi &contextMpi) {
+void TestAllGatherT(const dllm::ContextMpi &contextMpi) {
   int commSize;
   CHECK_MPI(MPI_Comm_size(contextMpi.mpiComm, &commSize));
   const int blockSize = 128;
@@ -45,7 +48,7 @@ void TestAllGatherT(const dllm::ContextCompute &context,
 
   auto task =
       dllm::communication::AllGather<dllm::communication::MPI>::runInplace(
-          tensorX, blockSize);
+          tensorX);
   tensorX.reset();
   task(&contextMpi);
 
@@ -68,20 +71,26 @@ void TestAllGatherT(const dllm::ContextCompute &context,
 }  // namespace
 
 TEST_F(AllGatherMPITestFixture, TestForwardF32) {
-  TestAllGatherT<float>(context, contextMpi);
+  TestAllGatherT<float>(contextMpi);
 }
 TEST_F(AllGatherMPITestFixture, TestForwardF64) {
-  TestAllGatherT<double>(context, contextMpi);
+  TestAllGatherT<double>(contextMpi);
 }
 
 class AllGatherMPIThreadPoolComputeTestFixture : public ::testing::Test {
  protected:
-  dllm::ContextMpi contextMpi{[] {
-                                int rank;
-                                CHECK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &rank));
-                                return rank;
-                              }(),
-                              MPI_COMM_WORLD};
+  dllm::ContextMpi contextMpi{
+      [] {
+        int rank;
+        CHECK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &rank));
+        return rank;
+      }(),
+      [] {
+        int commSize;
+        CHECK_MPI(MPI_Comm_size(MPI_COMM_WORLD, &commSize));
+        return commSize;
+      }(),
+      MPI_COMM_WORLD};
   dllm::ThreadStreamMpi threadStreamMpi{contextMpi};
 };
 
@@ -106,7 +115,7 @@ void TestThreadPoolComputeAllGatherT(dllm::ThreadStreamMpi &threadStreamMpi,
 
   auto task =
       dllm::communication::AllGather<dllm::communication::MPI>::runInplace(
-          tensorX, blockSize);
+          tensorX);
   threadStreamMpi.submit(std::move(task));
   tensorX->future->wait();
 
@@ -137,16 +146,14 @@ TEST_F(AllGatherMPIThreadPoolComputeTestFixture, TestForwardF64) {
 
 class AllGatherNcclTestFixture : public ::testing::Test {
  protected:
-  dllm::ContextCompute context{};
   int rank;
   dllm::ContextMpi contextMpi;
   dllm::ContextNccl contextNccl;
 
   void SetUp() override {
-    int processesPerNode;
     CHECK_MPI(MPI_Comm_split_type(MPI_COMM_WORLD, MPI_COMM_TYPE_SHARED, rank,
                                   MPI_INFO_NULL, &contextMpi.mpiComm));
-    CHECK_MPI(MPI_Comm_size(contextMpi.mpiComm, &processesPerNode));
+    CHECK_MPI(MPI_Comm_size(contextMpi.mpiComm, &contextMpi.commSize));
     CHECK_MPI(MPI_Comm_rank(contextMpi.mpiComm, &contextMpi.mpiRank));
     ncclUniqueId id;
     if (contextMpi.mpiRank == 0) {
@@ -155,8 +162,9 @@ class AllGatherNcclTestFixture : public ::testing::Test {
     CHECK_MPI(
         MPI_Bcast(&id, sizeof(ncclUniqueId), MPI_BYTE, 0, contextMpi.mpiComm));
     contextNccl.ncclRank = contextMpi.mpiRank;
+    contextNccl.commSize = contextMpi.commSize;
     CHECK_CUDART(cudaSetDevice(contextMpi.mpiRank));
-    CHECK_NCCL(ncclCommInitRank(&contextNccl.ncclComm, processesPerNode, id,
+    CHECK_NCCL(ncclCommInitRank(&contextNccl.ncclComm, contextMpi.commSize, id,
                                 contextMpi.mpiRank));
   }
 
@@ -168,8 +176,7 @@ class AllGatherNcclTestFixture : public ::testing::Test {
 
 namespace {
 template <typename T>
-void TestNcclAllGatherT(const dllm::ContextCompute &context,
-                        const dllm::ContextMpi &contextMpi,
+void TestNcclAllGatherT(const dllm::ContextMpi &contextMpi,
                         const dllm::ContextNccl &contextNccl) {
   int commSize;
   CHECK_MPI(MPI_Comm_size(contextMpi.mpiComm, &commSize));
@@ -193,7 +200,7 @@ void TestNcclAllGatherT(const dllm::ContextCompute &context,
 
   auto task =
       dllm::communication::AllGather<dllm::communication::NCCL>::runInplace(
-          tensorX, blockSize);
+          tensorX);
   task(&contextNccl);
   tensorX->future->wait();
 
@@ -220,10 +227,10 @@ void TestNcclAllGatherT(const dllm::ContextCompute &context,
 }  // namespace
 
 TEST_F(AllGatherNcclTestFixture, TestForwardF32) {
-  TestNcclAllGatherT<float>(context, contextMpi, contextNccl);
+  TestNcclAllGatherT<float>(contextMpi, contextNccl);
 }
 TEST_F(AllGatherNcclTestFixture, TestForwardF64) {
-  TestNcclAllGatherT<double>(context, contextMpi, contextNccl);
+  TestNcclAllGatherT<double>(contextMpi, contextNccl);
 }
 
 class AllGatherThreadStreamNcclTestFixture : public ::testing::Test {
@@ -282,7 +289,7 @@ void TestThreadStreamNcclAllGatherT(dllm::ThreadStreamNccl &threadStreamNccl,
 
   auto task =
       dllm::communication::AllGather<dllm::communication::NCCL>::runInplace(
-          tensorX, blockSize);
+          tensorX);
   threadStreamNccl.submit(std::move(task));
   tensorX->future->wait();
   CHECK_CUDART(cudaMemcpy(x.data(), xDev, sizeof(T) * cute::size(layoutX),

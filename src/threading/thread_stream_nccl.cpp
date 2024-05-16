@@ -31,6 +31,7 @@ void threadTask(const ncclUniqueId id, const int ncclWorldSize,
       cudaStreamCreateWithFlags(&context.cudaStream, cudaStreamNonBlocking));
   CHECK_NCCL(ncclCommInitRank(&context.ncclComm, ncclWorldSize, id, ncclRank));
   context.ncclRank = ncclRank;
+  context.commSize = ncclWorldSize;
   while (!shutDown->load()) {
     TaskNccl task;
     std::unique_lock lock{*queueMutex};
