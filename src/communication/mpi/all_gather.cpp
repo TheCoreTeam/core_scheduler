@@ -9,10 +9,6 @@
 namespace dllm::communication {
 TaskMpi AllGather<MPI>::run(const std::shared_ptr<const Tensor1D> &tensorSend,
                             const std::shared_ptr<Tensor1D> &tensorReceive) {
-  if (cute::size(tensorSend->layout) != cute::size(tensorReceive->layout)) {
-    SPDLOG_LOGGER_CRITICAL(&logger(),
-                           "sendbuff's size is different from the recvbuff's");
-  }
   if (tensorSend->dtype != tensorReceive->dtype) {
     SPDLOG_LOGGER_CRITICAL(&logger(),
                            "sendbuff's dtype is different from the recvbuff's");

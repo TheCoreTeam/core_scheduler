@@ -9,10 +9,6 @@
 namespace dllm::communication {
 TaskNccl AllGather<NCCL>::run(const std::shared_ptr<const Tensor1D> &tensorSend,
                               const std::shared_ptr<Tensor1D> &tensorReceive) {
-  if (cute::size(tensorSend->layout) != cute::size(tensorReceive->layout)) {
-    SPDLOG_LOGGER_CRITICAL(&logger(),
-                           "sendbuff is not the same as the recvbuff");
-  }
   if (tensorSend->deviceType != CUDA || tensorReceive->deviceType != CUDA) {
     SPDLOG_LOGGER_CRITICAL(&logger(), "NCCL backend only supports CUDA tensor");
   }
