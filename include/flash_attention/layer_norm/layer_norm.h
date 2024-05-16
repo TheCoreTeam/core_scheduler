@@ -12,4 +12,13 @@ dllm::TaskCompute forward(
     const std::shared_ptr<const dllm::Tensor<1>> beta,   // hidden_size  // bias
     const float epsilon                                // epsilon
 );
+
+dllm::TaskCompute backward(const std::shared_ptr<const dllm::Tensor<2>> dz,
+                           const std::shared_ptr<const dllm::Tensor<2>> x,
+                           const std::shared_ptr<const dllm::Tensor<1>> mu,
+                           const std::shared_ptr<const dllm::Tensor<1>> rsigma,
+                           const std::shared_ptr<const dllm::Tensor<1>> gamma,
+                           std::shared_ptr<dllm::Tensor<2>> dx0,
+                           std::shared_ptr<dllm::Tensor<1>> dgamma,
+                           std::shared_ptr<dllm::Tensor<1>> dbeta);
 }  // namespace dllm::flash_attn::layer_norm
