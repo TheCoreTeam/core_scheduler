@@ -26,16 +26,6 @@ void threadTask(const int localRank, std::queue<TaskCompute> *taskQueue,
                 std::mutex *queueMutex, std::condition_variable *cv,
                 std::mutex *cvMutex, const std::atomic<bool> *shutDown) {
   ContextCompute context{.deviceRank = localRank};
-  {
-    int init = false;
-    CHECK_MPI(MPI_Initialized(&init));
-    int worldRank = 0;
-    if (init) {
-      CHECK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &worldRank));
-    }
-    context.curandSeed = worldRank;
-    context.curandOffset = reinterpret_cast<unsigned long>(&context);
-  }
   CHECK_CUDART(cudaSetDevice(localRank));
   CHECK_CUDART(
       cudaStreamCreateWithFlags(&context.cudaStream, cudaStreamNonBlocking));

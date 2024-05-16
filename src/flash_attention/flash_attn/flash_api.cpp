@@ -11,6 +11,7 @@
 #include <torch/python.h>
 
 #include "flash.h"
+#include "random/random_internal.h"
 #include "static_switch.h"
 #include "util.h"
 
@@ -627,13 +628,14 @@ void forward(
   params.rng_state = reinterpret_cast<uint64_t *>(random_state.data_ptr());
 
   if (p_dropout > 0.0) {
+    auto &[seed, offset] = random::getRandomState();
     // auto gen = at::get_generator_or_default<at::CUDAGeneratorImpl>(
     //     gen_, at::cuda::detail::getDefaultCUDAGenerator());
     // See Note [Acquire lock when using random generators]
     // std::lock_guard<std::mutex> lock(gen->mutex_);
     // params.philox_args = gen->philox_cuda_state(counter_offset);
-    params.philox_args = {context->curandSeed, context->curandOffset.load()};
-    context->curandOffset += counter_offset;
+    params.philox_args = {seed, offset.load()};
+    offset += counter_offset;
   }
 
   // set_params_alibi(params, alibi_slopes_, batch_size, num_heads);

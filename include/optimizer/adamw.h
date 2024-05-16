@@ -7,6 +7,8 @@ struct AdamW;
 
 template <>
 struct AdamW<false> {
+  AdamW() = delete;
+
   struct State {
     using Layout = Tensor1D::Layout;
     std::shared_ptr<Tensor1D> m;
@@ -33,6 +35,8 @@ struct AdamW<false> {
 
 template <>
 struct AdamW<true> {
+  AdamW() = delete;
+
   struct State {
     using Layout = Tensor1D::Layout;
     std::shared_ptr<Tensor1D> m;

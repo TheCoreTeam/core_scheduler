@@ -1,6 +1,7 @@
 #include <curand_kernel.h>
 
 #include "compute/random.h"
+#include "random/random_internal.h"
 #include "util.h"
 
 namespace dllm::compute::Random {
@@ -43,15 +44,15 @@ __inline__ __attribute__((always_inline)) void autoDispatch(Dtype dtype,
 void kaimingNormKernel(const ContextCompute* context, Tensor2D& y,
                        double stddev) {
   const auto size = cute::size(y.layout);
+  auto& [seed, offset] = random::getRandomState();
   auto f = [&](auto dummy) {
     using T = std::remove_const_t<std::decay_t<decltype(dummy)>>;
     dim3 block(std::min<decltype(size)>(128, size));
     dim3 grid(util::ceilDiv(size, std::min<decltype(size)>(128, size)));
     kaimingNorm<<<grid, block, 0, context->cudaStream>>>(
-        static_cast<T*>(y.data()), context->curandSeed,
-        context->curandOffset.load(), stddev, size);
+        static_cast<T*>(y.data()), seed, offset.load(), stddev, size);
   };
   autoDispatch(y.dtype, f);
-  context->curandOffset += size;
+  offset += size;
 }
 }  // namespace dllm::compute::Random

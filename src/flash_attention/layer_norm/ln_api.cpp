@@ -3,6 +3,7 @@
 
 #include "ATen/cuda/CUDAContext.h"
 #include "ln.h"
+#include "random/random_internal.h"
 #include "threading/context_compute.h"
 
 using IntArrayRef1D = std::array<dllm::TensorIndexType, 1>;
@@ -272,10 +273,11 @@ auto dropout_add_ln_fwd_no_dropout(
 
     // See Note [Acquire lock when using random generators]
     {
+      auto &[seed, offset] = dllm::random::getRandomState();
       // std::lock_guard<std::mutex> lock(gen->mutex_);
       // params.philox_args = gen->philox_cuda_state(counter_offset);
-      params.philox_args = {context->curandSeed, context->curandOffset.load()};
-      context->curandOffset += counter_offset;
+      params.philox_args = {seed, offset.load()};
+      offset += counter_offset;
     }
   }
 
@@ -540,10 +542,11 @@ auto dropout_add_ln_fwd(
 
     // See Note [Acquire lock when using random generators]
     {
+      auto &[seed, offset] = dllm::random::getRandomState();
       // std::lock_guard<std::mutex> lock(gen->mutex_);
       // params.philox_args = gen->philox_cuda_state(counter_offset);
-      params.philox_args = {context->curandSeed, context->curandOffset.load()};
-      context->curandOffset += counter_offset;
+      params.philox_args = {seed, offset.load()};
+      offset += counter_offset;
     }
   }
 
@@ -1257,10 +1260,11 @@ auto dropout_add_ln_parallel_residual_fwd(
 
     // See Note [Acquire lock when using random generators]
     {
+      auto &[seed, offset] = dllm::random::getRandomState();
       // std::lock_guard<std::mutex> lock(gen->mutex_);
       // params.philox_args = gen->philox_cuda_state(counter_offset);
-      params.philox_args = {context->curandSeed, context->curandOffset.load()};
-      context->curandOffset += counter_offset;
+      params.philox_args = {seed, offset.load()};
+      offset += counter_offset;
     }
   }
 

@@ -16,6 +16,7 @@ add_subdirectory(threading)
 add_library(dllm_core SHARED
         logger.cpp
         tensor.cpp
+        random.cpp
         ${DLLM_MEMORY_SRCS}
         ${DLLM_COMPUTE_SRCS}
         ${DLLM_COMMUNICATION_SRCS}
