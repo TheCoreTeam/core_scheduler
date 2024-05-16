@@ -8,7 +8,12 @@
 
 namespace dllm::communication {
 TaskNccl AllGather<NCCL>::run(const std::shared_ptr<const Tensor1D> &tensorSend,
-                              const std::shared_ptr<Tensor1D> &tensorReceive) {
+                              const std::shared_ptr<Tensor1D> &tensorReceive,
+                              const std::size_t sendCount) {
+  if (sendCount > cute::size(tensorSend->layout) ||
+      sendCount > cute::size(tensorReceive->layout)) {
+    SPDLOG_LOGGER_CRITICAL(&logger(), "sendSize larger than buffer size");
+  }
   if (tensorSend->deviceType != CUDA || tensorReceive->deviceType != CUDA) {
     SPDLOG_LOGGER_CRITICAL(&logger(), "NCCL backend only supports CUDA tensor");
   }
@@ -18,13 +23,13 @@ TaskNccl AllGather<NCCL>::run(const std::shared_ptr<const Tensor1D> &tensorSend,
   }
   auto task = TaskNccl{
       [tensorSend = tensorSend, tensorReceive = tensorReceive,
-       futureReceive = *tensorReceive->future,
+       sendCount = sendCount, futureReceive = *tensorReceive->future,
        futureSend = *tensorSend->future](const ContextNccl *context) mutable {
         {
           util::FutureGuard guardReceive{futureReceive};
           util::FutureGuard guardSend{futureSend};
           CHECK_NCCL(ncclAllGather(tensorSend->data(), tensorReceive->data(),
-                                   cute::size(tensorSend->layout),
+                                   sendCount,
                                    util::toNcclDataType(tensorSend->dtype),
                                    context->ncclComm, context->cudaStream));
         }
@@ -37,23 +42,27 @@ TaskNccl AllGather<NCCL>::run(const std::shared_ptr<const Tensor1D> &tensorSend,
   return task;
 }
 
-TaskNccl AllGather<NCCL>::runInplace(const std::shared_ptr<Tensor1D> &tensor) {
+TaskNccl AllGather<NCCL>::runInplace(const std::shared_ptr<Tensor1D> &tensor,
+                                     const std::size_t sendCount) {
+  if (sendCount > cute::size(tensor->layout)) {
+    SPDLOG_LOGGER_CRITICAL(&logger(), "sendSize larger than buffer size");
+  }
   if (tensor->deviceType != CUDA) {
     SPDLOG_LOGGER_CRITICAL(&logger(), "NCCL backend only supports CUDA tensor");
   }
-  auto task = TaskNccl{[tensor = tensor, future = *tensor->future](
-                           const ContextNccl *context) mutable {
-    // Be careful: possible deadlock
-    {
-      util::FutureGuard guard{future};
-      CHECK_NCCL(ncclAllGather(tensor->data(), tensor->data(),
-                               cute::size(tensor->layout),
-                               util::toNcclDataType(tensor->dtype),
-                               context->ncclComm, context->cudaStream));
-    }
-    CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
-    tensor.reset();
-  }};
+  auto task =
+      TaskNccl{[tensor = tensor, sendCount = sendCount,
+                future = *tensor->future](const ContextNccl *context) mutable {
+        // Be careful: possible deadlock
+        {
+          util::FutureGuard guard{future};
+          CHECK_NCCL(ncclAllGather(tensor->data(), tensor->data(), sendCount,
+                                   util::toNcclDataType(tensor->dtype),
+                                   context->ncclComm, context->cudaStream));
+        }
+        CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
+        tensor.reset();
+      }};
   *tensor->future = task.get_future();
   return task;
 }

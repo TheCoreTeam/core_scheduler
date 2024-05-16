@@ -163,6 +163,7 @@ target_compile_options(dllm_tests PRIVATE
 add_executable(dllm_communication_tests
         main_communication.cpp
         test_all_reduce.cpp
+        test_all_gather.cpp
 )
 
 target_include_directories(dllm_communication_tests PRIVATE
