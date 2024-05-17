@@ -505,28 +505,45 @@ void dropout_add_ln_bwd_no_dropout(const dllm::ContextCompute *context,
 
   launcher(launch_params, true);
 
-  auto shape_dgamma_part = cute::make_shape(static_cast<dllm::TensorIndexType>(launch_params.params.ctas_per_col),
-                                            static_cast<dllm::TensorIndexType>(hidden_size));
-  auto shape_dbeta_part = cute::make_shape(static_cast<dllm::TensorIndexType>(launch_params.params.ctas_per_col),
- static_cast<dllm::TensorIndexType>(hidden_size));
-  auto layout_dgamma_part = cute::make_layout(shape_dgamma_part, cute::GenRowMajor{});
-  auto layout_dbeta_part = cute::make_layout(shape_dbeta_part, cute::GenRowMajor{});
+//  auto shape_dgamma_part = cute::make_shape(static_cast<dllm::TensorIndexType>(launch_params.params.ctas_per_col),
+//                                            static_cast<dllm::TensorIndexType>(hidden_size));
+//  auto shape_dbeta_part = cute::make_shape(static_cast<dllm::TensorIndexType>(launch_params.params.ctas_per_col),
+// static_cast<dllm::TensorIndexType>(hidden_size));
+//  auto layout_dgamma_part = cute::make_layout(shape_dgamma_part, cute::GenRowMajor{});
+//  auto layout_dbeta_part = cute::make_layout(shape_dbeta_part, cute::GenRowMajor{});
+//
+//  void *device_dgamma_part, *device_dbeta_part;
+//
+//  CHECK_CUDART(cudaMallocAsync(&device_dgamma_part, sizeof(float) * cute::size(layout_dgamma_part), context->cudaStream));
+//  CHECK_CUDART(cudaMallocAsync(&device_dbeta_part, sizeof(float) * cute::size(layout_dbeta_part), context->cudaStream));
+//  CHECK_CUDART(cudaMemsetAsync(device_dgamma_part, 0, sizeof(float) * cute::size(layout_dgamma_part), context->cudaStream));
+//  CHECK_CUDART(cudaMemsetAsync(device_dbeta_part, 0, sizeof(float) * cute::size(layout_dbeta_part), context->cudaStream));
+//
+//  auto dgamma_part = std::make_shared<dllm::Tensor2D>(
+//        device_dgamma_part, layout_dgamma_part, ctype, dllm::CUDA);
+//  auto dbeta_part = std::make_shared<dllm::Tensor2D>(
+//        device_dbeta_part, layout_dbeta_part, ctype, dllm::CUDA);
 
-  void *device_dgamma_part, *device_dbeta_part;
+//  auto dgamma_part = torch::empty({ launch_params.params.ctas_per_col, hidden_size }, opts.dtype(ctype));
+//  auto dbeta_part = torch::empty({ launch_params.params.ctas_per_col, hidden_size }, opts.dtype(ctype));
+  auto dgamma_part = torch::empty<dllm::CUDA>(
+        IntArrayRef2D{
+            static_cast<dllm::TensorIndexType>(launch_params.params.ctas_per_col),
+            static_cast<dllm::TensorIndexType>(hidden_size)},
+        ctype, context);
+    CHECK_CUDART(cudaMemsetAsync(dgamma_part->data(), 0,
+                                 sizeof(float) * launch_params.barrier_size,
+                                 context->cudaStream));
 
-  CHECK_CUDART(cudaMallocAsync(&device_dgamma_part, sizeof(float) * cute::size(layout_dgamma_part), context->cudaStream));
-  CHECK_CUDART(cudaMallocAsync(&device_dbeta_part, sizeof(float) * cute::size(layout_dbeta_part), context->cudaStream));
-  CHECK_CUDART(cudaMemsetAsync(device_dgamma_part, 0, sizeof(float) * cute::size(layout_dgamma_part), context->cudaStream));
-  CHECK_CUDART(cudaMemsetAsync(device_dbeta_part, 0, sizeof(float) * cute::size(layout_dbeta_part), context->cudaStream));
+  auto dbeta_part = torch::empty<dllm::CUDA>(
+        IntArrayRef2D{
+            static_cast<dllm::TensorIndexType>(launch_params.params.ctas_per_col),
+            static_cast<dllm::TensorIndexType>(hidden_size)},
+        ctype, context);
+    CHECK_CUDART(cudaMemsetAsync(dbeta_part->data(), 0,
+                                 sizeof(float) * launch_params.barrier_size,
+                                 context->cudaStream));
 
-  auto dgamma_part = std::make_shared<dllm::Tensor2D>(
-        device_dgamma_part, layout_dgamma_part, ctype, dllm::CUDA);
-  auto dbeta_part = std::make_shared<dllm::Tensor2D>(
-        device_dbeta_part, layout_dbeta_part, ctype, dllm::CUDA);
-
-  //    auto dgamma_part = torch::empty({ launch_params.params.ctas_per_col,
-  //    hidden_size }, opts.dtype(ctype)); auto dbeta_part = torch::empty({
-  //    launch_params.params.ctas_per_col, hidden_size }, opts.dtype(ctype));
   //    at::Tensor dcolscale_part;
   //    if (colscale_.has_value()) {
   //        dcolscale_part = torch::empty({ launch_params.params.ctas_per_col,
