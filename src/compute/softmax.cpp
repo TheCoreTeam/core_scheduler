@@ -2,7 +2,7 @@
 
 #include "util.h"
 
-namespace dllm::compute::SoftMax {
+namespace dllm::compute::Softmax {
 void forwardKernel(cudaStream_t stream, Tensor2D &output, const Tensor2D &input,
                    double scale);
 

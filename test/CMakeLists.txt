@@ -137,6 +137,7 @@ add_executable(dllm_tests
         test_fc.cpp
         test_relu.cpp
         test_gelu.cpp
+        # test_softmax.cpp
         ${DLLM_FLASH_ATTENTION_SRC}
 )
 

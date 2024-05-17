@@ -2,6 +2,7 @@
 #include <cooperative_groups/reduce.h>
 
 #include <complex>
+#include <limits>
 
 #include "compute/softmax.h"
 #include "util.h"
@@ -19,8 +20,9 @@ __device__ nv_bfloat16 exp(const nv_bfloat16& x) {
 }
 };  // namespace std
 
-namespace dllm::compute::SoftMax {
+namespace dllm::compute::Softmax {
 namespace {
+// From LLM.c
 template <typename floatX>
 __global__ void softmax_forward_kernel5(
     floatX* __restrict out, floatX inv_temperature,
@@ -55,7 +57,7 @@ __global__ void softmax_forward_kernel5(
 
   // not INF, so we don't get NaNs accidentally when subtracting two values.
   const floatX flt_max =
-      340282346638528859811704183484516925440.0f;  // to avoid including float.h
+      std::numeric_limits<floatX>::max();  // to avoid including float.h
   floatX maxval = -flt_max;
   floatX sumval = 0.0f;
 
@@ -70,7 +72,7 @@ __global__ void softmax_forward_kernel5(
     for (auto& k : regarray) {
       maxval = std::max(maxval, k);
     }
-    sumval *= expf(inv_temperature * (old_maxval - maxval));
+    sumval *= std::exp(inv_temperature * (old_maxval - maxval));
     for (auto& k : regarray) {
       sumval += std::exp(inv_temperature * (k - maxval));
     }
@@ -137,14 +139,12 @@ __inline__ __attribute__((always_inline)) void autoDispatch(Dtype dtype,
 
 void forwardKernel(cudaStream_t stream, Tensor2D& output, const Tensor2D& input,
                    const double scale) {
-  const auto size = cute::size(output.layout);
   const auto rows = cute::shape<0>(output.layout);
   const auto cols = cute::shape<1>(output.layout);
-  const auto ld = cute::stride<0>(input.layout);
   auto f = [&](auto dummy) {
     using T = std::remove_const_t<std::decay_t<decltype(dummy)>>;
-    const auto blockSize = std::min<decltype(rows)>(256, size);
-    const auto gridSize = util::ceilDiv(size, blockSize);
+    const long blockSize = 256;
+    const auto gridSize = util::ceilDiv(rows * 32, blockSize);
     softmax_forward_kernel5<T><<<gridSize, blockSize, 0, stream>>>(
         static_cast<T*>(output.data()), scale,
         static_cast<const T*>(input.data()), rows, cols,
@@ -152,4 +152,4 @@ void forwardKernel(cudaStream_t stream, Tensor2D& output, const Tensor2D& input,
   };
   autoDispatch(input.dtype, f);
 }
-}  // namespace dllm::compute::SoftMax
+}  // namespace dllm::compute::Softmax
