@@ -11,6 +11,7 @@
 #include "threading/thread_pool_compute.h"
 #include "threading/thread_stream_mpi.h"
 #include "threading/thread_stream_nccl.h"
+#include "util.h"
 
 class AllReduceMPITestFixture : public ::testing::Test {
  protected:
@@ -109,8 +110,10 @@ void TestThreadPoolComputeAllReduceT(dllm::ThreadStreamMpi &threadStreamMpi,
       dllm::communication::AllReduce<dllm::communication::MPI>::runInplace(
           tensorX, dllm::communication::SUM);
   threadStreamMpi.submit(std::move(task));
-  tensorX->future->wait();
-
+  {
+    dllm::util::FutureGuard{tensorX->future->rFuture};
+    dllm::util::FutureGuard{tensorX->future->wFuture};
+  }
   Eigen::Vector<T, Eigen::Dynamic> accumulator(m);
   if (contextMpi.mpiRank == 0) {
     int worldSize;
@@ -189,7 +192,10 @@ void TestNcclAllReduceT(const dllm::ContextMpi &contextMpi,
       dllm::communication::AllReduce<dllm::communication::NCCL>::runInplace(
           tensorX, dllm::communication::SUM);
   task(&contextNccl);
-  tensorX->future->wait();
+  {
+    dllm::util::FutureGuard{tensorX->future->rFuture};
+    dllm::util::FutureGuard{tensorX->future->wFuture};
+  }
 
   CHECK_CUDART(cudaMemcpy(x.data(), xDev, sizeof(T) * cute::size(layoutX),
                           cudaMemcpyDeviceToHost));
@@ -273,7 +279,10 @@ void TestThreadStreamNcclAllReduceT(dllm::ThreadStreamNccl &threadStreamNccl,
       dllm::communication::AllReduce<dllm::communication::NCCL>::runInplace(
           tensorX, dllm::communication::SUM);
   threadStreamNccl.submit(std::move(task));
-  tensorX->future->wait();
+  {
+    dllm::util::FutureGuard{tensorX->future->rFuture};
+    dllm::util::FutureGuard{tensorX->future->wFuture};
+  }
   CHECK_CUDART(cudaMemcpy(x.data(), xDev, sizeof(T) * cute::size(layoutX),
                           cudaMemcpyDeviceToHost));
   CHECK_CUDART(cudaDeviceSynchronize());

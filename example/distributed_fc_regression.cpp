@@ -237,8 +237,14 @@ int main(int argc, char **argv) {
         threadPool.submit(std::move(task));
       }
 
-      { dllm::util::FutureGuard{tensorW2->future}; }
-      { dllm::util::FutureGuard{tensorW1->future}; }
+      {
+        dllm::util::FutureGuard{tensorW2->future->rFuture};
+        dllm::util::FutureGuard{tensorW2->future->wFuture};
+      }
+      {
+        dllm::util::FutureGuard{tensorW1->future->rFuture};
+        dllm::util::FutureGuard{tensorW1->future->wFuture};
+      }
     }
   }
 
@@ -263,7 +269,10 @@ int main(int argc, char **argv) {
         tensorW2Out, tensorW1Out, tensorW2, CUBLAS_COMPUTE_32F_PEDANTIC);
     threadPool.submit(std::move(task));
   }
-  { dllm::util::FutureGuard{tensorW2Out->future}; }
+  {
+    dllm::util::FutureGuard{tensorW2Out->future->wFuture};
+    dllm::util::FutureGuard{tensorW2Out->future->rFuture};
+  }
 
   CHECK_CUDART(cudaMemcpy(yTestRef.data(), tensorW2Out->data(),
                           sizeof(T) * yTest.size(), cudaMemcpyDeviceToHost));

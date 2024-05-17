@@ -11,6 +11,7 @@
 #include "threading/thread_pool_compute.h"
 #include "threading/thread_stream_mpi.h"
 #include "threading/thread_stream_nccl.h"
+#include "util.h"
 
 class AllToAllMPITestFixture : public ::testing::Test {
  protected:
@@ -117,7 +118,10 @@ void TestThreadPoolComputeAllToAllT(dllm::ThreadStreamMpi &threadStreamMpi,
       dllm::communication::AllToAll<dllm::communication::MPI>::runInplace(
           tensorX);
   threadStreamMpi.submit(std::move(task));
-  tensorX->future->wait();
+  {
+    dllm::util::FutureGuard{tensorX->future->rFuture};
+    dllm::util::FutureGuard{tensorX->future->wFuture};
+  }
 
   Eigen::Vector<T, Eigen::Dynamic> accumulator(m);
   {

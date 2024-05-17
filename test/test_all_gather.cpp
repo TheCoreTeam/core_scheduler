@@ -11,6 +11,7 @@
 #include "threading/thread_pool_compute.h"
 #include "threading/thread_stream_mpi.h"
 #include "threading/thread_stream_nccl.h"
+#include "util.h"
 
 class AllGatherMPITestFixture : public ::testing::Test {
  protected:
@@ -117,7 +118,10 @@ void TestThreadPoolComputeAllGatherT(dllm::ThreadStreamMpi &threadStreamMpi,
       dllm::communication::AllGather<dllm::communication::MPI>::runInplace(
           tensorX);
   threadStreamMpi.submit(std::move(task));
-  tensorX->future->wait();
+  {
+    dllm::util::FutureGuard{tensorX->future->rFuture};
+    dllm::util::FutureGuard{tensorX->future->wFuture};
+  }
 
   Eigen::Vector<T, Eigen::Dynamic> accumulator(m);
   if (contextMpi.mpiRank == 0) {
@@ -202,7 +206,10 @@ void TestNcclAllGatherT(const dllm::ContextMpi &contextMpi,
       dllm::communication::AllGather<dllm::communication::NCCL>::runInplace(
           tensorX);
   task(&contextNccl);
-  tensorX->future->wait();
+  {
+    dllm::util::FutureGuard{tensorX->future->rFuture};
+    dllm::util::FutureGuard{tensorX->future->wFuture};
+  }
 
   CHECK_CUDART(cudaMemcpy(x.data(), xDev, sizeof(T) * cute::size(layoutX),
                           cudaMemcpyDeviceToHost));
@@ -291,7 +298,10 @@ void TestThreadStreamNcclAllGatherT(dllm::ThreadStreamNccl &threadStreamNccl,
       dllm::communication::AllGather<dllm::communication::NCCL>::runInplace(
           tensorX);
   threadStreamNccl.submit(std::move(task));
-  tensorX->future->wait();
+  {
+    dllm::util::FutureGuard{tensorX->future->rFuture};
+    dllm::util::FutureGuard{tensorX->future->wFuture};
+  }
   CHECK_CUDART(cudaMemcpy(x.data(), xDev, sizeof(T) * cute::size(layoutX),
                           cudaMemcpyDeviceToHost));
   CHECK_CUDART(cudaDeviceSynchronize());

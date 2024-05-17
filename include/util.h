@@ -23,14 +23,6 @@ struct FutureGuard {
   void reset() const { future = {}; }
 };
 
-template <typename Future>
-__inline__ __attribute__((always_inline)) void waitFutureIfValid(
-    Future &&future) {
-  if (future.valid()) {
-    future.wait();
-  }
-}
-
 constexpr __inline__ __attribute__((always_inline)) int ceilDiv(int a, int b) {
   return (a + b - 1) / b;
 }

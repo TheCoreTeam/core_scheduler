@@ -155,7 +155,8 @@ void TestT(const dllm::ContextCompute &context) {
         randomTensor, outTensor, softmaxTensor, qTensor, kTensor, vTensor, 0.0,
         scale);
     task(&context);
-    outTensor->future->wait();
+    dllm::util::FutureGuard{outTensor->future->rFuture};
+    dllm::util::FutureGuard{outTensor->future->wFuture};
   }
 
   auto outRef = at::empty_like(y_attn);
@@ -207,7 +208,8 @@ void TestT(const dllm::ContextCompute &context) {
         dqTensor, dkTensor, dvTensor, doutTensor, randomTensor, outTensor,
         softmaxTensor, qTensor, kTensor, vTensor, 0.0, scale);
     task(&context);
-    dqTensor->future->wait();
+    dllm::util::FutureGuard{dqTensor->future->rFuture};
+    dllm::util::FutureGuard{dqTensor->future->wFuture};
   }
 
   auto dq = torch::empty_like(q);

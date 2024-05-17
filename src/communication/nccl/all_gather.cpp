@@ -16,24 +16,26 @@ TaskNccl AllGather<NCCL>::run(const std::shared_ptr<const Tensor1D> &tensorSend,
     SPDLOG_LOGGER_CRITICAL(&logger(),
                            "sendbuff's dtype is different from the recvbuff's");
   }
-  auto task = TaskNccl{
-      [tensorSend = tensorSend, tensorReceive = tensorReceive,
-       futureReceive = *tensorReceive->future,
-       futureSend = *tensorSend->future](const ContextNccl *context) mutable {
-        {
-          util::FutureGuard guardReceive{futureReceive};
-          util::FutureGuard guardSend{futureSend};
-          CHECK_NCCL(ncclAllGather(tensorSend->data(), tensorReceive->data(),
-                                   cute::size(tensorSend->layout),
-                                   util::toNcclDataType(tensorSend->dtype),
-                                   context->ncclComm, context->cudaStream));
-        }
-        CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
-        tensorReceive.reset();
-        tensorSend.reset();
-      }};
-  const auto &future = *tensorSend->future = task.get_future();
-  *tensorReceive->future = future;
+  auto task = TaskNccl{[tensorSend = tensorSend, tensorReceive = tensorReceive,
+                        futureReceive = *tensorReceive->future,
+                        futureSend = tensorSend->future->rFuture](
+                           const ContextNccl *context) mutable {
+    {
+      util::FutureGuard guardSend{futureSend};
+      util::FutureGuard guardRReceive{futureReceive.rFuture};
+      util::FutureGuard guardWReceive{futureReceive.wFuture};
+      CHECK_NCCL(ncclAllGather(tensorSend->data(), tensorReceive->data(),
+                               cute::size(tensorSend->layout),
+                               util::toNcclDataType(tensorSend->dtype),
+                               context->ncclComm, context->cudaStream));
+    }
+    CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
+    tensorReceive.reset();
+    tensorSend.reset();
+  }};
+  const TaskFuture future = task.get_future();
+  tensorSend->future->rFuture = future;
+  tensorReceive->future->wFuture = future;
   return task;
 }
 
@@ -45,7 +47,8 @@ TaskNccl AllGather<NCCL>::runInplace(const std::shared_ptr<Tensor1D> &tensor) {
                            const ContextNccl *context) mutable {
     // Be careful: possible deadlock
     {
-      util::FutureGuard guard{future};
+      util::FutureGuard rGuard{future.rFuture};
+      util::FutureGuard wGuard{future.wFuture};
       CHECK_NCCL(ncclAllGather(tensor->data(), tensor->data(),
                                cute::size(tensor->layout) / context->commSize,
                                util::toNcclDataType(tensor->dtype),
@@ -54,7 +57,9 @@ TaskNccl AllGather<NCCL>::runInplace(const std::shared_ptr<Tensor1D> &tensor) {
     CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
     tensor.reset();
   }};
-  *tensor->future = task.get_future();
+  const TaskFuture future = task.get_future();
+  tensor->future->rFuture = future;
+  tensor->future->wFuture = future;
   return task;
 }
 }  // namespace dllm::communication

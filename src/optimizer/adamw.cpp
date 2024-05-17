@@ -34,8 +34,9 @@ TaskCompute AdamW<false>::init(std::shared_ptr<State> &state,
         CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
         state.reset();
       }};
-  const auto &future = *state->m->future = task.get_future();
-  *state->v->future = future;
+  const TaskFuture future = task.get_future();
+  state->m->future->wFuture = future;
+  state->v->future->wFuture = future;
   return task;
 }
 
@@ -51,10 +52,11 @@ TaskCompute AdamW<false>::step(const std::shared_ptr<State> &state,
   auto task = TaskCompute{
       [state = state, w = w, dw = dw, wFuture = *w->future,
        mFuture = *state->m->future, vFuture = *state->v->future,
-       dwFuture = *dw->future](const ContextCompute *context) mutable {
-        util::FutureGuard wGuard{wFuture};
-        util::FutureGuard mGuard{mFuture};
-        util::FutureGuard vGuard{vFuture};
+       dwFuture = dw->future->wFuture](const ContextCompute *context) mutable {
+        util::FutureGuard wRGuard{wFuture.rFuture};
+        util::FutureGuard wWGuard{wFuture.wFuture};
+        util::FutureGuard mRGuard{mFuture.rFuture};
+        util::FutureGuard mWGuard{mFuture.wFuture};
         util::FutureGuard dwGuard{dwFuture};
         stepKernel<false>(context->cudaStream, *state, *w, *dw);
         CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
@@ -62,10 +64,11 @@ TaskCompute AdamW<false>::step(const std::shared_ptr<State> &state,
         w.reset();
         dw.reset();
       }};
-  const auto &future = *w->future = task.get_future();
-  *state->m->future = future;
-  *state->v->future = future;
-  *dw->future = future;
+  const TaskFuture future = task.get_future();
+  w->future->wFuture = future;
+  state->m->future->wFuture = future;
+  state->v->future->wFuture = future;
+  dw->future->rFuture = future;
   return task;
 }
 
@@ -101,9 +104,10 @@ TaskCompute AdamW<true>::init(std::shared_ptr<State> &state,
       std::make_shared<Tensor1D>(nullptr, layout, dtype, deviceType),
       std::make_shared<Tensor1D>(nullptr, layout, dtype, deviceType), lr, beta1,
       beta2, eps, weight_decay, t);
-  const auto &future = *state->m->future = task.get_future();
-  *state->v->future = future;
-  *state->vMax->future = future;
+  const TaskFuture future = task.get_future();
+  state->m->future->wFuture = future;
+  state->v->future->wFuture = future;
+  state->vMax->future->wFuture = future;
   return task;
 }
 
@@ -112,26 +116,32 @@ TaskCompute AdamW<true>::step(const std::shared_ptr<State> &state,
                               const std::shared_ptr<const Tensor1D> &dw) {
   state->t++;
   // TODO(Jie): necessary check
-  auto task =
-      TaskCompute{[state = state, w = w, dw = dw, wFuture = *w->future,
-                   mFuture = *state->m->future, vFuture = *state->v->future,
-                   vMaxFuture = *state->vMax->future, dwFuture = *dw->future](
-                      const ContextCompute *context) mutable {
-        util::FutureGuard{wFuture};
-        util::FutureGuard{mFuture};
-        util::FutureGuard{vMaxFuture};
-        util::FutureGuard{dwFuture};
-        stepKernel<true>(context->cudaStream, *state, *w, *dw);
+  auto task = TaskCompute{
+      [state = state, w = w, dw = dw, wFuture = *w->future,
+       mFuture = *state->m->future, vFuture = *state->v->future,
+       vMaxFuture = *state->vMax->future,
+       dwFuture = dw->future->wFuture](const ContextCompute *context) mutable {
+        {
+          util::FutureGuard wRGuard{wFuture.rFuture};
+          util::FutureGuard wWGuard{wFuture.wFuture};
+          util::FutureGuard mRGuard{mFuture.rFuture};
+          util::FutureGuard mWGuard{mFuture.wFuture};
+          util::FutureGuard vMaxRGuard{vMaxFuture.rFuture};
+          util::FutureGuard vMaxWGuard{vMaxFuture.wFuture};
+          util::FutureGuard dwGuard{dwFuture};
+          stepKernel<true>(context->cudaStream, *state, *w, *dw);
+        }
         CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
         state.reset();
         w.reset();
         dw.reset();
       }};
-  const auto &future = *w->future = task.get_future();
-  *state->m->future = future;
-  *state->v->future = future;
-  *state->vMax->future = future;
-  *dw->future = future;
+  const TaskFuture future = task.get_future();
+  w->future->wFuture = future;
+  state->m->future->wFuture = future;
+  state->v->future->wFuture = future;
+  state->vMax->future->wFuture = future;
+  dw->future->rFuture = future;
   return task;
 }
 }  // namespace dllm::optimizer

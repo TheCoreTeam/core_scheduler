@@ -21,13 +21,15 @@ TaskNccl AllReduce<NCCL>::run(const std::shared_ptr<const Tensor1D> &tensorSend,
     SPDLOG_LOGGER_CRITICAL(&logger(),
                            "sendbuff's dtype is different from the recvbuff's");
   }
-  auto task = TaskNccl{
-      [tensorSend = tensorSend, tensorReceive = tensorReceive,
-       operation = operation, futureReceive = *tensorReceive->future,
-       futureSend = *tensorSend->future](const ContextNccl *context) mutable {
+  auto task =
+      TaskNccl{[tensorSend = tensorSend, tensorReceive = tensorReceive,
+                operation = operation, futureReceive = *tensorReceive->future,
+                futureSend = tensorSend->future->rFuture](
+                   const ContextNccl *context) mutable {
         {
-          util::FutureGuard guardReceive{futureReceive};
           util::FutureGuard guardSend{futureSend};
+          util::FutureGuard guardRReceive{futureReceive.rFuture};
+          util::FutureGuard guardWReceive{futureReceive.wFuture};
           CHECK_NCCL(ncclAllReduce(tensorSend->data(), tensorReceive->data(),
                                    cute::size(tensorSend->layout),
                                    util::toNcclDataType(tensorSend->dtype),
@@ -38,8 +40,9 @@ TaskNccl AllReduce<NCCL>::run(const std::shared_ptr<const Tensor1D> &tensorSend,
         tensorReceive.reset();
         tensorSend.reset();
       }};
-  const auto &future = *tensorSend->future = task.get_future();
-  *tensorReceive->future = future;
+  const TaskFuture future = task.get_future();
+  tensorSend->future->rFuture = future;
+  tensorReceive->future->wFuture = future;
   return task;
 }
 
@@ -53,7 +56,8 @@ TaskNccl AllReduce<NCCL>::runInplace(const std::shared_ptr<Tensor1D> &tensor,
                 future = *tensor->future](const ContextNccl *context) mutable {
         // Be careful: possible deadlock
         {
-          util::FutureGuard guard{future};
+          util::FutureGuard rGuard{future.rFuture};
+          util::FutureGuard wGuard{future.wFuture};
           CHECK_NCCL(ncclAllReduce(
               tensor->data(), tensor->data(), cute::size(tensor->layout),
               util::toNcclDataType(tensor->dtype), util::toNcclRedOp(operation),
@@ -62,7 +66,9 @@ TaskNccl AllReduce<NCCL>::runInplace(const std::shared_ptr<Tensor1D> &tensor,
         CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
         tensor.reset();
       }};
-  *tensor->future = task.get_future();
+  const TaskFuture future = task.get_future();
+  tensor->future->rFuture = future;
+  tensor->future->wFuture = future;
   return task;
 }
 }  // namespace dllm::communication

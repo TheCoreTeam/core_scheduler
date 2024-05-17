@@ -19,10 +19,11 @@ TaskCompute forward(const std::shared_ptr<Tensor1D> &error,
   }
   auto task =
       TaskCompute{[error = error, x = x, y = y, errorFuture = *error->future,
-                   xFuture = *x->future, yFuture = *y->future](
+                   xFuture = x->future->wFuture, yFuture = y->future->rFuture](
                       const ContextCompute *context) mutable {
         {
-          util::FutureGuard errorGuard{errorFuture};
+          util::FutureGuard errorRGuard{errorFuture.rFuture};
+          util::FutureGuard errorWGuard{errorFuture.wFuture};
           util::FutureGuard xGuard{xFuture};
           util::FutureGuard yGuard{yFuture};
           forwardKernel(context->cudaStream, *error, *x, *y);
@@ -32,9 +33,10 @@ TaskCompute forward(const std::shared_ptr<Tensor1D> &error,
         x.reset();
         y.reset();
       }};
-  const auto &future = *error->future = task.get_future();
-  *x->future = future;
-  *y->future = future;
+  const TaskFuture future = task.get_future();
+  error->future->wFuture = future;
+  x->future->rFuture = future;
+  y->future->rFuture = future;
   return task;
 }
 
@@ -45,11 +47,13 @@ TaskCompute backward(const std::shared_ptr<Tensor1D> &dx,
       x->layout.shape<0>() != dx->layout.shape<0>()) {
     SPDLOG_LOGGER_CRITICAL(&logger(), "Input data dim not same");
   }
-  auto task = TaskCompute{
-      [dx = dx, x = x, y = y, dxFuture = *dx->future, xFuture = *x->future,
-       yFuture = *y->future](const ContextCompute *context) mutable {
+  auto task =
+      TaskCompute{[dx = dx, x = x, y = y, dxFuture = *dx->future,
+                   xFuture = x->future->wFuture, yFuture = y->future->wFuture](
+                      const ContextCompute *context) mutable {
         {
-          util::FutureGuard dxGuard{dxFuture};
+          util::FutureGuard dxRGuard{dxFuture.rFuture};
+          util::FutureGuard dxWGuard{dxFuture.wFuture};
           util::FutureGuard xGuard{xFuture};
           util::FutureGuard yGuard{yFuture};
           backwardKernel(context->cudaStream, *dx, *x, *y);
@@ -59,9 +63,10 @@ TaskCompute backward(const std::shared_ptr<Tensor1D> &dx,
         x.reset();
         y.reset();
       }};
-  const auto &future = *dx->future = task.get_future();
-  *x->future = future;
-  *y->future = future;
+  const TaskFuture future = task.get_future();
+  dx->future->wFuture = future;
+  x->future->rFuture = future;
+  y->future->rFuture = future;
   return task;
 }
 }  // namespace dllm::compute::Mse

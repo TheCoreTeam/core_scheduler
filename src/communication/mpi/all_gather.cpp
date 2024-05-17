@@ -14,45 +14,47 @@ TaskMpi AllGather<MPI>::run(const std::shared_ptr<const Tensor1D> &tensorSend,
                            "sendbuff's dtype is different from the recvbuff's");
   }
 
-  auto task = TaskMpi{
-      [tensorSend = tensorSend, tensorReceive = tensorReceive,
-       futureReceive = *tensorReceive->future,
-       futureSend = *tensorSend->future](const ContextMpi *context) mutable {
-        const MPI_Datatype sendtype = [&]() {
-          switch (tensorSend->dtype) {
-            case R_64F:
-              return MPI_DOUBLE;
-            case R_32F:
-              return MPI_FLOAT;
-            default:
-              SPDLOG_LOGGER_CRITICAL(&logger(),
-                                     "Not supported MPI all-reduce datatype");
-              return reinterpret_cast<MPI_Datatype>(0);
-          }
-        }();
-        const MPI_Datatype recvtype = [&]() {
-          switch (tensorReceive->dtype) {
-            case R_64F:
-              return MPI_DOUBLE;
-            case R_32F:
-              return MPI_FLOAT;
-            default:
-              SPDLOG_LOGGER_CRITICAL(&logger(),
-                                     "Not supported MPI all-reduce datatype");
-              return reinterpret_cast<MPI_Datatype>(0);
-          }
-        }();
-        util::FutureGuard guardSend{futureSend};
-        util::FutureGuard guardReceive{futureReceive};
-        CHECK_MPI(MPI_Allgather_c(
-            tensorSend->data(), cute::size(tensorSend->layout), sendtype,
-            tensorReceive->data(), cute::size(tensorSend->layout), recvtype,
-            context->mpiComm));
-        tensorSend.reset();
-        tensorReceive.reset();
-      }};
-  const auto &future = *tensorReceive->future = task.get_future();
-  *tensorSend->future = future;
+  auto task = TaskMpi{[tensorSend = tensorSend, tensorReceive = tensorReceive,
+                       futureReceive = *tensorReceive->future,
+                       futureSend = tensorSend->future->rFuture](
+                          const ContextMpi *context) mutable {
+    const MPI_Datatype sendtype = [&]() {
+      switch (tensorSend->dtype) {
+        case R_64F:
+          return MPI_DOUBLE;
+        case R_32F:
+          return MPI_FLOAT;
+        default:
+          SPDLOG_LOGGER_CRITICAL(&logger(),
+                                 "Not supported MPI all-reduce datatype");
+          return reinterpret_cast<MPI_Datatype>(0);
+      }
+    }();
+    const MPI_Datatype recvtype = [&]() {
+      switch (tensorReceive->dtype) {
+        case R_64F:
+          return MPI_DOUBLE;
+        case R_32F:
+          return MPI_FLOAT;
+        default:
+          SPDLOG_LOGGER_CRITICAL(&logger(),
+                                 "Not supported MPI all-reduce datatype");
+          return reinterpret_cast<MPI_Datatype>(0);
+      }
+    }();
+    util::FutureGuard guardSend{futureSend};
+    util::FutureGuard guardRReceive{futureReceive.rFuture};
+    util::FutureGuard guardWReceive{futureReceive.wFuture};
+    CHECK_MPI(MPI_Allgather_c(
+        tensorSend->data(), cute::size(tensorSend->layout), sendtype,
+        tensorReceive->data(), cute::size(tensorSend->layout), recvtype,
+        context->mpiComm));
+    tensorSend.reset();
+    tensorReceive.reset();
+  }};
+  const TaskFuture future = task.get_future();
+  tensorSend->future->rFuture = future;
+  tensorReceive->future->wFuture = future;
   return task;
 }
 
@@ -72,14 +74,17 @@ TaskMpi AllGather<MPI>::runInplace(const std::shared_ptr<Tensor1D> &tensor) {
           return reinterpret_cast<MPI_Datatype>(0);
       }
     }();
-    util::FutureGuard guard{future};
+    util::FutureGuard rGuard{future.rFuture};
+    util::FutureGuard wGuard{future.wFuture};
     CHECK_MPI(MPI_Allgather_c(MPI_IN_PLACE, 0, MPI_DATATYPE_NULL,
                               tensor->data(),
                               cute::size(tensor->layout) / context->commSize,
                               datatype, context->mpiComm));
     tensor.reset();
   }};
-  *tensor->future = task.get_future();
+  const TaskFuture future = task.get_future();
+  tensor->future->rFuture = future;
+  tensor->future->wFuture = future;
   return task;
 }
 }  // namespace dllm::communication

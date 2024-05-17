@@ -10,6 +10,7 @@
 #include "tensor.h"
 #include "threading/thread_pool_compute.h"
 #include "threading/thread_stream_cudart.h"
+#include "util.h"
 
 namespace Eigen::internal {
 template <>
@@ -115,9 +116,14 @@ void TestDLLMAdamW::TestRoutine(const dllm::TensorIndexType size) {
     d2h.submit(std::move(task));
   }
 
-  xTensor->future->wait();
-  state->m->future->wait();
-  state->v->future->wait();
+  {
+    dllm::util::FutureGuard{xTensor->future->rFuture};
+    dllm::util::FutureGuard{xTensor->future->wFuture};
+    dllm::util::FutureGuard{state->m->future->rFuture};
+    dllm::util::FutureGuard{state->m->future->wFuture};
+    dllm::util::FutureGuard{state->v->future->rFuture};
+    dllm::util::FutureGuard{state->v->future->wFuture};
+  }
 
   xHost = xHost - lr * weight_decay * xHost;
   mHost = beta1 * mHost + (1 - beta1) * dxHost;
