@@ -123,7 +123,7 @@ if (DLLM_ENABLE_FLASH_ATTENTION)
     endforeach ()
 
     find_package(Python COMPONENTS Interpreter Development REQUIRED)
-    set(DLLM_FLASH_ATTENTION_SRC test_flash_attention.cpp)
+    set(DLLM_FLASH_ATTENTION_SRC test_flash_attention.cpp test_layernorm.cpp)
 else ()
     set(TORCH_INCLUDE_PATH)
     set(TORCH_LIBRARY)
@@ -185,29 +185,3 @@ target_compile_options(dllm_communication_tests PRIVATE
         $<$<CONFIG:Release>:-O3>
         $<$<CONFIG:Debug>:-O0>
 )
-
-add_executable(dllm_test_layernorm
-        main.cpp
-        test_layernorm.cpp
-)
-
-target_include_directories(dllm_test_layernorm PRIVATE
-        ${TORCH_INCLUDE_PATH}
-)
-
-target_link_libraries(dllm_test_layernorm PRIVATE
-        dllm
-        spdlog::spdlog
-        CUDA::cudart
-        Eigen3::Eigen
-        GTest::gtest
-        ${TORCH_LIBRARY}
-        ${Python_LIBRARIES}
-        dllm_flash_attention_plugin
-)
-
-target_compile_options(dllm_test_layernorm PRIVATE
-        $<$<CONFIG:Release>:-O3>
-        $<$<CONFIG:Debug>:-O0>
-)
-

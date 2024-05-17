@@ -1,24 +1,25 @@
+#include <c10/util/Half.h>
 #include <cuda_runtime.h>
+#include <flash_attention/layer_norm/layer_norm.h>
 #include <gtest/gtest.h>
+#include <torch/torch.h>
 
 #include <Eigen/Dense>
 #include <fstream>
-#include <torch/torch.h>
-#include <c10/util/Half.h>
 #include <iostream>
-#include <flash_attention/layer_norm/layer_norm.h>
+
 #include "tensor.h"
 
-template<typename T>
+template <typename T>
 struct TypeToTorch;
 
-template<>
+template <>
 struct TypeToTorch<float> {
   using Type = float;
   static const at::ScalarType dtype = torch::kFloat;
 };
 
-template<>
+template <>
 struct TypeToTorch<nv_half> {
   using Type = c10::Half;
   static const at::ScalarType dtype = torch::kHalf;
@@ -64,9 +65,11 @@ class TestFlashAttnLayerNorm : public ::testing::Test {
     CHECK_CUDART(cudaDeviceGetDefaultMemPool(&context.memPool, 0));
     torch::manual_seed(2024);
 
-    weight = torch::randn(d, torch::TensorOptions().dtype(dtype).device(device));
+    weight =
+        torch::randn(d, torch::TensorOptions().dtype(dtype).device(device));
     bias = torch::randn(d, torch::TensorOptions().dtype(dtype).device(device));
-    input = torch::randn({T, d}, torch::TensorOptions().dtype(dtype).device(device));
+    input = torch::randn({T, d},
+                         torch::TensorOptions().dtype(dtype).device(device));
 
     input1 = input.detach().clone().set_requires_grad(true);
     weight1 = weight.detach().clone().set_requires_grad(true);
@@ -75,7 +78,8 @@ class TestFlashAttnLayerNorm : public ::testing::Test {
     output1 = at::layer_norm(input1, {d}, weight1, bias1);
 
     grad_output = torch::randn_like(output1);
-    auto grads = torch::autograd::grad({output1}, {input1, weight1, bias1}, {grad_output}, true);
+    auto grads = torch::autograd::grad({output1}, {input1, weight1, bias1},
+                                       {grad_output}, true);
     grad_input1 = grads[0];
     grad_weight1 = grads[1];
     grad_bias1 = grads[2];
@@ -85,11 +89,12 @@ class TestFlashAttnLayerNorm : public ::testing::Test {
     auto layoutMu = cute::make_layout(shapeMu, cute::GenRowMajor{});
     auto layoutRSigma = cute::make_layout(shapeRSigma, cute::GenRowMajor{});
     CHECK_CUDART(cudaMalloc(&DeviceMu, sizeof(Element) * cute::size(layoutMu)));
-    CHECK_CUDART(cudaMalloc(&DeviceRSigma, sizeof(Element) * cute::size(layoutRSigma)));
+    CHECK_CUDART(
+        cudaMalloc(&DeviceRSigma, sizeof(Element) * cute::size(layoutRSigma)));
     CHECK_CUDART(
         cudaMemset(DeviceMu, 0, sizeof(Element) * cute::size(layoutMu)));
-    CHECK_CUDART(
-        cudaMemset(DeviceRSigma, 0, sizeof(Element) * cute::size(layoutRSigma)));
+    CHECK_CUDART(cudaMemset(DeviceRSigma, 0,
+                            sizeof(Element) * cute::size(layoutRSigma)));
 
     CHECK_CUDART(cudaDeviceSynchronize());
 
@@ -111,7 +116,6 @@ class TestFlashAttnLayerNorm : public ::testing::Test {
 };
 
 void TestFlashAttnLayerNorm::TestForwardRoutine() {
-
   void *DeviceZ, *DeviceX0, *DeviceGamma, *DeviceBeta;
   auto shapeInput = cute::make_shape(T, d);
   auto shapeWeight = cute::make_shape(d);
@@ -120,8 +124,7 @@ void TestFlashAttnLayerNorm::TestForwardRoutine() {
   auto layoutZ = cute::make_layout(shapeInput, cute::GenRowMajor{});
   CHECK_CUDART(cudaMalloc(&DeviceZ, sizeof(Element) * cute::size(layoutZ)));
 
-  CHECK_CUDART(
-      cudaMemset(DeviceZ, 0, sizeof(Element) * cute::size(layoutZ)));
+  CHECK_CUDART(cudaMemset(DeviceZ, 0, sizeof(Element) * cute::size(layoutZ)));
 
   auto tensorZ = std::make_shared<dllm::Tensor2D>(
       DeviceZ, layoutZ, dllm::toDtype<Element>(), dllm::CUDA);
@@ -130,18 +133,20 @@ void TestFlashAttnLayerNorm::TestForwardRoutine() {
   auto layoutGamma = cute::make_layout(shapeWeight, cute::GenRowMajor{});
   auto layoutBeta = cute::make_layout(shapeBias, cute::GenRowMajor{});
   CHECK_CUDART(cudaMalloc(&DeviceX0, sizeof(Element) * cute::size(layoutX0)));
-  CHECK_CUDART(cudaMalloc(&DeviceGamma, sizeof(Element) * cute::size(layoutGamma)));
-  CHECK_CUDART(cudaMalloc(&DeviceBeta, sizeof(Element) * cute::size(layoutBeta)));
+  CHECK_CUDART(
+      cudaMalloc(&DeviceGamma, sizeof(Element) * cute::size(layoutGamma)));
+  CHECK_CUDART(
+      cudaMalloc(&DeviceBeta, sizeof(Element) * cute::size(layoutBeta)));
 
-  CHECK_CUDART(cudaMemcpy(DeviceX0, input.data_ptr<typename TypeToTorch<Element>::Type>(),
-                          sizeof(Element) * cute::size(layoutX0),
-                          cudaMemcpyHostToDevice));
-  CHECK_CUDART(cudaMemcpy(DeviceGamma, weight.data_ptr<typename TypeToTorch<Element>::Type>(),
-                          sizeof(Element) * cute::size(layoutGamma),
-                          cudaMemcpyHostToDevice));
-  CHECK_CUDART(cudaMemcpy(DeviceBeta, bias.data_ptr<typename TypeToTorch<Element>::Type>(),
-                          sizeof(Element) * cute::size(layoutBeta),
-                          cudaMemcpyHostToDevice));
+  CHECK_CUDART(cudaMemcpy(
+      DeviceX0, input.data_ptr<typename TypeToTorch<Element>::Type>(),
+      sizeof(Element) * cute::size(layoutX0), cudaMemcpyHostToDevice));
+  CHECK_CUDART(cudaMemcpy(
+      DeviceGamma, weight.data_ptr<typename TypeToTorch<Element>::Type>(),
+      sizeof(Element) * cute::size(layoutGamma), cudaMemcpyHostToDevice));
+  CHECK_CUDART(cudaMemcpy(
+      DeviceBeta, bias.data_ptr<typename TypeToTorch<Element>::Type>(),
+      sizeof(Element) * cute::size(layoutBeta), cudaMemcpyHostToDevice));
 
   CHECK_CUDART(cudaDeviceSynchronize());
 
@@ -152,21 +157,22 @@ void TestFlashAttnLayerNorm::TestForwardRoutine() {
   auto tensorBeta = std::make_shared<dllm::Tensor1D>(
       DeviceBeta, layoutBeta, dllm::toDtype<Element>(), dllm::CUDA);
 
-  auto tast = dllm::flash_attn::layer_norm::forward(tensorZ, tensorMu, tensorRSigma, tensorX0, tensorGamma, tensorBeta, eps);
+  auto tast = dllm::flash_attn::layer_norm::forward(
+      tensorZ, tensorMu, tensorRSigma, tensorX0, tensorGamma, tensorBeta, eps);
   tast(&context);
 
   auto output2 = torch::empty_like(output1);
   auto weight2 = torch::empty_like(weight1);
   auto bias2 = torch::empty_like(bias1);
 
-  CHECK_CUDART(cudaMemcpy(output2.data_ptr<typename TypeToTorch<Element>::Type>(), DeviceZ,
-                          sizeof(Element) * cute::size(layoutZ),
-                          cudaMemcpyDeviceToHost));
-  CHECK_CUDART(cudaMemcpy(weight2.data_ptr<typename TypeToTorch<Element>::Type>(), DeviceGamma,
-                          sizeof(Element) * cute::size(layoutGamma),
-                          cudaMemcpyDeviceToHost));
-  CHECK_CUDART(cudaMemcpy(bias2.data_ptr<typename TypeToTorch<Element>::Type>(), DeviceBeta,
-                          sizeof(Element) * cute::size(layoutBeta),
+  CHECK_CUDART(cudaMemcpy(
+      output2.data_ptr<typename TypeToTorch<Element>::Type>(), DeviceZ,
+      sizeof(Element) * cute::size(layoutZ), cudaMemcpyDeviceToHost));
+  CHECK_CUDART(cudaMemcpy(
+      weight2.data_ptr<typename TypeToTorch<Element>::Type>(), DeviceGamma,
+      sizeof(Element) * cute::size(layoutGamma), cudaMemcpyDeviceToHost));
+  CHECK_CUDART(cudaMemcpy(bias2.data_ptr<typename TypeToTorch<Element>::Type>(),
+                          DeviceBeta, sizeof(Element) * cute::size(layoutBeta),
                           cudaMemcpyDeviceToHost));
 
   CHECK_CUDART(cudaDeviceSynchronize());
@@ -176,30 +182,30 @@ void TestFlashAttnLayerNorm::TestForwardRoutine() {
   auto isApprox_bias = bias1.allclose(bias2, tol);
 
   if (!isApprox_input) {
-      std::ofstream file_output_ref("output1.txt");
-      file_output_ref << output1 << std::endl;
-      file_output_ref.close();
-      std::ofstream file_output("output2.txt");
-      file_output << output2 << std::endl;
-      file_output.close();
+    std::ofstream file_output_ref("output1.txt");
+    file_output_ref << output1 << std::endl;
+    file_output_ref.close();
+    std::ofstream file_output("output2.txt");
+    file_output << output2 << std::endl;
+    file_output.close();
   }
 
   if (!isApprox_weight) {
-      std::ofstream file_weight_ref("weight1.txt");
-      file_weight_ref << weight1 << std::endl;
-      file_weight_ref.close();
-      std::ofstream file_weight("weight2.txt");
-      file_weight << weight2 << std::endl;
-      file_weight.close();
+    std::ofstream file_weight_ref("weight1.txt");
+    file_weight_ref << weight1 << std::endl;
+    file_weight_ref.close();
+    std::ofstream file_weight("weight2.txt");
+    file_weight << weight2 << std::endl;
+    file_weight.close();
   }
 
   if (!isApprox_bias) {
-      std::ofstream file_bias_ref("bias1.txt");
-      file_bias_ref << bias1 << std::endl;
-      file_bias_ref.close();
-      std::ofstream file_bias("bias2.txt");
-      file_bias << bias2 << std::endl;
-      file_bias.close();
+    std::ofstream file_bias_ref("bias1.txt");
+    file_bias_ref << bias1 << std::endl;
+    file_bias_ref.close();
+    std::ofstream file_bias("bias2.txt");
+    file_bias << bias2 << std::endl;
+    file_bias.close();
   }
 
   ASSERT_TRUE(isApprox_input);
@@ -212,7 +218,6 @@ void TestFlashAttnLayerNorm::TestForwardRoutine() {
 }
 
 void TestFlashAttnLayerNorm::TestBackwardRoutine() {
-
   void *DeviceDz, *DeviceX0, *DeviceGamma;
   void *DeviceDx0, *DeviceDgamma, *DeviceDbeta;
 
@@ -228,23 +233,29 @@ void TestFlashAttnLayerNorm::TestBackwardRoutine() {
   auto layoutDbeta = cute::make_layout(shapeBias, cute::GenRowMajor{});
   CHECK_CUDART(cudaMalloc(&DeviceDz, sizeof(Element) * cute::size(layoutDz)));
   CHECK_CUDART(cudaMalloc(&DeviceX0, sizeof(Element) * cute::size(layoutX0)));
-  CHECK_CUDART(cudaMalloc(&DeviceGamma, sizeof(Element) * cute::size(layoutGamma)));
+  CHECK_CUDART(
+      cudaMalloc(&DeviceGamma, sizeof(Element) * cute::size(layoutGamma)));
   CHECK_CUDART(cudaMalloc(&DeviceDx0, sizeof(Element) * cute::size(layoutDx0)));
-  CHECK_CUDART(cudaMalloc(&DeviceDgamma, sizeof(Element) * cute::size(layoutDgamma)));
-  CHECK_CUDART(cudaMalloc(&DeviceDbeta, sizeof(Element) * cute::size(layoutDbeta)));
+  CHECK_CUDART(
+      cudaMalloc(&DeviceDgamma, sizeof(Element) * cute::size(layoutDgamma)));
+  CHECK_CUDART(
+      cudaMalloc(&DeviceDbeta, sizeof(Element) * cute::size(layoutDbeta)));
 
-  CHECK_CUDART(cudaMemcpy(DeviceDz, grad_output.data_ptr<typename TypeToTorch<Element>::Type>(),
-                          sizeof(Element) * cute::size(layoutDz),
-                          cudaMemcpyHostToDevice));
-  CHECK_CUDART(cudaMemcpy(DeviceX0, input.data_ptr<typename TypeToTorch<Element>::Type>(),
-                          sizeof(Element) * cute::size(layoutX0),
-                          cudaMemcpyHostToDevice));
-  CHECK_CUDART(cudaMemcpy(DeviceGamma, weight.data_ptr<typename TypeToTorch<Element>::Type>(),
-                          sizeof(Element) * cute::size(layoutGamma),
-                          cudaMemcpyHostToDevice));
-  CHECK_CUDART(cudaMemset(DeviceDx0, 0, sizeof(Element) * cute::size(layoutDx0)));
-  CHECK_CUDART(cudaMemset(DeviceDgamma, 0, sizeof(Element) * cute::size(layoutDgamma)));
-  CHECK_CUDART(cudaMemset(DeviceDbeta, 0, sizeof(Element) * cute::size(layoutDbeta)));
+  CHECK_CUDART(cudaMemcpy(
+      DeviceDz, grad_output.data_ptr<typename TypeToTorch<Element>::Type>(),
+      sizeof(Element) * cute::size(layoutDz), cudaMemcpyHostToDevice));
+  CHECK_CUDART(cudaMemcpy(
+      DeviceX0, input.data_ptr<typename TypeToTorch<Element>::Type>(),
+      sizeof(Element) * cute::size(layoutX0), cudaMemcpyHostToDevice));
+  CHECK_CUDART(cudaMemcpy(
+      DeviceGamma, weight.data_ptr<typename TypeToTorch<Element>::Type>(),
+      sizeof(Element) * cute::size(layoutGamma), cudaMemcpyHostToDevice));
+  CHECK_CUDART(
+      cudaMemset(DeviceDx0, 0, sizeof(Element) * cute::size(layoutDx0)));
+  CHECK_CUDART(
+      cudaMemset(DeviceDgamma, 0, sizeof(Element) * cute::size(layoutDgamma)));
+  CHECK_CUDART(
+      cudaMemset(DeviceDbeta, 0, sizeof(Element) * cute::size(layoutDbeta)));
 
   CHECK_CUDART(cudaDeviceSynchronize());
 
@@ -261,22 +272,25 @@ void TestFlashAttnLayerNorm::TestBackwardRoutine() {
   auto tensorDbeta = std::make_shared<dllm::Tensor1D>(
       DeviceDbeta, layoutDbeta, dllm::toDtype<Element>(), dllm::CUDA);
 
-  auto tast = dllm::flash_attn::layer_norm::backward(tensorDz, tensorX0, tensorMu, tensorRSigma, tensorGamma, tensorDx0, tensorDgamma, tensorDbeta);
+  auto tast = dllm::flash_attn::layer_norm::backward(
+      tensorDz, tensorX0, tensorMu, tensorRSigma, tensorGamma, tensorDx0,
+      tensorDgamma, tensorDbeta);
   tast(&context);
 
   auto grad_input2 = torch::empty_like(grad_input1);
   auto grad_weight2 = torch::empty_like(grad_weight1);
   auto grad_bias2 = torch::empty_like(grad_bias1);
 
-  CHECK_CUDART(cudaMemcpy(grad_input2.data_ptr<typename TypeToTorch<Element>::Type>(), DeviceDx0,
-                          sizeof(Element) * cute::size(layoutDx0),
-                          cudaMemcpyDeviceToHost));
-  CHECK_CUDART(cudaMemcpy(grad_weight2.data_ptr<typename TypeToTorch<Element>::Type>(), DeviceDgamma,
-                          sizeof(Element) * cute::size(layoutDgamma),
-                          cudaMemcpyDeviceToHost));
-  CHECK_CUDART(cudaMemcpy(grad_bias2.data_ptr<typename TypeToTorch<Element>::Type>(), DeviceDbeta,
-                          sizeof(Element) * cute::size(layoutDbeta),
-                          cudaMemcpyDeviceToHost));
+  CHECK_CUDART(cudaMemcpy(
+      grad_input2.data_ptr<typename TypeToTorch<Element>::Type>(), DeviceDx0,
+      sizeof(Element) * cute::size(layoutDx0), cudaMemcpyDeviceToHost));
+  CHECK_CUDART(
+      cudaMemcpy(grad_weight2.data_ptr<typename TypeToTorch<Element>::Type>(),
+                 DeviceDgamma, sizeof(Element) * cute::size(layoutDgamma),
+                 cudaMemcpyDeviceToHost));
+  CHECK_CUDART(cudaMemcpy(
+      grad_bias2.data_ptr<typename TypeToTorch<Element>::Type>(), DeviceDbeta,
+      sizeof(Element) * cute::size(layoutDbeta), cudaMemcpyDeviceToHost));
 
   CHECK_CUDART(cudaDeviceSynchronize());
 
@@ -285,30 +299,30 @@ void TestFlashAttnLayerNorm::TestBackwardRoutine() {
   auto isApprox_grad_bias = grad_bias1.allclose(grad_bias2, tol);
 
   if (!isApprox_grad_input) {
-      std::ofstream file_grad_input_ref("grad_input1.txt");
-      file_grad_input_ref << grad_input1 << std::endl;
-      file_grad_input_ref.close();
-      std::ofstream file_grad_input("grad_input2.txt");
-      file_grad_input << grad_input2 << std::endl;
-      file_grad_input.close();
+    std::ofstream file_grad_input_ref("grad_input1.txt");
+    file_grad_input_ref << grad_input1 << std::endl;
+    file_grad_input_ref.close();
+    std::ofstream file_grad_input("grad_input2.txt");
+    file_grad_input << grad_input2 << std::endl;
+    file_grad_input.close();
   }
 
   if (!isApprox_grad_weight) {
-      std::ofstream file_grad_weight_ref("grad_weight1.txt");
-      file_grad_weight_ref << grad_weight1 << std::endl;
-      file_grad_weight_ref.close();
-      std::ofstream file_grad_weight("grad_weight2.txt");
-      file_grad_weight << grad_weight2 << std::endl;
-      file_grad_weight.close();
+    std::ofstream file_grad_weight_ref("grad_weight1.txt");
+    file_grad_weight_ref << grad_weight1 << std::endl;
+    file_grad_weight_ref.close();
+    std::ofstream file_grad_weight("grad_weight2.txt");
+    file_grad_weight << grad_weight2 << std::endl;
+    file_grad_weight.close();
   }
 
   if (!isApprox_grad_bias) {
-      std::ofstream file_grad_bias_ref("grad_bias1.txt");
-      file_grad_bias_ref << grad_bias1 << std::endl;
-      file_grad_bias_ref.close();
-      std::ofstream file_grad_bias("grad_bias2.txt");
-      file_grad_bias << grad_bias2 << std::endl;
-      file_grad_bias.close();
+    std::ofstream file_grad_bias_ref("grad_bias1.txt");
+    file_grad_bias_ref << grad_bias1 << std::endl;
+    file_grad_bias_ref.close();
+    std::ofstream file_grad_bias("grad_bias2.txt");
+    file_grad_bias << grad_bias2 << std::endl;
+    file_grad_bias.close();
   }
   CHECK_CUDART(cudaFree(DeviceDz));
   CHECK_CUDART(cudaFree(DeviceX0));
@@ -316,9 +330,7 @@ void TestFlashAttnLayerNorm::TestBackwardRoutine() {
   CHECK_CUDART(cudaFree(DeviceDx0));
   CHECK_CUDART(cudaFree(DeviceDgamma));
   CHECK_CUDART(cudaFree(DeviceDbeta));
-
 }
-
 
 TEST_F(TestFlashAttnLayerNorm, TestFloat) {
   TestForwardRoutine();

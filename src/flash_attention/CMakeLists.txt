@@ -55,18 +55,18 @@ target_compile_options(dll_flash_attention_registry PRIVATE
 
 add_library(dllm_flash_attention_plugin SHARED
         ${CMAKE_CURRENT_SOURCE_DIR}/context.cpp
-#        ${FLASH_ATTENTION_FLASH_ATTN_SRC}
-#        ${FLASH_ATTENTION_FT_ATTEHTION_SRC}
-#        ${FLASH_ATTENTION_FUSED_SOFTMAX_SRC}
+        ${FLASH_ATTENTION_FLASH_ATTN_SRC}
+        ${FLASH_ATTENTION_FT_ATTEHTION_SRC}
+        ${FLASH_ATTENTION_FUSED_SOFTMAX_SRC}
         ${FLASH_ATTENTION_LAYER_NORM_SRC}
 )
 
 target_include_directories(dllm_flash_attention_plugin PRIVATE
         ${FLASH_ATTENTION_PATH}/csrc/cutlass/include
         ${CMAKE_CURRENT_SOURCE_DIR}/fake_torch
-#        ${FLASH_ATTENTION_FLASH_ATTN_INCLUDE}
-#        ${FLASH_ATTENTION_FT_ATTEHTION_INCLUDE}
-#        ${FLASH_ATTENTION_FUSED_SOFTMAX_INCLUDE}
+        ${FLASH_ATTENTION_FLASH_ATTN_INCLUDE}
+        ${FLASH_ATTENTION_FT_ATTEHTION_INCLUDE}
+        ${FLASH_ATTENTION_FUSED_SOFTMAX_INCLUDE}
         ${FLASH_ATTENTION_LAYER_NORM_INCLUDE}
 )
 
