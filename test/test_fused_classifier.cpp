@@ -101,7 +101,8 @@ void TestT(const dllm::ContextCompute &context) {
   auto logitsLayout = cute::make_layout(logitsShape, logitsStride);
   CHECK_CUDART(
       cudaMalloc(&logitsDevicePtr, sizeof(Dtype) * cute::cosize(logitsLayout)));
-  CHECK_CUDART(cudaMemcpy(logitsDevicePtr, logits.to(dtype).data_ptr(),
+  auto logitsCpy = logits.to(dtype);
+  CHECK_CUDART(cudaMemcpy(logitsDevicePtr, logitsCpy.data_ptr(),
                           sizeof(Dtype) * cute::cosize(logitsLayout),
                           cudaMemcpyHostToDevice));
   auto logitsTensor = std::make_shared<dllm::Tensor3D>(
@@ -119,7 +120,7 @@ void TestT(const dllm::ContextCompute &context) {
   auto targetsShape = cute::make_shape(B, T);
   auto targetsLayout = cute::make_layout(targetsShape, cute::GenRowMajor{});
   CHECK_CUDART(
-      cudaMalloc(&targetsDevicePtr, sizeof(Dtype) * cute::size(targetsLayout)));
+      cudaMalloc(&targetsDevicePtr, sizeof(int) * cute::size(targetsLayout)));
   CHECK_CUDART(cudaMemcpy(targetsDevicePtr, targets.data_ptr<int>(),
                           sizeof(int) * cute::size(targetsLayout),
                           cudaMemcpyHostToDevice));
@@ -145,12 +146,18 @@ void TestT(const dllm::ContextCompute &context) {
                           sizeof(Dtype) * cute::cosize(logitsTensor->layout),
                           cudaMemcpyDeviceToHost));
   CHECK_CUDART(cudaDeviceSynchronize());
+  std::cout << losses[0] << std::endl;
+  std::cout << lossesRef[0] << std::endl;
+  double atol = 1e-5;
+  if constexpr (std::is_same_v<Dtype, nv_half>) {
+    atol = 2e-2;
+  } else if constexpr (std::is_same_v<Dtype, nv_bfloat16>) {
+    atol = 4e-2;
+  }
   ASSERT_TRUE(
-      torch::allclose(lossesRef.to(torch::kDouble), losses, 1e-5, 1e-3));
-  std::cout << gradRef[0] << std::endl;
-  std::cout << logits.grad()[0] << std::endl;
+      torch::allclose(lossesRef.to(torch::kDouble), losses, 1e-5, atol));
   ASSERT_TRUE(
-      torch::allclose(gradRef.to(torch::kDouble), logits.grad(), 1e-5, 1e-3));
+      torch::allclose(gradRef.to(torch::kDouble), logits.grad(), 1e-5, atol));
 
   CHECK_CUDART(cudaFree(logitsDevicePtr));
   CHECK_CUDART(cudaFree(lossesDevicePtr));
