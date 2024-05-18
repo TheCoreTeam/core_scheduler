@@ -16,25 +16,6 @@
 #include "threading/thread_stream_nccl.h"
 #include "util.h"
 
-void printTensor(const dllm::Tensor1D &tensor) {
-  if (tensor.deviceType == dllm::CUDA) {
-    switch (tensor.dtype) {
-      case dllm::R_32F: {
-        using T = float;
-        const auto size = cute::size(tensor.layout);
-        Eigen::Vector<T, Eigen::Dynamic> buffer(size);
-        dllm::util::waitFutureIfValid(tensor.future);
-        CHECK_CUDART(cudaMemcpy(buffer.data(), tensor.data(), sizeof(T) * size,
-                                cudaMemcpyDeviceToHost));
-        CHECK_CUDART(cudaDeviceSynchronize());
-        std::cout << buffer.transpose() << std::endl;
-      }
-      default:
-        return;
-    }
-  }
-}
-
 int main(int argc, char **argv) {
   // dtype: FP32
   // Because we use FcNoBias, we can only fit to a linear function without bias
@@ -255,8 +236,15 @@ int main(int argc, char **argv) {
             lr);
         threadPool.submit(std::move(task));
       }
-      tensorW2->future->wait();
-      tensorW1->future->wait();
+
+      {
+        dllm::util::FutureGuard{tensorW2->future->rFuture};
+        dllm::util::FutureGuard{tensorW2->future->wFuture};
+      }
+      {
+        dllm::util::FutureGuard{tensorW1->future->rFuture};
+        dllm::util::FutureGuard{tensorW1->future->wFuture};
+      }
     }
   }
 
@@ -281,7 +269,10 @@ int main(int argc, char **argv) {
         tensorW2Out, tensorW1Out, tensorW2, CUBLAS_COMPUTE_32F_PEDANTIC);
     threadPool.submit(std::move(task));
   }
-  tensorW2Out->future->wait();
+  {
+    dllm::util::FutureGuard{tensorW2Out->future->wFuture};
+    dllm::util::FutureGuard{tensorW2Out->future->rFuture};
+  }
 
   CHECK_CUDART(cudaMemcpy(yTestRef.data(), tensorW2Out->data(),
                           sizeof(T) * yTest.size(), cudaMemcpyDeviceToHost));

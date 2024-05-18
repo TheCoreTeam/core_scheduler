@@ -18,17 +18,25 @@ TaskCompute forward(const std::shared_ptr<Tensor1D> &error,
     SPDLOG_LOGGER_CRITICAL(&logger(), "Input data dim not same");
   }
   auto task =
-      TaskCompute{[=, futureError = *error->future, futureX = *x->future,
-                   futureY = *y->future](const ContextCompute *context) {
-        util::waitFutureIfValid(futureError);
-        util::waitFutureIfValid(futureX);
-        util::waitFutureIfValid(futureY);
-        forwardKernel(context->cudaStream, *error, *x, *y);
+      TaskCompute{[error = error, x = x, y = y, errorFuture = *error->future,
+                   xFuture = x->future->wFuture, yFuture = y->future->rFuture](
+                      const ContextCompute *context) mutable {
+        {
+          util::FutureGuard errorRGuard{errorFuture.rFuture};
+          util::FutureGuard errorWGuard{errorFuture.wFuture};
+          util::FutureGuard xGuard{xFuture};
+          util::FutureGuard yGuard{yFuture};
+          forwardKernel(context->cudaStream, *error, *x, *y);
+        }
         CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
+        error.reset();
+        x.reset();
+        y.reset();
       }};
-  const auto &future = *error->future = task.get_future();
-  *x->future = future;
-  *y->future = future;
+  const TaskFuture future = task.get_future();
+  error->future->wFuture = future;
+  x->future->rFuture = future;
+  y->future->rFuture = future;
   return task;
 }
 
@@ -40,17 +48,25 @@ TaskCompute backward(const std::shared_ptr<Tensor1D> &dx,
     SPDLOG_LOGGER_CRITICAL(&logger(), "Input data dim not same");
   }
   auto task =
-      TaskCompute{[=, futureDx = *dx->future, futureX = *x->future,
-                   futureY = *y->future](const ContextCompute *context) {
-        util::waitFutureIfValid(futureDx);
-        util::waitFutureIfValid(futureX);
-        util::waitFutureIfValid(futureY);
-        backwardKernel(context->cudaStream, *dx, *x, *y);
+      TaskCompute{[dx = dx, x = x, y = y, dxFuture = *dx->future,
+                   xFuture = x->future->wFuture, yFuture = y->future->wFuture](
+                      const ContextCompute *context) mutable {
+        {
+          util::FutureGuard dxRGuard{dxFuture.rFuture};
+          util::FutureGuard dxWGuard{dxFuture.wFuture};
+          util::FutureGuard xGuard{xFuture};
+          util::FutureGuard yGuard{yFuture};
+          backwardKernel(context->cudaStream, *dx, *x, *y);
+        }
         CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
+        dx.reset();
+        x.reset();
+        y.reset();
       }};
-  const auto &future = *dx->future = task.get_future();
-  *x->future = future;
-  *y->future = future;
+  const TaskFuture future = task.get_future();
+  dx->future->wFuture = future;
+  x->future->rFuture = future;
+  y->future->rFuture = future;
   return task;
 }
 }  // namespace dllm::compute::Mse

@@ -123,7 +123,7 @@ if (DLLM_ENABLE_FLASH_ATTENTION)
     endforeach ()
 
     find_package(Python COMPONENTS Interpreter Development REQUIRED)
-    set(DLLM_FLASH_ATTENTION_SRC test_flash_attention.cpp test_layernorm.cpp)
+    set(DLLM_FLASH_ATTENTION_SRC test_flash_attention.cpp)
 else ()
     set(TORCH_INCLUDE_PATH)
     set(TORCH_LIBRARY)
@@ -133,9 +133,11 @@ endif ()
 
 add_executable(dllm_tests
         main.cpp
+        test_adamw.cpp
         test_fc.cpp
         test_relu.cpp
         test_gelu.cpp
+        # test_fused_classifier.cpp
         ${DLLM_FLASH_ATTENTION_SRC}
 )
 
@@ -162,6 +164,8 @@ target_compile_options(dllm_tests PRIVATE
 add_executable(dllm_communication_tests
         main_communication.cpp
         test_all_reduce.cpp
+        test_all_gather.cpp
+        test_all_to_all.cpp
 )
 
 target_include_directories(dllm_communication_tests PRIVATE

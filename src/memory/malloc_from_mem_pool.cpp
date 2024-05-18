@@ -1,9 +1,10 @@
-#include "allocate/malloc_from_mem_pool.h"
+#include "memory/malloc_from_mem_pool.h"
 
-#include "allocate/malloc_from_mem_internal.h"
+#include "memory/malloc_from_mem_internal.h"
 
-namespace dllm::alloc {
-void mallocFromMemPool(std::shared_ptr<Tensor1D> &x, cudaStream_t stream) {
+namespace dllm::memory {
+void mallocFromMemPool(const std::shared_ptr<Tensor1D> &x,
+                       const cudaStream_t stream) {
   if (x->data() != nullptr) {
     SPDLOG_LOGGER_CRITICAL(&logger(), "The data must be nullptr");
   }
@@ -23,7 +24,7 @@ void mallocFromMemPool(std::shared_ptr<Tensor1D> &x, cudaStream_t stream) {
       [=](void *ptr) { CHECK_CUDART(cudaFreeAsync(ptr, stream)); }});
 }
 
-std::shared_ptr<void> mallocFromMemPool(size_t size, Dtype dtype,
+std::shared_ptr<void> mallocFromMemPool(const size_t size, const Dtype dtype,
                                         const ContextCompute *context) {
   return std::shared_ptr<void>{
       [&] {

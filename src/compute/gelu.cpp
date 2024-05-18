@@ -13,12 +13,22 @@ TaskCompute forward(const std::shared_ptr<Tensor1D> &output,
     SPDLOG_LOGGER_CRITICAL(&logger(), "Input data dim not same");
   }
   auto task = TaskCompute{
-      [=, futureInput = *input->future](const ContextCompute *context) {
-        util::waitFutureIfValid(futureInput);
-        forwardKernel(context->cudaStream, *output, *input);
+      [output = output, input = input, outputFuture = *output->future,
+       inputFuture =
+           input->future->wFuture](const ContextCompute *context) mutable {
+        {
+          util::FutureGuard inputGuard{inputFuture};
+          util::FutureGuard outputRGuard{outputFuture.rFuture};
+          util::FutureGuard outputWGuard{outputFuture.wFuture};
+          forwardKernel(context->cudaStream, *output, *input);
+        }
         CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
+        output.reset();
+        input.reset();
       }};
-  *input->future = task.get_future();
+  const TaskFuture future = task.get_future();
+  input->future->rFuture = future;
+  output->future->wFuture = future;
   return task;
 }
 }  // namespace dllm::compute::GeLU

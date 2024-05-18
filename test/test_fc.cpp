@@ -346,7 +346,10 @@ void TestThreadPoolComputeForwardT(dllm::ThreadPoolCompute &threadPool) {
   tensorX.reset();
   tensorW.reset();
   threadPool.submit(std::move(task));
-  future->wait();
+  {
+    dllm::util::FutureGuard{future->rFuture};
+    dllm::util::FutureGuard{future->wFuture};
+  }
 
   CHECK_CUDART(cudaMemcpy(hostY.data(), ptrY,
                           sizeof(DataTypeOutput) * cute::size(layoutY),
@@ -429,7 +432,10 @@ void TestThreadPoolComputeBackwardWT(dllm::ThreadPoolCompute &threadPool) {
   tensorDY.reset();
   tensorX.reset();
   threadPool.submit(std::move(task));
-  future->wait();
+  {
+    dllm::util::FutureGuard{future->rFuture};
+    dllm::util::FutureGuard{future->wFuture};
+  }
 
   CHECK_CUDART(cudaMemcpy(hostDW.data(), ptrDW,
                           sizeof(DataTypeOutput) * cute::size(layoutDW),
@@ -512,7 +518,10 @@ void TestThreadPoolComputeBackwardXT(dllm::ThreadPoolCompute &threadPool) {
   tensorDY.reset();
   tensorW.reset();
   threadPool.submit(std::move(task));
-  future->wait();
+  {
+    dllm::util::FutureGuard{future->rFuture};
+    dllm::util::FutureGuard{future->wFuture};
+  }
 
   CHECK_CUDART(cudaMemcpy(hostDX.data(), ptrDX,
                           sizeof(DataTypeOutput) * cute::size(layoutDX),

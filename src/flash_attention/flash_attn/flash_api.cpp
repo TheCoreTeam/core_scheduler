@@ -11,6 +11,7 @@
 #include <torch/python.h>
 
 #include "flash.h"
+#include "random/random_internal.h"
 #include "static_switch.h"
 #include "util.h"
 
@@ -627,13 +628,14 @@ void forward(
   params.rng_state = reinterpret_cast<uint64_t *>(random_state.data_ptr());
 
   if (p_dropout > 0.0) {
+    auto &[seed, offset] = random::getRandomState();
     // auto gen = at::get_generator_or_default<at::CUDAGeneratorImpl>(
     //     gen_, at::cuda::detail::getDefaultCUDAGenerator());
     // See Note [Acquire lock when using random generators]
     // std::lock_guard<std::mutex> lock(gen->mutex_);
     // params.philox_args = gen->philox_cuda_state(counter_offset);
-    params.philox_args = {context->curandSeed, context->curandOffset.load()};
-    context->curandOffset += counter_offset;
+    params.philox_args = {seed, offset.load()};
+    offset += counter_offset;
   }
 
   // set_params_alibi(params, alibi_slopes_, batch_size, num_heads);
@@ -689,31 +691,45 @@ TaskCompute forward(const std::shared_ptr<dllm::Tensor<1>> &random_state,
                     const std::shared_ptr<const dllm::Tensor<4>> &q,
                     const std::shared_ptr<const dllm::Tensor<4>> &k,
                     const std::shared_ptr<const dllm::Tensor<4>> &v,
-                    const double drouput_p, const double softmax_scale) {
+                    const double dropout_p, const double softmax_scale) {
   if (!(out->layout.shape() == q->layout.shape()) ||
       !(k->layout.shape() == v->layout.shape())) {
   }
   auto task = TaskCompute{
-      [=, futureRandom = *random_state->future, futureOut = *out->future,
-       futureSoftmax = *softmax_lse->future, futureQ = *q->future,
-       futureK = *k->future,
-       futureV = *v->future](const ContextCompute *context) {
-        util::waitFutureIfValid(futureRandom);
-        util::waitFutureIfValid(futureOut);
-        util::waitFutureIfValid(futureSoftmax);
-        util::waitFutureIfValid(futureQ);
-        util::waitFutureIfValid(futureK);
-        util::waitFutureIfValid(futureV);
-        forward(context, *random_state, *out, *softmax_lse, *q, *k, *v,
-                drouput_p, softmax_scale);
+      [random_state = random_state, out = out, softmax_lse = softmax_lse, q = q,
+       k = k, v = v, dropout_p = dropout_p, softmax_scale = softmax_scale,
+       randomFuture = *random_state->future, outFuture = *out->future,
+       softmaxFuture = *softmax_lse->future, qFuture = q->future->wFuture,
+       kFuture = k->future->wFuture,
+       vFuture = v->future->wFuture](const ContextCompute *context) mutable {
+        {
+          util::FutureGuard randomRGuard{randomFuture.rFuture};
+          util::FutureGuard randomWGuard{randomFuture.wFuture};
+          util::FutureGuard outRGuard{outFuture.rFuture};
+          util::FutureGuard outWGuard{outFuture.wFuture};
+          util::FutureGuard softmaxRGuard{softmaxFuture.rFuture};
+          util::FutureGuard softmaxWGuard{softmaxFuture.wFuture};
+          util::FutureGuard qGuard{qFuture};
+          util::FutureGuard kGuard{kFuture};
+          util::FutureGuard vGuard{vFuture};
+          forward(context, *random_state, *out, *softmax_lse, *q, *k, *v,
+                  dropout_p, softmax_scale);
+        }
         CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
+        random_state.reset();
+        out.reset();
+        softmax_lse.reset();
+        q.reset();
+        k.reset();
+        v.reset();
       }};
-  const auto &future = *random_state->future = task.get_future();
-  *out->future = future;
-  *softmax_lse->future = future;
-  *q->future = future;
-  *k->future = future;
-  *v->future = future;
+  const TaskFuture future = task.get_future();
+  random_state->future->wFuture = future;
+  out->future->wFuture = future;
+  softmax_lse->future->wFuture = future;
+  q->future->rFuture = future;
+  k->future->rFuture = future;
+  v->future->rFuture = future;
   return task;
 }
 }  // namespace dllm::compute::FlashAttention
@@ -1879,34 +1895,53 @@ TaskCompute backward(const std::shared_ptr<dllm::Tensor<4>> &dq,
       !(k->layout.shape() == v->layout.shape())) {
   }
   auto task = TaskCompute{
-      [=, futureDq = *dq->future, futureDk = *dk->future,
-       futureDv = *dv->future, futureDout = *dout->future,
-       futureOut = *out->future, futureSofmax = *softmax_lse->future,
-       futureQ = *q->future, futureK = *k->future,
-       futureV = *v->future](const ContextCompute *context) {
-        util::waitFutureIfValid(futureDout);
-        util::waitFutureIfValid(futureDq);
-        util::waitFutureIfValid(futureDk);
-        util::waitFutureIfValid(futureDv);
-        util::waitFutureIfValid(futureOut);
-        util::waitFutureIfValid(futureSofmax);
-        util::waitFutureIfValid(futureQ);
-        util::waitFutureIfValid(futureK);
-        util::waitFutureIfValid(futureV);
-        backward(context, *dout, dq, dk, dv, *random_state, *out, *softmax_lse,
-                 *q, *k, *v, drouput_p, softmax_scale);
+      [dout = dout, dq = dq, dk = dk, dv = dv, random_state = random_state,
+       out = out, softmax_lse = softmax_lse, q = q, k = k, v = v,
+       drouput_p = drouput_p, softmax_scale = softmax_scale,
+       dqFuture = *dq->future, dkFuture = *dk->future, dvFuture = *dv->future,
+       doutFuture = dout->future->wFuture, outFuture = out->future->wFuture,
+       softmaxtFuture = softmax_lse->future->wFuture,
+       qFuture = q->future->wFuture, kFuture = k->future->wFuture,
+       vFuture = v->future->wFuture](const ContextCompute *context) mutable {
+        {
+          util::FutureGuard dqRGuard{dqFuture.rFuture};
+          util::FutureGuard dqWGuard{dqFuture.wFuture};
+          util::FutureGuard dkRGuard{dkFuture.rFuture};
+          util::FutureGuard dkWGuard{dkFuture.wFuture};
+          util::FutureGuard dvRGuard{dvFuture.rFuture};
+          util::FutureGuard dvWGuard{dvFuture.wFuture};
+          util::FutureGuard doutGuard{doutFuture};
+          util::FutureGuard outGuard{outFuture};
+          util::FutureGuard softmaxGuard{softmaxtFuture};
+          util::FutureGuard qGuard{qFuture};
+          util::FutureGuard kGuard{kFuture};
+          util::FutureGuard vGuard{vFuture};
+          backward(context, *dout, dq, dk, dv, *random_state, *out,
+                   *softmax_lse, *q, *k, *v, drouput_p, softmax_scale);
+        }
         CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
+        dout.reset();
+        dq.reset();
+        dk.reset();
+        dv.reset();
+        random_state.reset();
+        out.reset();
+        softmax_lse.reset();
+        q.reset();
+        k.reset();
+        v.reset();
       }};
-  const auto &future = *dq->future = task.get_future();
-  *dk->future = future;
-  *dv->future = future;
-  *dout->future = future;
-  *random_state->future = future;
-  *out->future = future;
-  *softmax_lse->future = future;
-  *q->future = future;
-  *k->future = future;
-  *v->future = future;
+  const TaskFuture future = task.get_future();
+  dq->future->wFuture = future;
+  dk->future->wFuture = future;
+  dv->future->wFuture = future;
+  dout->future->rFuture = future;
+  random_state->future->rFuture = future;
+  out->future->rFuture = future;
+  softmax_lse->future->rFuture = future;
+  q->future->rFuture = future;
+  k->future->rFuture = future;
+  v->future->rFuture = future;
   return task;
 }
 }  // namespace dllm::compute::FlashAttention

@@ -11,9 +11,7 @@ set(DLLM_COMPUTE_SRCS
         ${CMAKE_CURRENT_SOURCE_DIR}/random.cu
         ${CMAKE_CURRENT_SOURCE_DIR}/fc.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/matmul.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/nll.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/nll.cu
-        ${CMAKE_CURRENT_SOURCE_DIR}/softmax.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/softmax.cu
+        ${CMAKE_CURRENT_SOURCE_DIR}/fused_classifier.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/fused_classifier.cu
 )
 set(DLLM_COMPUTE_SRCS ${DLLM_COMPUTE_SRCS} PARENT_SCOPE)
