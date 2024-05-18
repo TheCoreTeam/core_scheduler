@@ -55,7 +55,7 @@ target_compile_options(dll_flash_attention_registry PRIVATE
 
 add_library(dllm_flash_attention_plugin SHARED
         ${CMAKE_CURRENT_SOURCE_DIR}/context.cpp
-        # ${FLASH_ATTENTION_FLASH_ATTN_SRC}
+        ${FLASH_ATTENTION_FLASH_ATTN_SRC}
         ${FLASH_ATTENTION_FT_ATTEHTION_SRC}
         ${FLASH_ATTENTION_FUSED_SOFTMAX_SRC}
         ${FLASH_ATTENTION_LAYER_NORM_SRC}
@@ -75,7 +75,7 @@ target_link_libraries(dllm_flash_attention_plugin PRIVATE dllm CUDA::cudart dll_
 target_compile_options(dllm_flash_attention_plugin PRIVATE
         $<$<CONFIG:Release>:-O3>
         $<$<CONFIG:Debug>:-O0>
-        $<$<COMPILE_LANGUAGE:CUDA>:--expt-relaxed-constexpr --expt-extended-lambda --use_fast_math -Wno-deprecated-enum-enum-conversion>
+        $<$<COMPILE_LANGUAGE:CUDA>:--expt-relaxed-constexpr --expt-extended-lambda --use_fast_math>
         $<$<COMPILE_LANGUAGE:CXX>:-Wno-deprecated-enum-enum-conversion>
 )
 

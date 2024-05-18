@@ -8,32 +8,13 @@
 
 #include "communication/nccl/all_reduce.h"
 #include "compute/fc.h"
-#include "compute/random.h"
 #include "compute/mse.h"
+#include "compute/random.h"
 #include "logger.h"
 #include "optimizer/sgd.h"
 #include "threading/thread_pool_compute.h"
 #include "threading/thread_stream_nccl.h"
 #include "util.h"
-
-void printTensor(const dllm::Tensor1D &tensor) {
-  if (tensor.deviceType == dllm::CUDA) {
-    switch (tensor.dtype) {
-      case dllm::R_32F: {
-        using T = float;
-        const auto size = cute::size(tensor.layout);
-        Eigen::Vector<T, Eigen::Dynamic> buffer(size);
-        dllm::util::waitFutureIfValid(tensor.future);
-        CHECK_CUDART(cudaMemcpy(buffer.data(), tensor.data(), sizeof(T) * size,
-                                cudaMemcpyDeviceToHost));
-        CHECK_CUDART(cudaDeviceSynchronize());
-        std::cout << buffer.transpose() << std::endl;
-      }
-      default:
-        return;
-    }
-  }
-}
 
 int main(int argc, char **argv) {
   // dtype: FP32
@@ -181,13 +162,11 @@ int main(int argc, char **argv) {
 
   {
     auto task = dllm::compute::Random::kaimingNorm(tensorW1);
-    auto future = threadPool.submit(std::move(task));
-    tensorW1->future = future;
+    threadPool.submit(std::move(task));
   }
   {
     auto task = dllm::compute::Random::kaimingNorm(tensorW2);
-    auto future = threadPool.submit(std::move(task));
-    tensorW2->future = future;
+    threadPool.submit(std::move(task));
   }
 
   const int epoch = 10;
@@ -196,79 +175,76 @@ int main(int argc, char **argv) {
       {
         auto task = dllm::compute::FcNoBias::forward(
             tensorW1Out, tensorX, tensorW1, CUBLAS_COMPUTE_32F_PEDANTIC);
-        auto future = threadPool.submit(std::move(task));
-        tensorW1Out->future = future;
+        threadPool.submit(std::move(task));
       }
       {
         auto task = dllm::compute::FcNoBias::forward(
             tensorW2Out, tensorW1Out, tensorW2, CUBLAS_COMPUTE_32F_PEDANTIC);
-        auto future = threadPool.submit(std::move(task));
-        tensorW2Out->future = future;
+        threadPool.submit(std::move(task));
       }
       {
         auto task = dllm::compute::Mse::backward(
             dllm::util::flatten<1>(tensorDW2Out),
             dllm::util::toConstSharedPtr(dllm::util::flatten<1>(tensorW2Out)),
             dllm::util::toConstSharedPtr(dllm::util::flatten<1>(tensorY)));
-        auto future = threadPool.submit(std::move(task));
-        tensorDW2Out->future = future;
+        threadPool.submit(std::move(task));
       }
       {
         auto task = dllm::compute::FcNoBias::backwardW(
             tensorDW2, dllm::util::toConstSharedPtr(tensorDW2Out),
             dllm::util::toConstSharedPtr(tensorW1Out),
             CUBLAS_COMPUTE_32F_PEDANTIC);
-        auto future = threadPool.submit(std::move(task));
-        tensorDW2->future = future;
+        threadPool.submit(std::move(task));
       }
       {
         auto task = dllm::compute::FcNoBias::backwardX(
             tensorDW1Out, dllm::util::toConstSharedPtr(tensorDW2Out),
             dllm::util::toConstSharedPtr(tensorW2),
             CUBLAS_COMPUTE_32F_PEDANTIC);
-        auto future = threadPool.submit(std::move(task));
-        tensorDW1Out->future = future;
+        threadPool.submit(std::move(task));
       }
       {
         auto task = dllm::compute::FcNoBias::backwardW(
             tensorDW1, dllm::util::toConstSharedPtr(tensorDW1Out),
             dllm::util::toConstSharedPtr(tensorW1Out),
             CUBLAS_COMPUTE_32F_PEDANTIC);
-        auto future = threadPool.submit(std::move(task));
-        tensorDW1->future = future;
+        threadPool.submit(std::move(task));
       }
       {
         auto task = dllm::communication::AllReduce<dllm::communication::NCCL>::
             runInplace(dllm::util::flatten<1>(tensorW2),
                        dllm::communication::SUM);
-        auto future = threadStreamNccl.submit(std::move(task));
-        tensorW2->future = future;
+        threadStreamNccl.submit(std::move(task));
       }
       {
         auto task = dllm::communication::AllReduce<dllm::communication::NCCL>::
             runInplace(dllm::util::flatten<1>(tensorW1),
                        dllm::communication::SUM);
-        auto future = threadStreamNccl.submit(std::move(task));
-        tensorW1->future = future;
+        threadStreamNccl.submit(std::move(task));
       }
       {
         auto task = dllm::optimizer::Sgd::step(
             dllm::util::flatten<1>(tensorW2),
             dllm::util::toConstSharedPtr(dllm::util::flatten<1>(tensorDW2)),
             lr);
-        auto future = threadPool.submit(std::move(task));
-        tensorW2->future = future;
+        threadPool.submit(std::move(task));
       }
       {
         auto task = dllm::optimizer::Sgd::step(
             dllm::util::flatten<1>(tensorW1),
             dllm::util::toConstSharedPtr(dllm::util::flatten<1>(tensorDW1)),
             lr);
-        auto future = threadPool.submit(std::move(task));
-        tensorW1->future = future;
+        threadPool.submit(std::move(task));
       }
-      tensorW2->future->wait();
-      tensorW1->future->wait();
+
+      {
+        dllm::util::FutureGuard{tensorW2->future->rFuture};
+        dllm::util::FutureGuard{tensorW2->future->wFuture};
+      }
+      {
+        dllm::util::FutureGuard{tensorW1->future->rFuture};
+        dllm::util::FutureGuard{tensorW1->future->wFuture};
+      }
     }
   }
 
@@ -286,16 +262,17 @@ int main(int argc, char **argv) {
   {
     auto task = dllm::compute::FcNoBias::forward(tensorW1Out, tensorX, tensorW1,
                                                  CUBLAS_COMPUTE_32F_PEDANTIC);
-    auto future = threadPool.submit(std::move(task));
-    tensorW1Out->future = future;
+    threadPool.submit(std::move(task));
   }
   {
     auto task = dllm::compute::FcNoBias::forward(
         tensorW2Out, tensorW1Out, tensorW2, CUBLAS_COMPUTE_32F_PEDANTIC);
-    auto future = threadPool.submit(std::move(task));
-    tensorW2Out->future = future;
+    threadPool.submit(std::move(task));
   }
-  tensorW2Out->future->wait();
+  {
+    dllm::util::FutureGuard{tensorW2Out->future->wFuture};
+    dllm::util::FutureGuard{tensorW2Out->future->rFuture};
+  }
 
   CHECK_CUDART(cudaMemcpy(yTestRef.data(), tensorW2Out->data(),
                           sizeof(T) * yTest.size(), cudaMemcpyDeviceToHost));

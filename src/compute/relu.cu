@@ -1,7 +1,7 @@
 #include "tensor.h"
 #include "util.h"
 
-namespace dllm::compute {
+namespace dllm::compute::ReLU {
 template <typename Element>
 __global__ void relu(const Element* __restrict__ input,
                      Element* __restrict__ output, const size_t size) {
@@ -35,7 +35,8 @@ __inline__ __attribute__((always_inline)) void autoDispatch(Dtype dtype,
 }
 }  // namespace
 
-void reluKernel(cudaStream_t stream, const Tensor1D& input, Tensor1D& output) {
+void forwardKernel(cudaStream_t stream, const Tensor1D& input,
+                   Tensor1D& output) {
   const auto size = cute::size(input.layout);
   const dim3 block(std::min<std::decay_t<decltype(size)>>(128, size));
   const dim3 grid(
@@ -50,4 +51,4 @@ void reluKernel(cudaStream_t stream, const Tensor1D& input, Tensor1D& output) {
 
   autoDispatch(input.dtype, f);
 }
-}  // namespace dllm::compute
+}  // namespace dllm::compute::ReLU

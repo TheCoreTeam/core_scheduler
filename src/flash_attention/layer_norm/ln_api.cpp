@@ -3,6 +3,7 @@
 
 #include "ATen/cuda/CUDAContext.h"
 #include "ln.h"
+#include "random/random_internal.h"
 #include "threading/context_compute.h"
 
 using IntArrayRef1D = std::array<dllm::TensorIndexType, 1>;
@@ -122,6 +123,195 @@ layer_norm::BwdFunction &get_parallel_bwd_launcher(
     TORCH_CHECK(false, "BWD: Unsupported hidden_size or types: ", hidden_size,
                 wtype, itype, rtype, otype, ctype);
   }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+auto dropout_add_ln_fwd_no_dropout(
+    const dllm::ContextCompute *context,
+    at::Tensor<2> &z,            // Input: BxSxhidden_size
+    at::Tensor<1> &mu,           // Input: FP32
+    at::Tensor<1> &rsigma,       // Input: FP32
+    const at::Tensor<2> &x0,     // Input: BxSxhidden_size
+    const at::Tensor<1> &gamma,  // hidden_size  // weight
+    const at::Tensor<1> &beta,   // hidden_size  // bias
+    const float epsilon          // epsilon
+) {
+  const float dropout_p = 0;       // 0.0
+  const float rowscale_const = 1;  // 1.0
+  const int64_t z_numrows = 0;     // 0
+  bool residual_in_fp32 = false;   // Not sure
+  bool is_rms_norm = false;        // false
+  at::cuda::setCurrentCUDAStream(context->cudaStream);
+
+  auto itype = x0.scalar_type();
+  auto rtype = (x0.scalar_type());
+  auto wtype = gamma.scalar_type();
+  auto otype = itype;
+  auto ctype = torch::kFloat32;
+  auto mtype = torch::kUInt8;
+
+  TORCH_CHECK(x0.is_cuda());
+  TORCH_CHECK(gamma.is_cuda());
+
+  // TORCH_CHECK(x0.is_contiguous());
+  // c10::IntArrayRef does not own the storage, so we need to construct a
+  // vector. Otherwise just constructing IntArrayRef({blah}) will cause
+  // uninitialized memory because blah is then deallocated.
+  //  std::vector<int64_t> sizes_vec{
+  //      !x0_subset_.has_value() ? x0.size(0) : x0_subset_.value().size(0),
+  //      x0.size(1)};
+  IntArrayRef2D sizes_vec{x0.size<0>(), x0.size<1>()};
+  // auto sizes = c10::IntArrayRef(sizes_vec);
+  auto &sizes = sizes_vec;
+  TORCH_CHECK(x0.dim() == 2);
+  TORCH_CHECK(sizes.size() == 2);
+
+  const int rows = sizes[0];
+  const int cols = sizes[1];
+  auto hidden_size = gamma.numel();
+  TORCH_CHECK(hidden_size == cols);
+
+  TORCH_CHECK((hidden_size % 8 == 0) && (hidden_size <= 8192));
+  TORCH_CHECK(epsilon >= 0.f);
+
+  // Otherwise the kernel will be launched from cuda:0 device
+  // Cast to char to avoid compiler warning about narrowing
+  // at::cuda::CUDAGuard device_guard{(char)x0.get_device()};
+
+  // auto opts = x0.options();
+  // at::Tensor x;
+  // if (save_x) {
+  //   x = torch::empty(sizes, opts.dtype(rtype));
+  // }
+  // at::Tensor dmask;
+  // if (dropout_p > 0.f) {
+  //   dmask = torch::empty(x0.sizes(), opts.dtype(mtype));
+  // };
+  // auto z = torch::empty(
+  //     z_subset_.has_value() ? IntArrayRef2D{z_numrows, cols} : sizes,
+  //     opts.dtype(otype));
+  //  auto z = torch::empty<dllm::CUDA>(sizes, otype, context);
+
+  // auto mu = torch::empty({rows}, opts.dtype(ctype));
+  // auto rsigma = torch::empty({rows}, opts.dtype(ctype));
+  static_assert(
+      std::is_same_v<std::remove_const_t<
+                         std::remove_pointer_t<std::decay_t<const int *&>>>,
+                     int>);
+  //  auto mu = torch::empty<dllm::CUDA>(
+  //      IntArrayRef1D{static_cast<dllm::TensorIndexType>(rows)}, ctype,
+  //      context);
+  //  auto rsigma = torch::empty<dllm::CUDA>(
+  //      IntArrayRef1D{static_cast<dllm::TensorIndexType>(rows)}, ctype,
+  //      context);
+
+  layer_norm::LaunchParams<layer_norm::FwdParams> launch_params;
+
+  launch_params.props = at::cuda::getCurrentDeviceProperties();
+  // launch_params.stream = at::cuda::getCurrentCUDAStream().stream();
+  launch_params.stream = context->cudaStream;
+  TORCH_CHECK(dropout_p < 1.f);
+  launch_params.params.dropout_keep_p = 1.f - dropout_p;
+  // launch_params.params.residual =
+  //     residual_.has_value() ? residual_.value().data_ptr() : nullptr;
+  // launch_params.params.rowscale =
+  //     rowscale_.has_value() ? rowscale_.value().data_ptr() : nullptr;
+  // launch_params.params.colscale =
+  //     colscale_.has_value() ? colscale_.value().data_ptr() : nullptr;
+  // launch_params.params.x0_subset =
+  //     x0_subset_.has_value() ? x0_subset_.value().data_ptr() : nullptr;
+  // launch_params.params.z_subset =
+  //     z_subset_.has_value() ? z_subset_.value().data_ptr() : nullptr;
+
+  launch_params.params.residual = nullptr;
+  launch_params.params.rowscale = nullptr;
+  launch_params.params.colscale = nullptr;
+  launch_params.params.x0_subset = nullptr;
+  launch_params.params.z_subset = nullptr;
+
+  // auto gen = at::get_generator_or_default<at::CUDAGeneratorImpl>(
+  //     gen_, at::cuda::detail::getDefaultCUDAGenerator());
+
+  auto round_multiple = [](int x, int m) { return (x + m - 1) / m * m; };
+  const int multiple =
+      hidden_size <= 1536 ? 256 : (hidden_size <= 3072 ? 512 : 1024);
+  // Request the kernel launcher.
+  auto launcher = get_fwd_launcher(wtype, itype, rtype, otype, ctype,
+                                   round_multiple(hidden_size, multiple));
+
+  // Set the kernel runtime parameters.
+  layer_norm::FwdParams &params = launch_params.params;
+  params.rows = rows;
+  params.cols = cols;
+  // params.x0 = x0.data_ptr();
+  params.x0 = const_cast<void *>(x0.data_ptr());
+  params.x = nullptr;
+  params.dmask = nullptr;
+  params.mu = mu.data_ptr();
+  params.rs = rsigma.data_ptr();
+  // params.gamma = gamma.data_ptr();
+  params.gamma = const_cast<void *>(gamma.data_ptr());
+  // params.beta = beta_.has_value() ? beta_.value().data_ptr() : nullptr;
+  params.beta = const_cast<void *>(beta.data_ptr());
+  params.z = z.data_ptr();
+  params.epsilon = epsilon;
+  params.dropout_scale = 1.f / (1.f - dropout_p);
+  params.inverse_cols = 1.f / float(params.cols);
+  params.rowscale_const = rowscale_const;
+  params.is_rms_norm = is_rms_norm;
+
+  // Query the kernel-specific launch parameters.
+  launcher(launch_params, true);
+
+  // at::Tensor workspace, barrier;
+
+  if (dropout_p > 0.f) {
+    // number of times random will be generated per thread, to offset philox
+    // counter in thc random state
+    int64_t counter_offset = launch_params.elts_per_thread;
+
+    // See Note [Acquire lock when using random generators]
+    {
+      auto &[seed, offset] = dllm::random::getRandomState();
+      // std::lock_guard<std::mutex> lock(gen->mutex_);
+      // params.philox_args = gen->philox_cuda_state(counter_offset);
+      params.philox_args = {seed, offset.load()};
+      offset += counter_offset;
+    }
+  }
+
+  std::shared_ptr<dllm::Tensor<1>> workspace, barrier;
+  if (launch_params.barrier_size > 0) {
+    // TODO Any way to avoid this?
+    // barrier =
+    //     torch::zeros(launch_params.barrier_size, opts.dtype(torch::kInt32));
+    // workspace =
+    //     torch::empty(launch_params.workspace_bytes,
+    //     opts.dtype(torch::kChar));
+    // params.workspace = workspace.data_ptr();
+    // params.barrier = barrier.data_ptr<int>();
+    barrier = torch::empty<dllm::CUDA>(
+        IntArrayRef1D{
+            static_cast<dllm::TensorIndexType>(launch_params.barrier_size)},
+        torch::kInt32, context);
+    CHECK_CUDART(cudaMemsetAsync(barrier->data(), 0,
+                                 sizeof(int) * launch_params.barrier_size,
+                                 context->cudaStream));
+    workspace = torch::empty<dllm::CUDA>(
+        IntArrayRef1D{
+            static_cast<dllm::TensorIndexType>(launch_params.workspace_bytes)},
+        torch::kChar, context);
+    params.barrier = barrier->data_ptr<int>();
+    params.workspace = workspace->data_ptr();
+  }
+
+  // Launch the kernel.
+  launcher(launch_params, false);
+  CHECK_CUDART(cudaStreamSynchronize(launch_params.stream));
+
+  // return {z, x, dmask, mu, rsigma};
+  //  return std::make_tuple(mu, rsigma);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -352,10 +542,11 @@ auto dropout_add_ln_fwd(
 
     // See Note [Acquire lock when using random generators]
     {
+      auto &[seed, offset] = dllm::random::getRandomState();
       // std::lock_guard<std::mutex> lock(gen->mutex_);
       // params.philox_args = gen->philox_cuda_state(counter_offset);
-      params.philox_args = {context->curandSeed, context->curandOffset.load()};
-      context->curandOffset += counter_offset;
+      params.philox_args = {seed, offset.load()};
+      offset += counter_offset;
     }
   }
 
@@ -387,6 +578,213 @@ auto dropout_add_ln_fwd(
 
   // return {z, x, dmask, mu, rsigma};
   return std::make_tuple(z, x, dmask, mu, rsigma);
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+auto dropout_add_ln_bwd_simplified(
+    const dllm::ContextCompute *context,
+    const at::Tensor<2> &dz,                     // BxSxhidden_size
+    c10::optional<const at::Tensor<2>> &dx_,     // BxSxhidden_size
+    const at::Tensor<2> &x,                      // BxSxhidden_size
+    c10::optional<const at::Tensor<2>> &dmask_,  // BxSxhidden_size
+    const at::Tensor<2> &mu,                     // BxS, FP32!
+    const at::Tensor<2> &rsigma,                 // BxS, FP32!
+    const at::Tensor<1> &gamma,                  // hidden_size
+    const float dropout_p,
+    const float rowscale_const,  // 1.0
+    const int64_t x0_numrows,    // 0
+    const bool has_residual, bool is_rms_norm = false) {
+  at::cuda::setCurrentCUDAStream(context->cudaStream);
+
+  auto itype = dz.scalar_type();
+  auto rtype = x.scalar_type();
+  auto wtype = gamma.scalar_type();
+  auto otype = itype;
+  auto ctype = torch::kFloat32;
+  auto mtype = torch::kUInt8;
+
+  if (dropout_p > 0.f) {
+    TORCH_CHECK(dmask_.has_value());
+  }
+
+  TORCH_CHECK(dz.dtype == otype);
+  TORCH_CHECK(mu.dtype == ctype);
+  TORCH_CHECK(rsigma.dtype == ctype);
+
+  TORCH_CHECK(x.is_cuda());
+  TORCH_CHECK(dz.is_cuda());
+  TORCH_CHECK(mu.is_cuda());
+  TORCH_CHECK(rsigma.is_cuda());
+  TORCH_CHECK(gamma.is_cuda());
+
+  // TORCH_CHECK(x.is_contiguous());
+  // TORCH_CHECK(dz.is_contiguous());
+
+  auto sizes = x.sizes();
+  TORCH_CHECK(sizes.size() == 2);
+  auto rows = sizes[0];
+  auto cols = sizes[1];
+  TORCH_CHECK(dz.dim() == 2);
+  TORCH_CHECK(dz.size<1>() == cols);
+  auto hidden_size = gamma.numel();
+  TORCH_CHECK(hidden_size == cols);
+
+  // c10::IntArrayRef does not own the storage, so we need to construct a
+  // vector. Otherwise just constructing IntArrayRef({blah}) will cause
+  // uninitialized memory because blah is then deallocated.
+  IntArrayRef2D x0_sizes_vec{rows, cols};
+  auto &x0_sizes = x0_sizes_vec;
+
+  if (dx_.has_value()) {
+    auto dx = dx_.value();
+    TORCH_CHECK(dx.dtype == rtype);
+    TORCH_CHECK(dx.is_cuda());
+    // TORCH_CHECK(dx.is_contiguous());
+    TORCH_CHECK(dx.sizes() == sizes);
+  }
+
+  if (dmask_.has_value()) {
+    auto dmask = dmask_.value();
+    TORCH_CHECK(dmask.dtype == mtype);
+    TORCH_CHECK(dmask.is_cuda());
+    // TORCH_CHECK(dmask.is_contiguous());
+    TORCH_CHECK(dmask.sizes() == x0_sizes);
+  }
+
+  TORCH_CHECK((hidden_size % 8 == 0) && (hidden_size <= 8192));
+
+  TORCH_CHECK(mu.numel() == rows);
+  TORCH_CHECK(mu.sizes() == rsigma.sizes());
+
+  TORCH_CHECK(gamma.numel() == cols);
+
+  // Otherwise the kernel will be launched from cuda:0 device
+  // Cast to char to avoid compiler warning about narrowing
+  // at::cuda::CUDAGuard device_guard{(char)dz.get_device()};
+
+  // auto opts = x.options();
+
+  // auto dx0 = torch::empty(x0_sizes, opts.dtype(itype));
+  // at::Tensor dresidual;
+  // if (has_residual) {
+  //   dresidual = torch::empty_like(x, opts.dtype(rtype));
+  // }
+  // auto dgamma = torch::empty_like(gamma);
+  // auto dbeta = torch::empty_like(gamma);
+  // at::Tensor dcolscale;
+  // if (colscale_.has_value()) {
+  //   dcolscale = torch::empty_like(colscale_.value());
+  // }
+
+  auto dx0 = torch::empty<dllm::CUDA>(x0_sizes, itype, context);
+  auto dresidual = [&]() {
+    if (has_residual) {
+      return torch::empty<dllm::CUDA>(x.layout, rtype, context);
+    }
+    return decltype(torch::empty<dllm::CUDA>(x.layout, rtype, context)){};
+  }();
+  auto dgamma = torch::empty_like<dllm::CUDA>(gamma, context);
+  auto dbeta = torch::empty_like<dllm::CUDA>(gamma, context);
+
+  layer_norm::LaunchParams<layer_norm::BwdParams> launch_params;
+  // launch_params.stream = at::cuda::getCurrentCUDAStream().stream();
+  launch_params.stream = context->cudaStream;
+  launch_params.props = at::cuda::getCurrentDeviceProperties();
+  TORCH_CHECK(dropout_p < 1.f);
+  launch_params.params.dropout_keep_p = 1.f - dropout_p;
+  launch_params.params.dresidual =
+      has_residual ? dresidual->data_ptr() : nullptr;
+  launch_params.params.rowscale = nullptr;
+  launch_params.params.colscale = nullptr;
+  launch_params.params.x0_subset = nullptr;
+  launch_params.params.z_subset = nullptr;
+
+  auto round_multiple = [](int x, int m) { return (x + m - 1) / m * m; };
+  const int multiple =
+      hidden_size <= 1536 ? 256 : (hidden_size <= 3072 ? 512 : 1024);
+  auto launcher = get_bwd_launcher(wtype, itype, rtype, otype, ctype,
+                                   round_multiple(hidden_size, multiple));
+
+  launcher(launch_params, true);
+
+  // auto dgamma_part = torch::empty(
+  //     {launch_params.params.ctas_per_col, hidden_size}, opts.dtype(ctype));
+  // auto dbeta_part = torch::empty(
+  //     {launch_params.params.ctas_per_col, hidden_size}, opts.dtype(ctype));
+  // at::Tensor dcolscale_part;
+  // if (colscale_.has_value()) {
+  //   dcolscale_part = torch::empty(
+  //       {launch_params.params.ctas_per_col, hidden_size}, opts.dtype(ctype));
+  // }
+
+  auto dgamma_part = torch::empty<dllm::CUDA>(
+      IntArrayRef2D{launch_params.params.ctas_per_col, hidden_size}, ctype,
+      context);
+  auto dbeta_part = torch::empty<dllm::CUDA>(
+      IntArrayRef2D{launch_params.params.ctas_per_col, hidden_size}, ctype,
+      context);
+
+  layer_norm::BwdParams &params = launch_params.params;
+  params.rows = rows;
+  params.cols = cols;
+  params.x = const_cast<void *>(x.data_ptr());
+  params.x0 = nullptr;
+  params.dmask =
+      dropout_p > 0.f ? const_cast<void *>(dmask_.value().data_ptr()) : nullptr;
+  params.mu = const_cast<void *>(mu.data_ptr());
+  params.rs = const_cast<void *>(rsigma.data_ptr());
+  params.gamma = const_cast<void *>(gamma.data_ptr());
+  params.dz = const_cast<void *>(dz.data_ptr());
+  params.dx =
+      dx_.has_value() ? const_cast<void *>(dx_.value().data_ptr()) : nullptr;
+  params.dx0 = dx0->data_ptr();
+  params.dbeta = dbeta->data_ptr();
+  params.dgamma = dgamma->data_ptr();
+  params.dcolscale = nullptr;
+  params.dbeta_part = dbeta_part->data_ptr();
+  params.dgamma_part = dgamma_part->data_ptr();
+  params.dcolscale_part = nullptr;
+  params.dropout_scale = 1.f / (1.f - dropout_p);
+  params.inverse_cols = 1.f / float(params.cols);
+  params.rowscale_const = rowscale_const;
+  params.is_rms_norm = is_rms_norm;
+
+  std::shared_ptr<dllm::Tensor<1>> workspace, barrier;
+  if (launch_params.barrier_size > 0) {
+    // TODO Any way to avoid this?
+    // barrier =
+    //     torch::zeros(launch_params.barrier_size, opts.dtype(torch::kInt32));
+    // workspace =
+    //     torch::empty(launch_params.workspace_bytes,
+    //     opts.dtype(torch::kChar));
+    // params.workspace = workspace.data_ptr();
+    // params.barrier = barrier.data_ptr<int>();
+    barrier = torch::empty<dllm::CUDA>(
+        IntArrayRef1D{
+            static_cast<dllm::TensorIndexType>(launch_params.barrier_size)},
+        torch::kInt32, context);
+    CHECK_CUDART(cudaMemsetAsync(barrier->data(), 0,
+                                 sizeof(int) * launch_params.barrier_size,
+                                 context->cudaStream));
+    workspace = torch::empty<dllm::CUDA>(
+        IntArrayRef1D{
+            static_cast<dllm::TensorIndexType>(launch_params.workspace_bytes)},
+        torch::kChar, context);
+  }
+
+  launcher(launch_params, false);
+
+  // std::vector<at::Tensor> result = {dx0,   dresidual,   dgamma,
+  //                                   dbeta, dgamma_part, dbeta_part};
+  // if (colscale_.has_value()) {
+  //   result.push_back(dcolscale);
+  //   result.push_back(dcolscale_part);
+  // }
+  // return result;
+
+  return std::make_tuple(dx0, dresidual, dgamma, dbeta, dgamma_part,
+                         dbeta_part);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -862,10 +1260,11 @@ auto dropout_add_ln_parallel_residual_fwd(
 
     // See Note [Acquire lock when using random generators]
     {
+      auto &[seed, offset] = dllm::random::getRandomState();
       // std::lock_guard<std::mutex> lock(gen->mutex_);
       // params.philox_args = gen->philox_cuda_state(counter_offset);
-      params.philox_args = {context->curandSeed, context->curandOffset.load()};
-      context->curandOffset += counter_offset;
+      params.philox_args = {seed, offset.load()};
+      offset += counter_offset;
     }
   }
 

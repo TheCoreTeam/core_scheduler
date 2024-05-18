@@ -19,9 +19,9 @@ struct ThreadPoolCompute {
 
   ~ThreadPoolCompute();
 
-  std::shared_ptr<FutureCompute> submit(TaskCompute &&task);
+  void submit(TaskCompute &&task);
 
-  std::shared_ptr<FutureCompute> submit(const TaskCompute &task) = delete;
+  void submit(const TaskCompute &task) = delete;
 
  private:
   std::vector<std::thread> threadVector{};

@@ -39,6 +39,11 @@ struct repeat_last_1_type<T, 0, Template, Args...> {
 
 using TensorIndexType = long;
 
+struct rwFuture {
+  TaskFuture rFuture{};
+  TaskFuture wFuture{};
+};
+
 template <int N_>
 struct Tensor {
   constexpr static int N = N_;
@@ -64,22 +69,24 @@ struct Tensor {
     tensor.layout = {};
   }
 
-  Tensor(const void *data, Layout layout, Dtype dtype, DeviceType deviceType,
-         std::shared_ptr<FutureCompute> future = {})
+  Tensor(const void *data, const Layout layout, const Dtype dtype,
+         const DeviceType deviceType,
+         const std::shared_ptr<rwFuture> &future = std::make_shared<rwFuture>())
       : data_{std::shared_ptr<const void>{data, [](const void *) {}}},
         layout{layout},
         dtype{dtype},
         deviceType{deviceType},
-        future{std::move(future)} {}
+        future{future} {}
 
   template <template <typename T> class SmartPointer, typename T>
-  Tensor(SmartPointer<T> &&data, Layout layout, Dtype dtype,
-         DeviceType deviceType, std::shared_ptr<FutureCompute> future = {})
+  Tensor(SmartPointer<T> &&data, const Layout layout, const Dtype dtype,
+         const DeviceType deviceType,
+         const std::shared_ptr<rwFuture> &future = std::make_shared<rwFuture>())
       : data_{std::forward<SmartPointer<T>>(data)},
         layout{layout},
         dtype{dtype},
         deviceType{deviceType},
-        future{std::move(future)} {}
+        future{future} {}
 
   void *data() { return const_cast<void *>(data_.get()); }
 
@@ -181,14 +188,14 @@ struct Tensor {
   // NEVER use them alone!
 #endif
 
+ private:
+  std::shared_ptr<const void> data_;
+
  public:
   Layout layout;
   Dtype dtype;
   DeviceType deviceType;
-  std::shared_ptr<FutureCompute> future;
-
- private:
-  std::shared_ptr<const void> data_;
+  std::shared_ptr<rwFuture> future;
 };
 
 template <template <int> class T, int N>

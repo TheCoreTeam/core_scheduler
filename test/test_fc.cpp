@@ -341,11 +341,15 @@ void TestThreadPoolComputeForwardT(dllm::ThreadPoolCompute &threadPool) {
   auto tensorX2D = dllm::util::flatten<2>(tensorX);
   auto task = dllm::compute::FcNoBias::forward(
       tensorY2D, tensorX2D, tensorW, toCublasComputeType<ComputeType>());
+  auto future = tensorY->future;
   tensorY.reset();
   tensorX.reset();
   tensorW.reset();
-  auto future = threadPool.submit(std::move(task));
-  future->wait();
+  threadPool.submit(std::move(task));
+  {
+    dllm::util::FutureGuard{future->rFuture};
+    dllm::util::FutureGuard{future->wFuture};
+  }
 
   CHECK_CUDART(cudaMemcpy(hostY.data(), ptrY,
                           sizeof(DataTypeOutput) * cute::size(layoutY),
@@ -423,11 +427,15 @@ void TestThreadPoolComputeBackwardWT(dllm::ThreadPoolCompute &threadPool) {
   auto tensorX2D = dllm::util::flatten<2>(tensorX);
   auto task = dllm::compute::FcNoBias::backwardW(
       tensorDW, tensorDY2D, tensorX2D, toCublasComputeType<ComputeType>());
+  auto future = tensorX->future;
   tensorDW.reset();
   tensorDY.reset();
   tensorX.reset();
-  auto future = threadPool.submit(std::move(task));
-  future->wait();
+  threadPool.submit(std::move(task));
+  {
+    dllm::util::FutureGuard{future->rFuture};
+    dllm::util::FutureGuard{future->wFuture};
+  }
 
   CHECK_CUDART(cudaMemcpy(hostDW.data(), ptrDW,
                           sizeof(DataTypeOutput) * cute::size(layoutDW),
@@ -505,11 +513,15 @@ void TestThreadPoolComputeBackwardXT(dllm::ThreadPoolCompute &threadPool) {
   auto tensorDY2D = dllm::util::flatten<2>(tensorDY);
   auto task = dllm::compute::FcNoBias::backwardX(
       tensorDX2D, tensorDY2D, tensorW, toCublasComputeType<ComputeType>());
+  auto future = tensorW->future;
   tensorDX.reset();
   tensorDY.reset();
   tensorW.reset();
-  auto future = threadPool.submit(std::move(task));
-  future->wait();
+  threadPool.submit(std::move(task));
+  {
+    dllm::util::FutureGuard{future->rFuture};
+    dllm::util::FutureGuard{future->wFuture};
+  }
 
   CHECK_CUDART(cudaMemcpy(hostDX.data(), ptrDX,
                           sizeof(DataTypeOutput) * cute::size(layoutDX),

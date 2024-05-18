@@ -1,6 +1,7 @@
 #include <curand_kernel.h>
 
 #include "compute/random.h"
+#include "random/random_internal.h"
 #include "util.h"
 
 namespace dllm::compute::Random {
@@ -53,29 +54,29 @@ __inline__ __attribute__((always_inline)) void autoDispatch(Dtype dtype,
 
 void gaussianKernel(const ContextCompute *context, Tensor1D &tensor) {
   const auto size = cute::size(tensor.layout);
+  auto &[seed, offset] = random::getRandomState();
   auto f = [&](auto dummy) {
     using T = std::remove_const_t<std::decay_t<decltype(dummy)>>;
     dim3 block(std::min<decltype(size)>(128, size));
     dim3 grid(util::ceilDiv(size, std::min<decltype(size)>(128, size)));
     gaussian<<<grid, block, 0, context->cudaStream>>>(
-        static_cast<T *>(tensor.data()), context->curandSeed,
-        context->curandOffset.load(), size);
+        static_cast<T *>(tensor.data()), seed, offset.load(), size);
   };
   autoDispatch(tensor.dtype, f);
-  context->curandOffset += size;
+  offset += size;
 }
 
 void uniformKernel(const ContextCompute *context, Tensor1D &tensor) {
   const auto size = cute::size(tensor.layout);
+  auto &[seed, offset] = random::getRandomState();
   auto f = [&](auto dummy) {
     using T = std::remove_const_t<std::decay_t<decltype(dummy)>>;
     dim3 block(std::min<decltype(size)>(128, size));
     dim3 grid(util::ceilDiv(size, std::min<decltype(size)>(128, size)));
     uniform<<<grid, block, 0, context->cudaStream>>>(
-        static_cast<T *>(tensor.data()), context->curandSeed,
-        context->curandOffset.load(), size);
+        static_cast<T *>(tensor.data()), seed, offset.load(), size);
   };
   autoDispatch(tensor.dtype, f);
-  context->curandOffset += size;
+  offset += size;
 }
 }  // namespace dllm::compute::Random

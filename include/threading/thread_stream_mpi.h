@@ -13,14 +13,13 @@
 
 namespace dllm {
 struct ThreadStreamMpi {
-  ThreadStreamMpi(ContextMpi context,
-                  std::optional<const int> bindingMap = {});
+  ThreadStreamMpi(ContextMpi context, std::optional<const int> bindingMap = {});
 
   ~ThreadStreamMpi();
 
-  std::shared_ptr<FutureMpi> submit(TaskMpi &&task);
+  void submit(TaskMpi &&task);
 
-  std::shared_ptr<FutureMpi> submit(const TaskMpi &task) = delete;
+  void submit(const TaskMpi &task) = delete;
 
  private:
   std::thread thread{};

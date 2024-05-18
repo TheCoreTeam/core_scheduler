@@ -73,7 +73,7 @@ void TestDLLMGelu::TestRoutine(const dllm::TensorIndexType size) {
             erf(static_cast<TargetType>(x) * inv_sqrt_2));
   });
 
-  auto tast = dllm::compute::GeLU(tensorOutput, tensorInput);
+  auto tast = dllm::compute::GeLU::forward(tensorOutput, tensorInput);
   tast(&context);
 
   CHECK_CUDART(cudaMemcpy(hostOutput.data(), DeviceOutput,

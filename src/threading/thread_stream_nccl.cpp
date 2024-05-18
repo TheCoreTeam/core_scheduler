@@ -8,12 +8,12 @@
 
 namespace dllm {
 namespace {
-void setThreadAffinity(std::thread &th, int coreId) {
+void setThreadAffinity(std::thread &th, const int coreId) {
   cpu_set_t cpuset;
   CPU_ZERO(&cpuset);
   CPU_SET(coreId, &cpuset);
 
-  int rc =
+  const int rc =
       pthread_setaffinity_np(th.native_handle(), sizeof(cpu_set_t), &cpuset);
   if (rc != 0) {
     SPDLOG_LOGGER_CRITICAL(&logger(), "core binding error with code {}", rc);
@@ -24,13 +24,14 @@ void threadTask(const ncclUniqueId id, const int ncclWorldSize,
                 const int ncclRank, const int deviceRank,
                 std::queue<TaskNccl> *taskQueue, std::mutex *queueMutex,
                 std::condition_variable *cv, std::mutex *cvMutex,
-                std::atomic<bool> *shutDown) {
+                const std::atomic<bool> *shutDown) {
   ContextNccl context;
   CHECK_CUDART(cudaSetDevice(deviceRank));
   CHECK_CUDART(
       cudaStreamCreateWithFlags(&context.cudaStream, cudaStreamNonBlocking));
   CHECK_NCCL(ncclCommInitRank(&context.ncclComm, ncclWorldSize, id, ncclRank));
   context.ncclRank = ncclRank;
+  context.commSize = ncclWorldSize;
   while (!shutDown->load()) {
     TaskNccl task;
     std::unique_lock lock{*queueMutex};
@@ -47,6 +48,9 @@ void threadTask(const ncclUniqueId id, const int ncclWorldSize,
                [&] { return shutDown->load() || !taskQueue->empty(); });
     }
   }
+  std::unique_lock lock{*queueMutex};
+  *taskQueue = {};
+  lock.unlock();
   CHECK_NCCL(ncclCommDestroy(context.ncclComm));
   CHECK_CUDART(cudaStreamDestroy(context.cudaStream));
 }
@@ -61,13 +65,11 @@ ThreadStreamNccl::~ThreadStreamNccl() {
   thread.join();
 }
 
-std::shared_ptr<FutureNccl> ThreadStreamNccl::submit(TaskNccl &&task) {
-  auto future = task.get_future();
+void ThreadStreamNccl::submit(TaskNccl &&task) {
   std::unique_lock lock{queueMutex};
   taskQueue.push(std::move(task));
   lock.unlock();
   cv.notify_one();
-  return std::make_shared<FutureNccl>(std::move(future));
 }
 
 ThreadStreamNccl::ThreadStreamNccl(const ncclUniqueId id,

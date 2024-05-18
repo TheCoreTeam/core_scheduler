@@ -3,21 +3,25 @@
 #include "threading/task_compute.h"
 
 namespace dllm::util {
-template <typename Future>
-__inline__ __attribute__((always_inline)) void waitFutureIfValid(
-    const std::shared_ptr<Future> &future) {
-  if (future != nullptr && future->valid()) {
-    future->wait();
+struct FutureGuard {
+  TaskFuture &future;
+  explicit FutureGuard(TaskFuture &future) : future{future} {
+    if (future.valid()) {
+      future.wait();
+    }
   }
-}
 
-template <typename Future>
-__inline__ __attribute__((always_inline)) void waitFutureIfValid(
-    Future &&future) {
-  if (future.valid()) {
-    future.wait();
+  explicit FutureGuard(const std::shared_ptr<TaskFuture> &future)
+      : future{*future} {
+    if (future->valid()) {
+      future->wait();
+    }
   }
-}
+
+  ~FutureGuard() { future = {}; }
+
+  void reset() const { future = {}; }
+};
 
 constexpr __inline__ __attribute__((always_inline)) int ceilDiv(int a, int b) {
   return (a + b - 1) / b;

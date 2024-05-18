@@ -64,7 +64,7 @@ void TestDLLMRelu::TestRoutine(const dllm::TensorIndexType size) {
   hostRef =
       hostInput.unaryExpr([](Element x) { return std::max<Element>(0, x); });
 
-  auto tast = dllm::compute::relu(tensorInput, tensorOutput);
+  auto tast = dllm::compute::ReLU::forward(tensorInput, tensorOutput);
   tast(&context);
 
   CHECK_CUDART(cudaMemcpy(hostOutput.data(), DeviceOutput,
