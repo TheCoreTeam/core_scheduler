@@ -68,6 +68,7 @@ __device__ void store128cg(ElementType* target, Packed128<ElementType> value) {
 template <typename floatX>
 struct SoftmaxParams {
   floatX Scale;
+  floatX InvScale;
   floatX Offset;
 };
 
@@ -184,7 +185,8 @@ __device__ auto prepare_softmax_blockwide3(const int idx, const floatX* inp,
   UpperType block_sumval = blockReduce(warpReduceSum<UpperType>, thread_sumval);
 
   // return the softmax parameters
-  return SoftmaxParams<UpperType>{1.f / block_sumval, block_maxval};
+  return SoftmaxParams<UpperType>{1.f / block_sumval, block_sumval,
+                                  block_maxval};
 }
 
 // From LLM.c
@@ -213,10 +215,12 @@ __global__ void __launch_bounds__(1024, MAX_1024_THREADS_BLOCKS)
 
   // calculate the probability needed for the loss and update (single-threaded)
   if (threadIdx.x == 0) {
-    UpperType prob =
-        std::exp(static_cast<UpperType>(logits[idx * P + ix]) - sp.Offset) *
-        sp.Scale;
-    losses[idx] = -std::log(prob);
+    // UpperType prob =
+    //     std::exp(static_cast<UpperType>(logits[idx * P + ix]) - sp.Offset) *
+    //     sp.Scale;
+    // losses[idx] = -std::log(prob);
+    losses[idx] = -(static_cast<UpperType>(logits[idx * P + ix]) - sp.Offset -
+                    std::log(sp.InvScale));
   }
 
   // calculate the gradients directly, saves bandwidth from probs during
