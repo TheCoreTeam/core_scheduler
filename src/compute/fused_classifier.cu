@@ -275,7 +275,7 @@ class NvtxRange {
  public:
   NvtxRange(const char* s) { nvtxRangePush(s); }
   NvtxRange(const std::string& base_str, int number) {
-    const std::string range_string = std::format("{} {}", base_str, number);
+    const std::string range_string = fmt::format("{} {}", base_str, number);
     nvtxRangePush(range_string.c_str());
   }
   ~NvtxRange() { nvtxRangePop(); }
