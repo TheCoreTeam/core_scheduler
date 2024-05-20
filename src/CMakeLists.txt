@@ -46,7 +46,9 @@ else ()
     add_library(dllm_flash_attention_plugin INTERFACE)
 endif ()
 
+add_subdirectory(dataset)
+
 add_library(dllm INTERFACE)
 
-target_link_libraries(dllm INTERFACE dllm_core dllm_flash_attention_plugin)
+target_link_libraries(dllm INTERFACE dllm_core dllm_flash_attention_plugin dllm_dataset)
 target_link_libraries(dllm INTERFACE nvidia::cutlass::cutlass)
