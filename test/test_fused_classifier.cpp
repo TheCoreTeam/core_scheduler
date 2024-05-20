@@ -126,6 +126,7 @@ void TestT(const dllm::ContextCompute &context) {
                           cudaMemcpyHostToDevice));
   auto targetsTensor = std::make_shared<dllm::Tensor2D>(
       targetsDevicePtr, targetsLayout, dllm::toDtype<int>(), dllm::CUDA);
+  CHECK_CUDART(cudaDeviceSynchronize());
 
   {
     auto task = dllm::compute::FusedClassifier::call(logitsTensor, lossesTensor,
