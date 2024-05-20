@@ -168,6 +168,7 @@ __device__ auto prepare_softmax_blockwide3(const int idx, const floatX* inp,
     x128 packed_x = load128(
         x +
         i * x128::size);  // load and keep in cache until fused_classifier loop
+#pragma unroll
     for (int k = 0; k < x128::size; ++k) {
       UpperType v = packed_x[k];
       UpperType old_maxval = thread_maxval;

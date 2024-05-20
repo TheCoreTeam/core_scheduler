@@ -16,9 +16,7 @@ namespace Eigen::internal {
 template <>
 struct scalar_random_op<nv_half> {
   EIGEN_EMPTY_STRUCT_CTOR(scalar_random_op)
-  inline const nv_half operator()() const {
-    return static_cast<nv_half>(random<float>());
-  }
+  nv_half operator()() const { return static_cast<nv_half>(random<float>()); }
 };
 }  // namespace Eigen::internal
 
@@ -147,8 +145,6 @@ void TestT(const dllm::ContextCompute &context) {
                           sizeof(Dtype) * cute::cosize(logitsTensor->layout),
                           cudaMemcpyDeviceToHost));
   CHECK_CUDART(cudaDeviceSynchronize());
-  std::cout << losses[0] << std::endl;
-  std::cout << lossesRef[0] << std::endl;
   double atol = 1e-5;
   if constexpr (std::is_same_v<Dtype, nv_half>) {
     atol = 2e-2;
