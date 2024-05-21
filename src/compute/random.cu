@@ -60,10 +60,9 @@ void gaussianKernel(const ContextCompute *context, Tensor1D &tensor) {
     dim3 block(std::min<decltype(size)>(128, size));
     dim3 grid(util::ceilDiv(size, std::min<decltype(size)>(128, size)));
     gaussian<<<grid, block, 0, context->cudaStream>>>(
-        static_cast<T *>(tensor.data()), seed, offset.load(), size);
+        static_cast<T *>(tensor.data()), seed, offset.fetch_add(size), size);
   };
   autoDispatch(tensor.dtype, f);
-  offset += size;
 }
 
 void uniformKernel(const ContextCompute *context, Tensor1D &tensor) {
@@ -74,9 +73,8 @@ void uniformKernel(const ContextCompute *context, Tensor1D &tensor) {
     dim3 block(std::min<decltype(size)>(128, size));
     dim3 grid(util::ceilDiv(size, std::min<decltype(size)>(128, size)));
     uniform<<<grid, block, 0, context->cudaStream>>>(
-        static_cast<T *>(tensor.data()), seed, offset.load(), size);
+        static_cast<T *>(tensor.data()), seed, offset.fetch_add(size), size);
   };
   autoDispatch(tensor.dtype, f);
-  offset += size;
 }
 }  // namespace dllm::compute::Random

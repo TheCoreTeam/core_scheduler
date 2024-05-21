@@ -1,22 +1,35 @@
 #pragma once
-#include <arrow/api.h>
-
+#include <cstdint>
 #include <memory>
+#include <vector>
 
 namespace dllm::dataset {
 struct LlmDataset {
-  std::shared_ptr<const arrow::Table> table;
+  LlmDataset() = delete;
+
+  static std::shared_ptr<const LlmDataset> create(
+      const std::vector<std::string> &path);
+
+  struct Element {
+    std::int64_t input_id;
+    std::int64_t target;
+  };
 
   struct RowAccessor {
     RowAccessor() = delete;
 
-    template <typename T>
-    [[nodiscard]] T accessCol(std::size_t colIdx) const;
+    [[nodiscard]] Element accessCol(std::int64_t colIdx) const;
+
+    std::int64_t cols() const;
 
     ~RowAccessor();
   };
 
   [[nodiscard]] std::shared_ptr<const RowAccessor> accessRow(
-      std::size_t rowIdx) const;
+      std::int64_t rowIdx) const;
+
+  std::int64_t rows() const;
+
+  std::int64_t cols() const;
 };
 }  // namespace dllm::dataset

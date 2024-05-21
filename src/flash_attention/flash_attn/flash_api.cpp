@@ -634,8 +634,7 @@ void forward(
     // See Note [Acquire lock when using random generators]
     // std::lock_guard<std::mutex> lock(gen->mutex_);
     // params.philox_args = gen->philox_cuda_state(counter_offset);
-    params.philox_args = {seed, offset.load()};
-    offset += counter_offset;
+    params.philox_args = {seed, offset.fetch_add(counter_offset)};
   }
 
   // set_params_alibi(params, alibi_slopes_, batch_size, num_heads);

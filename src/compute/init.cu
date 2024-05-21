@@ -50,9 +50,8 @@ void kaimingNormKernel(const ContextCompute* context, Tensor2D& y,
     dim3 block(std::min<decltype(size)>(128, size));
     dim3 grid(util::ceilDiv(size, std::min<decltype(size)>(128, size)));
     kaimingNorm<<<grid, block, 0, context->cudaStream>>>(
-        static_cast<T*>(y.data()), seed, offset.load(), stddev, size);
+        static_cast<T*>(y.data()), seed, offset.fetch_add(size), stddev, size);
   };
   autoDispatch(y.dtype, f);
-  offset += size;
 }
 }  // namespace dllm::compute::Random
