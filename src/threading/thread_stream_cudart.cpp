@@ -27,6 +27,7 @@ void threadTask(const int deviceRank, std::queue<TaskCudart> *taskQueue,
   CHECK_CUDART(cudaSetDevice(deviceRank));
   CHECK_CUDART(
       cudaStreamCreateWithFlags(&context.cudaStream, cudaStreamNonBlocking));
+  CHECK_CUDART(cudaDeviceGetDefaultMemPool(&context.memPool, deviceRank));
   while (!shutDown->load()) {
     TaskCudart task;
     std::unique_lock lock{*queueMutex};

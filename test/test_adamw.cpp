@@ -71,13 +71,13 @@ void TestDLLMAdamW::TestRoutine(const dllm::TensorIndexType size) {
   {
     auto task = dllm::memory::allocateRowMajor(
         xTensor, {size}, dllm::toDtype<Element>(), dllm::CUDA);
-    tp.submit(std::move(task));
+    h2d.submit(std::move(task));
   }
   std::shared_ptr<dllm::Tensor1D> dxTensor;
   {
     auto task = dllm::memory::allocateRowMajor(
         dxTensor, {size}, dllm::toDtype<Element>(), dllm::CUDA);
-    tp.submit(std::move(task));
+    h2d.submit(std::move(task));
   }
 
   using AdamW = dllm::optimizer::AdamW<>;
