@@ -1,4 +1,5 @@
 #include "memory/malloc_from_mem_internal.h"
+#include "tensor_friend.h"
 
 namespace dllm::memory {
 void mallocFromMemPool(const std::shared_ptr<Tensor1D> &x,
@@ -11,7 +12,7 @@ void mallocFromMemPool(const std::shared_ptr<Tensor1D> &x,
         &logger(),
         "This is a CUDA function but the tensor is not a CUDA tensor");
   }
-  x->resetData(std::shared_ptr<void>{
+  auto p = Tensor1D::DataPtr{
       [&] {
         void *ptr;
         CHECK_CUDART(cudaMallocAsync(
@@ -19,12 +20,15 @@ void mallocFromMemPool(const std::shared_ptr<Tensor1D> &x,
         CHECK_CUDART(cudaStreamSynchronize(stream));
         return ptr;
       }(),
-      [=](void *ptr) { CHECK_CUDART(cudaFreeAsync(ptr, stream)); }});
+      [=](const void *ptr) {
+        CHECK_CUDART(cudaFreeAsync(const_cast<void *>(ptr), stream));
+      }};
+  TensorFriend::resetTensorData(x, std::move(p));
 }
 
-std::shared_ptr<void> mallocFromMemPool(const size_t size, const Dtype dtype,
-                                        const ContextCompute *context) {
-  return std::shared_ptr<void>{
+Tensor1D::DataPtr mallocFromMemPool(const size_t size, const Dtype dtype,
+                                    const ContextCompute *context) {
+  return {
       [&] {
         void *ptr;
         CHECK_CUDART(cudaMallocFromPoolAsync(
@@ -32,8 +36,8 @@ std::shared_ptr<void> mallocFromMemPool(const size_t size, const Dtype dtype,
         CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
         return ptr;
       }(),
-      [stream = context->cudaStream](void *ptr) {
-        CHECK_CUDART(cudaFreeAsync(ptr, stream));
+      [stream = context->cudaStream](const void *ptr) {
+        CHECK_CUDART(cudaFreeAsync(const_cast<void *>(ptr), stream));
       }};
 }
 }  // namespace dllm::memory

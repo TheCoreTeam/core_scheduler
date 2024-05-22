@@ -44,6 +44,8 @@ struct rwFuture {
   TaskFuture wFuture{};
 };
 
+struct TensorFriend;
+
 template <int N_>
 struct Tensor {
   constexpr static int N = N_;
@@ -72,7 +74,8 @@ struct Tensor {
   Tensor(const void *data, const Layout layout, const Dtype dtype,
          const DeviceType deviceType,
          const std::shared_ptr<rwFuture> &future = std::make_shared<rwFuture>())
-      : data_{std::shared_ptr<const void>{data, [](const void *) {}}},
+      : data_{std::make_shared<DataPtr>(
+            DataPtr{data, DataPtrDeleter{[](const void *) {}}})},
         layout{layout},
         dtype{dtype},
         deviceType{deviceType},
@@ -88,14 +91,9 @@ struct Tensor {
         deviceType{deviceType},
         future{future} {}
 
-  void *data() { return const_cast<void *>(data_.get()); }
+  void *data() { return const_cast<void *>(data_.get()->get()); }
 
-  const void *data() const { return data_.get(); }
-
-  template <template <typename T> class SmartPointer, typename T>
-  void resetData(SmartPointer<T> &&data) {
-    data_ = std::forward<SmartPointer<T>>(data);
-  }
+  const void *data() const { return data_.get()->get(); }
 
 #ifdef DLLM_BUILD_FLASH_ATTENTION
   // following functions are internal use to align with pytorch api
@@ -166,7 +164,7 @@ struct Tensor {
       const auto size = cute::cosize(layout);
       if constexpr (argsIsContextComputPointer) {
         const ContextCompute *context = std::get<0>(std::tuple<Args>{args}...);
-        std::shared_ptr<void> data{
+        DataPtr data{
             [&] {
               void *ptr;
               CHECK_CUDART(cudaMallocFromPoolAsync(&ptr, toByte(dtype) * size,
@@ -175,10 +173,11 @@ struct Tensor {
               CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
               return ptr;
             }(),
-            [stream = context->cudaStream](void *ptr) {
-              CHECK_CUDART(cudaFreeAsync(ptr, stream));
+            [stream = context->cudaStream](const void *ptr) {
+              CHECK_CUDART(cudaFreeAsync(const_cast<void *>(ptr), stream));
             }};
-        return std::make_shared<Tensor>(std::move(data), layout, dtype, CUDA);
+        return std::make_shared<Tensor>(
+            std::make_shared<DataPtr>(std::move(data)), layout, dtype, CUDA);
       } else {
       }
     } else {
@@ -188,8 +187,14 @@ struct Tensor {
   // NEVER use them alone!
 #endif
 
+  friend TensorFriend;
+
+ public:
+  using DataPtrDeleter = std::function<void(const void *)>;
+  using DataPtr = std::unique_ptr<const void, DataPtrDeleter>;
+
  private:
-  std::shared_ptr<const void> data_;
+  std::shared_ptr<DataPtr> data_;
 
  public:
   Layout layout;

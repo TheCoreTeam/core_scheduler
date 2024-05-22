@@ -1,5 +1,6 @@
 #include "memory/allocate.h"
 
+#include "tensor_friend.h"
 #include "util.h"
 
 namespace dllm::memory {
@@ -15,7 +16,7 @@ TaskCudart allocateRowMajor(std::shared_ptr<Tensor<N>> &p,
                              const ContextCudart *context) mutable {
     util::FutureGuard rGuard{future.rFuture};
     util::FutureGuard wGuard{future.wFuture};
-    p->resetData(std::shared_ptr<const void>{
+    auto ptr = typename Tensor<N>::DataPtr{
         [&] {
           void *ptr;
           CHECK_CUDART(cudaMallocFromPoolAsync(
@@ -23,9 +24,10 @@ TaskCudart allocateRowMajor(std::shared_ptr<Tensor<N>> &p,
           CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
           return ptr;
         }(),
-        [stream = context->cudaStream](void *ptr) {
-          CHECK_CUDART(cudaFreeAsync(ptr, stream));
-        }});
+        [stream = context->cudaStream](const void *ptr) {
+          CHECK_CUDART(cudaFreeAsync(const_cast<void *>(ptr), stream));
+        }};
+    TensorFriend::resetTensorData(p, std::move(ptr));
   }};
 
   p->future->wFuture = task.get_future();
