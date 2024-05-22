@@ -1,5 +1,7 @@
 #include "memory/allocate.h"
 
+#include "util.h"
+
 namespace dllm::memory {
 template <int N>
   requires(N >= 1 && N <= 4)
@@ -9,20 +11,22 @@ TaskCompute allocateRowMajor(std::shared_ptr<Tensor<N>> &p,
   const auto layout = cute::make_layout(shape, cute::GenRowMajor{});
   p = std::make_shared<Tensor<N>>(nullptr, layout, dtype, deviceType);
   const std::size_t sizeInByte = toByte(dtype) * cute::cosize(layout);
-  auto task = TaskCompute{
-      [sizeInByte = sizeInByte, p = p](const ContextCompute *context) mutable {
-        p->resetData(std::shared_ptr<const void>{
-            [&] {
-              void *ptr;
-              CHECK_CUDART(cudaMallocFromPoolAsync(
-                  &ptr, sizeInByte, context->memPool, context->cudaStream));
-              CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
-              return ptr;
-            }(),
-            [stream = context->cudaStream](void *ptr) {
-              CHECK_CUDART(cudaFreeAsync(ptr, stream));
-            }});
-      }};
+  auto task = TaskCompute{[sizeInByte = sizeInByte, p = p, future = *p->future](
+                              const ContextCompute *context) mutable {
+    util::FutureGuard rGuard{future.rFuture};
+    util::FutureGuard wGuard{future.wFuture};
+    p->resetData(std::shared_ptr<const void>{
+        [&] {
+          void *ptr;
+          CHECK_CUDART(cudaMallocFromPoolAsync(
+              &ptr, sizeInByte, context->memPool, context->cudaStream));
+          CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
+          return ptr;
+        }(),
+        [stream = context->cudaStream](void *ptr) {
+          CHECK_CUDART(cudaFreeAsync(ptr, stream));
+        }});
+  }};
 
   p->future->wFuture = task.get_future();
   return task;
