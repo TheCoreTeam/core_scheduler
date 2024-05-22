@@ -4,26 +4,27 @@
 
 #include <fstream>
 
-#include "compute/residual.h"
-#include "logger.h"
-#include "tensor.h"
+#include "compute/add.h"
 
 template <typename T>
-struct TypeToTorch;
+struct TypeTrait;
 
 template <>
-struct TypeToTorch<float> {
+struct TypeTrait<float> {
   static constexpr at::ScalarType dtype = torch::kFloat;
+  static constexpr std::string label = "float";
 };
 
 template <>
-struct TypeToTorch<nv_half> {
+struct TypeTrait<nv_half> {
   static constexpr at::ScalarType dtype = torch::kHalf;
+  static constexpr std::string label = "half";
 };
 
 template <>
-struct TypeToTorch<double> {
+struct TypeTrait<double> {
   static constexpr at::ScalarType dtype = torch::kDouble;
+  static constexpr std::string label = "double";
 };
 
 template <typename Element>
@@ -36,15 +37,15 @@ class TestDLLMResidual : public ::testing::Test {
   const dllm::TensorIndexType K = 128;
 
   torch::Device device = torch::kCPU;
-  torch::Dtype dtype = TypeToTorch<Element>::dtype;
+  torch::Dtype dtype = TypeTrait<Element>::dtype;
 
-  at::Tensor input;
-  at::Tensor residual;
+  at::Tensor A;
+  at::Tensor B;
   at::Tensor output;
 
   at::Tensor grad_output;
-  at::Tensor grad_input;
-  at::Tensor grad_residual;
+  at::Tensor grad_A;
+  at::Tensor grad_B;
 
   void *d_grad_output;
   std::shared_ptr<dllm::Tensor3D> tensor_grad_output;
@@ -60,24 +61,24 @@ template <typename Element>
 void TestDLLMResidual<Element>::SetUp() {
   CHECK_CUDART(
       cudaStreamCreateWithFlags(&context.cudaStream, cudaStreamNonBlocking));
-  //    CHECK_CUDART(cudaDeviceGetDefaultMemPool(&context.memPool, 0));
+
   torch::manual_seed(2024);
 
-  input = torch::rand(
+  A = torch::rand(
       {M, N, K},
       torch::TensorOptions().dtype(dtype).device(device).requires_grad(true));
 
-  residual = torch::rand(
+  B = torch::rand(
       {M, N, K},
       torch::TensorOptions().dtype(dtype).device(device).requires_grad(true));
 
-  output = input + residual;
+  output = A + B;
 
-  grad_output = torch::rand_like(input);
+  grad_output = torch::rand_like(A);
   output.backward(grad_output, true);
 
-  grad_input = input.grad();
-  grad_residual = residual.grad();
+  grad_A = A.grad();
+  grad_B = B.grad();
 
   auto shape = cute::make_shape(M, N, K);
   auto layout = cute::make_layout(shape, cute::GenRowMajor{});
@@ -107,12 +108,12 @@ void TestDLLMResidual<Element>::TestForwardRoutine() {
   void *d_input, *d_residual, *d_output;
 
   CHECK_CUDART(cudaMalloc(&d_input, sizeof(Element) * cute::size(layout)));
-  CHECK_CUDART(cudaMemcpy(d_input, input.data_ptr(),
+  CHECK_CUDART(cudaMemcpy(d_input, A.data_ptr(),
                           sizeof(Element) * cute::size(layout),
                           cudaMemcpyHostToDevice));
 
   CHECK_CUDART(cudaMalloc(&d_residual, sizeof(Element) * cute::size(layout)));
-  CHECK_CUDART(cudaMemcpy(d_residual, residual.data_ptr(),
+  CHECK_CUDART(cudaMemcpy(d_residual, B.data_ptr(),
                           sizeof(Element) * cute::size(layout),
                           cudaMemcpyHostToDevice));
 
@@ -129,11 +130,11 @@ void TestDLLMResidual<Element>::TestForwardRoutine() {
   auto tensor_output = std::make_shared<dllm::Tensor3D>(
       d_output, layout, dllm::toDtype<Element>(), dllm::CUDA);
 
-  auto task_forward = dllm::compute::Residual::forward(
-      tensor_input, tensor_residual, tensor_output);
+  auto task_forward =
+      dllm::compute::Add::forward(tensor_output, tensor_input, tensor_residual);
   task_forward(&context);
 
-  auto my_output = torch::empty_like(input);
+  auto my_output = torch::empty_like(A);
 
   CHECK_CUDART(cudaMemcpy(my_output.data_ptr(), d_output,
                           sizeof(Element) * cute::size(layout),
@@ -145,10 +146,11 @@ void TestDLLMResidual<Element>::TestForwardRoutine() {
   ASSERT_TRUE(is_approx_output);
 
   if (!is_approx_output) {
-    std::ofstream file_output_ref("output.txt");
+    std::ofstream file_output_ref("output" + TypeTrait<Element>::label +
+                                  ".txt");
     file_output_ref << output << std::endl;
     file_output_ref.close();
-    std::ofstream file_output("my_output.txt");
+    std::ofstream file_output("my_output" + TypeTrait<Element>::label + ".txt");
     file_output << my_output << std::endl;
     file_output.close();
   }
@@ -180,12 +182,12 @@ void TestDLLMResidual<Element>::TestBackwardRoutine() {
   auto tensor_grad_residual = std::make_shared<dllm::Tensor3D>(
       d_grad_residual, layout, dllm::toDtype<Element>(), dllm::CUDA);
 
-  auto task_backward = dllm::compute::Residual::backward(
-      tensor_grad_output, tensor_grad_input, tensor_grad_residual);
+  auto task_backward = dllm::compute::Add::backward(
+      tensor_grad_input, tensor_grad_residual, tensor_grad_output);
   task_backward(&context);
 
-  auto my_grad_input = torch::empty_like(input);
-  auto my_grad_residual = torch::empty_like(input);
+  auto my_grad_input = torch::empty_like(A);
+  auto my_grad_residual = torch::empty_like(A);
 
   CHECK_CUDART(cudaMemcpy(my_grad_input.data_ptr(), d_grad_input,
                           sizeof(Element) * cute::size(layout),
@@ -195,23 +197,27 @@ void TestDLLMResidual<Element>::TestBackwardRoutine() {
                           cudaMemcpyDeviceToHost));
   CHECK_CUDART(cudaDeviceSynchronize());
 
-  auto is_approx_grad_input = grad_input.allclose(my_grad_input);
-  auto is_approx_grad_residual = grad_residual.allclose(my_grad_residual);
+  auto is_approx_grad_input = grad_A.allclose(my_grad_input);
+  auto is_approx_grad_residual = grad_B.allclose(my_grad_residual);
 
   if (!is_approx_grad_input) {
-    std::ofstream file_weight_ref("grad_input.txt");
-    file_weight_ref << grad_input << std::endl;
+    std::ofstream file_weight_ref("grad_input" + TypeTrait<Element>::label +
+                                  ".txt");
+    file_weight_ref << grad_A << std::endl;
     file_weight_ref.close();
-    std::ofstream file_weight("my_grad_input.txt");
+    std::ofstream file_weight("my_grad_input" + TypeTrait<Element>::label +
+                              ".txt");
     file_weight << my_grad_input << std::endl;
     file_weight.close();
   }
 
   if (!is_approx_grad_residual) {
-    std::ofstream file_bias_ref("grad_residual.txt");
-    file_bias_ref << grad_residual << std::endl;
+    std::ofstream file_bias_ref("grad_residual" + TypeTrait<Element>::label +
+                                ".txt");
+    file_bias_ref << grad_B << std::endl;
     file_bias_ref.close();
-    std::ofstream file_bias("my_grad_residual.txt");
+    std::ofstream file_bias("my_grad_residual" + TypeTrait<Element>::label +
+                            ".txt");
     file_bias << my_grad_residual << std::endl;
     file_bias.close();
   }
@@ -224,6 +230,7 @@ void TestDLLMResidual<Element>::TestBackwardRoutine() {
 
 using ElementTypes = ::testing::Types<float, nv_half, double>;
 TYPED_TEST_SUITE(TestDLLMResidual, ElementTypes);
+
 TYPED_TEST(TestDLLMResidual, TestVaryingElementTypes) {
   this->TestForwardRoutine();
   this->TestBackwardRoutine();

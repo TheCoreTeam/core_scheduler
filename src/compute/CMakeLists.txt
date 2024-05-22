@@ -13,7 +13,7 @@ set(DLLM_COMPUTE_SRCS
         ${CMAKE_CURRENT_SOURCE_DIR}/matmul.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/fused_classifier.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/fused_classifier.cu
-        ${CMAKE_CURRENT_SOURCE_DIR}/residual.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/residual.cu
+        ${CMAKE_CURRENT_SOURCE_DIR}/add.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/add.cu
 )
 set(DLLM_COMPUTE_SRCS ${DLLM_COMPUTE_SRCS} PARENT_SCOPE)

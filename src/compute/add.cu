@@ -5,7 +5,7 @@
 #include "tensor.h"
 #include "util.h"
 
-namespace dllm::compute::Residual {
+namespace dllm::compute::Add {
 namespace {
 template <typename Fn>
 __inline__ __attribute__((always_inline)) void autoDispatch(Dtype dtype,
@@ -36,8 +36,8 @@ struct element_add {
   }
 };
 
-void forwardKernel(cudaStream_t stream, const Tensor3D& A, const Tensor3D& B,
-                   Tensor3D& C) {
+void forwardKernel(cudaStream_t stream, Tensor3D& output, const Tensor3D& A,
+                   const Tensor3D& B) {
   const auto size = cute::size(A.layout);
 
   auto f = [&](auto dummy) {
@@ -46,7 +46,7 @@ void forwardKernel(cudaStream_t stream, const Tensor3D& A, const Tensor3D& B,
         static_cast<const Element*>(A.data()));
     thrust::device_ptr<const Element> dev_ptr_B(
         static_cast<const Element*>(B.data()));
-    thrust::device_ptr<Element> dev_ptr_C(static_cast<Element*>(C.data()));
+    thrust::device_ptr<Element> dev_ptr_C(static_cast<Element*>(output.data()));
     thrust::transform(thrust::cuda::par.on(stream), dev_ptr_A, dev_ptr_A + size,
                       dev_ptr_B, dev_ptr_C, element_add<Element>());
   };
@@ -54,23 +54,18 @@ void forwardKernel(cudaStream_t stream, const Tensor3D& A, const Tensor3D& B,
   autoDispatch(A.dtype, f);
 }
 
-void backwardKernel(cudaStream_t stream, const Tensor3D& grad_output,
-                    Tensor3D& grad_A, Tensor3D& grad_B) {
+void backwardKernel(cudaStream_t stream, Tensor3D& grad_A, Tensor3D& grad_B,
+                    const Tensor3D& grad_output) {
   const auto size = cute::size(grad_output.layout);
 
   auto f = [&](auto dummy) {
     using Element = std::remove_const_t<std::decay_t<decltype(dummy)>>;
-    thrust::device_ptr<const Element> dev_ptr_grad_output(
-        static_cast<const Element*>(grad_output.data()));
-    thrust::device_ptr<Element> dev_ptr_grad_A(
-        static_cast<Element*>(grad_A.data()));
-    thrust::device_ptr<Element> dev_ptr_grad_B(
-        static_cast<Element*>(grad_B.data()));
-
-    thrust::copy(thrust::cuda::par.on(stream), dev_ptr_grad_output,
-                 dev_ptr_grad_output + size, dev_ptr_grad_A);
-    thrust::copy(thrust::cuda::par.on(stream), dev_ptr_grad_output,
-                 dev_ptr_grad_output + size, dev_ptr_grad_B);
+    CHECK_CUDART(cudaMemcpyAsync(grad_A.data(), grad_output.data(),
+                                 sizeof(Element) * size,
+                                 cudaMemcpyDeviceToDevice, stream));
+    CHECK_CUDART(cudaMemcpyAsync(grad_B.data(), grad_output.data(),
+                                 sizeof(Element) * size,
+                                 cudaMemcpyDeviceToDevice, stream));
   };
 
   autoDispatch(grad_output.dtype, f);
