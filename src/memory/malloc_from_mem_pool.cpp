@@ -1,5 +1,3 @@
-#include "memory/malloc_from_mem_pool.h"
-
 #include "memory/malloc_from_mem_internal.h"
 
 namespace dllm::memory {
@@ -38,4 +36,4 @@ std::shared_ptr<void> mallocFromMemPool(const size_t size, const Dtype dtype,
         CHECK_CUDART(cudaFreeAsync(ptr, stream));
       }};
 }
-}  // namespace dllm::alloc
+}  // namespace dllm::memory
