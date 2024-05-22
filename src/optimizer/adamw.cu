@@ -49,6 +49,7 @@ __global__ void step(T *__restrict w, T *__restrict m, T *__restrict v,
   const auto m_hat_t = m_t * inv_one_minus_beta1_pow_t;
   const auto v_hat_t = v_t * inv_one_minus_beta2_pow_t;
   const auto v_hat_max_t = std::max(vMax[tid], v_hat_t);
+  vMax[tid] = v_hat_max_t;
   w[tid] = theta_t - lr * m_hat_t / (std::sqrt(v_hat_max_t) + eps);
 }
 
