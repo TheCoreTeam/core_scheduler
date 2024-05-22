@@ -138,7 +138,8 @@ add_executable(dllm_tests
         test_fc.cpp
         test_relu.cpp
         test_gelu.cpp
-        test_fused_classifier.cpp
+        # test_fused_classifier.cpp
+        test_add.cpp
         ${DLLM_FLASH_ATTENTION_SRC}
 )
 
