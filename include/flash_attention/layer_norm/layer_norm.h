@@ -2,7 +2,7 @@
 #include "tensor.h"
 #include "threading/task_compute.h"
 
-namespace dllm::flash_attn::layer_norm {
+namespace dllm::flash_attn::LayerNorm {
 dllm::TaskCompute forward(
     std::shared_ptr<dllm::Tensor<2>> z,                  // Input: BxSxhidden_size
     std::shared_ptr<dllm::Tensor<1>> mu,                 // Input: FP32
@@ -13,12 +13,12 @@ dllm::TaskCompute forward(
     const float epsilon                                // epsilon
 );
 
-dllm::TaskCompute backward(const std::shared_ptr<const dllm::Tensor<2>> dz,
+dllm::TaskCompute backward(std::shared_ptr<dllm::Tensor<2>> dx0,
+                           std::shared_ptr<dllm::Tensor<1>> dgamma,
+                           std::shared_ptr<dllm::Tensor<1>> dbeta,
+                           const std::shared_ptr<const dllm::Tensor<2>> dz,
                            const std::shared_ptr<const dllm::Tensor<2>> x,
                            const std::shared_ptr<const dllm::Tensor<1>> mu,
                            const std::shared_ptr<const dllm::Tensor<1>> rsigma,
-                           const std::shared_ptr<const dllm::Tensor<1>> gamma,
-                           std::shared_ptr<dllm::Tensor<2>> dx0,
-                           std::shared_ptr<dllm::Tensor<1>> dgamma,
-                           std::shared_ptr<dllm::Tensor<1>> dbeta);
+                           const std::shared_ptr<const dllm::Tensor<1>> gamma);
 }  // namespace dllm::flash_attn::layer_norm
