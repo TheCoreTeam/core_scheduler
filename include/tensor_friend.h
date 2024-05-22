@@ -15,5 +15,25 @@ struct TensorFriend {
                               typename Tensor<N>::DataPtr ptr) {
     resetTensorData(*tensor, std::move(ptr));
   }
+
+  template <int N>
+  static auto getTensorDataPtr(const Tensor<N> &tensor) {
+    return tensor.data_;
+  }
+
+  template <int N>
+  static auto getTensorDataPtr(const std::shared_ptr<const Tensor<N>> &tensor) {
+    return getTensorDataPtr(*tensor);
+  }
+
+  template <int N>
+  static auto getTensorDataPtr(Tensor<N> &tensor) {
+    return tensor.data_;
+  }
+
+  template <int N>
+  static auto getTensorDataPtr(const std::shared_ptr<Tensor<N>> &tensor) {
+    return getTensorDataPtr(*tensor);
+  }
 };
 }  // namespace dllm
