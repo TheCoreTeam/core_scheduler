@@ -23,6 +23,7 @@ git submodule update --recursive
 mkdir build
 cd build
 cmake ..
+# if you don't want to compile flash attention, use cmake -DDLLM_ENABLE_FLASH_ATTENTION=OFF ..
 make -j dllm_tests
 ./test/dllm_tests
 ```
