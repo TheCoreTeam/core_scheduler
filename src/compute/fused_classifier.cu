@@ -3,7 +3,6 @@
 #include <fmt/format.h>
 #include <nvtx3/nvToolsExt.h>
 
-#include <format>
 #include <string>
 
 #include "compute/fused_classifier.h"

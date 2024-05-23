@@ -15,5 +15,7 @@ set(DLLM_COMPUTE_SRCS
         ${CMAKE_CURRENT_SOURCE_DIR}/fused_classifier.cu
         ${CMAKE_CURRENT_SOURCE_DIR}/add.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/add.cu
+        ${CMAKE_CURRENT_SOURCE_DIR}/embedding.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/embedding.cu
 )
 set(DLLM_COMPUTE_SRCS ${DLLM_COMPUTE_SRCS} PARENT_SCOPE)

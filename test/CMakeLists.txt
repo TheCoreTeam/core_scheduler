@@ -141,6 +141,8 @@ add_executable(dllm_tests
         # test_fused_classifier.cpp
         test_add.cpp
         ${DLLM_FLASH_ATTENTION_SRC}
+        test_embedding.cpp
+        ${DLLM_FLASH_ATTENTION_SRC}
 )
 
 target_include_directories(dllm_tests PRIVATE
