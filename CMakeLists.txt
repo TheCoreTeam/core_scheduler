@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.11)
+cmake_minimum_required(VERSION 3.25)
 project(dllm LANGUAGES CXX CUDA)
 
 if (NOT CMAKE_BUILD_TYPE)
