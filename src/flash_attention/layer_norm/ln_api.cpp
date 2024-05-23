@@ -241,18 +241,17 @@ void dropout_add_ln_fwd_no_dropout(
   // Launch the kernel.
   launcher(launch_params, false);
   CHECK_CUDART(cudaStreamSynchronize(launch_params.stream));
-
 }
 
 dllm::TaskCompute forward(
-    std::shared_ptr<dllm::Tensor<2>> z,               // Input: BxSxhidden_size
-    std::shared_ptr<dllm::Tensor<1>> mu,              // Input: FP32
-    std::shared_ptr<dllm::Tensor<1>> rsigma,          // Input: FP32
-    const std::shared_ptr<const dllm::Tensor<2>> x0,  // Input: BxSxhidden_size
+    const std::shared_ptr<dllm::Tensor<2>> &z,         // Input: BxSxhidden_size
+    const std::shared_ptr<dllm::Tensor<1>> &mu,        // Input: FP32
+    const std::shared_ptr<dllm::Tensor<1>> &rsigma,    // Input: FP32
+    const std::shared_ptr<const dllm::Tensor<2>> &x0,  // Input: BxSxhidden_size
     const std::shared_ptr<const dllm::Tensor<1>>
-        gamma,  // hidden_size  // weight
-    const std::shared_ptr<const dllm::Tensor<1>> beta,  // hidden_size  // bias
-    const float epsilon                                 // epsilon
+        &gamma,  // hidden_size  // weight
+    const std::shared_ptr<const dllm::Tensor<1>> &beta,  // hidden_size  // bias
+    const float epsilon                                  // epsilon
 ) {
   auto task = dllm::TaskCompute{
       [z = z, mu = mu, rsigma = rsigma, x0 = x0, gamma = gamma, beta = beta,
@@ -417,14 +416,15 @@ void dropout_add_ln_bwd_no_dropout(at::Tensor<2> &dx0, at::Tensor<1> &dgamma,
   CHECK_CUDART(cudaStreamSynchronize(launch_params.stream));
 }
 
-dllm::TaskCompute backward(std::shared_ptr<dllm::Tensor<2>> dx0,
-                           std::shared_ptr<dllm::Tensor<1>> dgamma,
-                           std::shared_ptr<dllm::Tensor<1>> dbeta,
-                           const std::shared_ptr<const dllm::Tensor<2>> dz,
-                           const std::shared_ptr<const dllm::Tensor<2>> x,
-                           const std::shared_ptr<const dllm::Tensor<1>> mu,
-                           const std::shared_ptr<const dllm::Tensor<1>> rsigma,
-                           const std::shared_ptr<const dllm::Tensor<1>> gamma) {
+dllm::TaskCompute backward(
+    const std::shared_ptr<dllm::Tensor<2>> &dx0,
+    const std::shared_ptr<dllm::Tensor<1>> &dgamma,
+    const std::shared_ptr<dllm::Tensor<1>> &dbeta,
+    const std::shared_ptr<const dllm::Tensor<2>> &dz,
+    const std::shared_ptr<const dllm::Tensor<2>> &x,
+    const std::shared_ptr<const dllm::Tensor<1>> &mu,
+    const std::shared_ptr<const dllm::Tensor<1>> &rsigma,
+    const std::shared_ptr<const dllm::Tensor<1>> &gamma) {
   auto task = dllm::TaskCompute{
       [dz = dz, x = x, mu = mu, rsigma = rsigma, gamma = gamma, dx0 = dx0,
        dgamma = dgamma, dbeta = dbeta, dx0Future = *dx0->future,
