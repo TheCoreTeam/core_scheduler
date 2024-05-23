@@ -178,7 +178,7 @@ __device__ auto prepare_softmax_blockwide3(const int idx, const floatX* inp,
 
   // Block Max Reduction -> Maths -> Block Sum Reduction
   UpperType block_maxval =
-      blockReduce(warpReduceMax<UpperType>, thread_maxval, false, -INFINITY);
+      blockReduce(warpReduceMax<UpperType>, thread_maxval, true, -INFINITY);
   thread_sumval *= std::exp(thread_maxval - block_maxval);
   UpperType block_sumval = blockReduce(warpReduceSum<UpperType>, thread_sumval);
 
@@ -252,10 +252,12 @@ __global__ void __launch_bounds__(1024, MAX_1024_THREADS_BLOCKS)
   // handle remaining elements after the last multiple of x128::size
   // e.g. if V = 8003, and x128::size = 8, we need to handle the last 3 elements
   const int unaligned_start =
-      V & ~(x128::size - 1);  // round down to multiple of x128::size
+      V / x128::size * x128::size;  // round down to multiple of x128::size
   for (auto i = threadIdx.x + unaligned_start; i < V; i += blockDim.x) {
     UpperType prob =
         std::exp(static_cast<UpperType>(logits_vec[i]) - sp.Offset) * sp.Scale;
+    // printf("tid: %d, value: %f\n", int(threadIdx.x + blockIdx.x *
+    // blockDim.x), float(prob));
     UpperType indicator = (i == ix) ? 1.0f : 0.0f;
     UpperType dlogit = (prob - indicator) * dloss;
     if (WriteLogits) {

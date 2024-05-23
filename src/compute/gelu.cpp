@@ -4,46 +4,48 @@
 #include "util.h"
 
 namespace dllm::compute::GeLU {
-void forwardKernel(cudaStream_t cudaStream, Tensor2D &output,
-                   const Tensor2D &input);
+void forwardKernel(cudaStream_t cudaStream, Tensor1D &output,
+                   const Tensor1D &input);
 
-void backwardKernel(cudaStream_t cudaStream, Tensor2D& dinput,
-                    const Tensor2D& input, const Tensor2D& doutput);
+void backwardKernel(cudaStream_t cudaStream, Tensor1D &dinput,
+                    const Tensor1D &input, const Tensor1D &doutput);
 
-TaskCompute forward(const std::shared_ptr<Tensor2D> &output,
-                    const std::shared_ptr<const Tensor2D> &input) {
+TaskCompute forward(const std::shared_ptr<Tensor1D> &output,
+                    const std::shared_ptr<const Tensor1D> &input) {
   if (output->layout.shape<0>() != input->layout.shape<0>()) {
     SPDLOG_LOGGER_CRITICAL(&logger(), "Input data dim not same");
   }
   auto task = TaskCompute{
-      [output=output, input=input,
-     outputfuture = *output->future, inputFuture = input->future->wFuture](const ContextCompute *context) mutable{
-    {
-      util::FutureGuard outputrGuard{outputfuture.rFuture};
-      util::FutureGuard outputwGuard{outputfuture.wFuture};
-      util::FutureGuard inputGuard{inputFuture};
-      forwardKernel(context->cudaStream, *output, *input);
-    }
-    CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
-    output.reset();
-    input.reset();
-  }};
+      [output = output, input = input, outputfuture = *output->future,
+       inputFuture =
+           input->future->wFuture](const ContextCompute *context) mutable {
+        {
+          util::FutureGuard outputrGuard{outputfuture.rFuture};
+          util::FutureGuard outputwGuard{outputfuture.wFuture};
+          util::FutureGuard inputGuard{inputFuture};
+          forwardKernel(context->cudaStream, *output, *input);
+        }
+        CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
+        output.reset();
+        input.reset();
+      }};
   const TaskFuture future = task.get_future();
   input->future->rFuture = future;
   output->future->wFuture = future;
   return task;
 }
 
-TaskCompute backward(const std::shared_ptr<Tensor2D> &dinput,
-                    const std::shared_ptr<const Tensor2D> &input,
-                    const std::shared_ptr<const Tensor2D> &doutput
-                     ) {
-  if (doutput->layout.shape<1>() != input->layout.shape<1>()) {
+TaskCompute backward(const std::shared_ptr<Tensor1D> &dinput,
+                     const std::shared_ptr<const Tensor1D> &input,
+                     const std::shared_ptr<const Tensor1D> &doutput) {
+  if (doutput->layout.shape() != input->layout.shape()) {
     SPDLOG_LOGGER_CRITICAL(&logger(), "Input data dim not same");
   }
   auto task = TaskCompute{
-      [doutput=doutput, input=input,dinput=dinput,
-       dinputfuture = *dinput->future, doutputfuture = doutput->future->wFuture, inputFuture = input->future->wFuture](const ContextCompute *context) mutable{
+      [doutput = doutput, input = input, dinput = dinput,
+       dinputfuture = *dinput->future, doutputfuture = doutput->future->wFuture,
+       inputFuture =
+           input->future->wFuture](const ContextCompute *context) mutable {
         util::FutureGuard dinputRGuard{dinputfuture.rFuture};
         util::FutureGuard dinputWGuard{dinputfuture.wFuture};
         util::FutureGuard dyGuard{doutputfuture};

@@ -41,8 +41,8 @@ target_link_libraries(dllm_core PUBLIC spdlog::spdlog_header_only)
 target_link_libraries(dllm_core PRIVATE nvidia::cutlass::cutlass)
 
 if (DLLM_ENABLE_FLASH_ATTENTION)
-#    add_subdirectory(flash_attention)
-#else ()
+    add_subdirectory(flash_attention)
+else ()
     add_library(dllm_flash_attention_plugin INTERFACE)
 endif ()
 

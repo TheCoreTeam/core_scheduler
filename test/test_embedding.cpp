@@ -59,6 +59,7 @@ class TestEmbedding : public ::testing::Test {
 template <typename Element>
 void TestEmbedding::TestRoutine(const double tol_forward,
                                 const double tol_backward) {
+  torch::manual_seed(1);
   const dllm::TensorIndexType B = 2;
   const dllm::TensorIndexType T = 1024;
   const dllm::TensorIndexType MaxT = 1024;
