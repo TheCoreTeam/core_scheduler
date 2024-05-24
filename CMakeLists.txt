@@ -27,26 +27,14 @@ find_package(CUDAToolkit REQUIRED)
 find_package(CUDNN REQUIRED)
 find_package(CuTe REQUIRED)
 find_package(NCCL REQUIRED)
-find_package(MPI REQUIRED)
-
 find_package(fmt REQUIRED)
 find_package(spdlog REQUIRED)
 
-#add_subdirectory(third_party/fmt)
-
-#set(SPDLOG_FMT_EXTERNAL ON)
-#add_subdirectory(third_party/spdlog)
-
-#set(CUTLASS_ENABLE_HEADERS_ONLY ON)
-#set(CUTLASS_ENABLE_EXAMPLES OFF)
-#set(CUTLASS_ENABLE_TOOLS OFF)
-#set(CUTLASS_ENABLE_LIBRARY OFF)
-#set(CUTLASS_ENABLE_PROFILER OFF)
-#set(CUTLASS_ENABLE_PERFORMANCE OFF)
-#set(CUTLASS_ENABLE_TESTS OFF)
-#set(CUTLASS_INSTALL_TESTS ON)
-#set(CUTLASS_ENABLE_GTEST_UNIT_TESTS OFF)
-#add_subdirectory(third_party/cutlass)
+message(STATUS $ENV{CONDA_PREFIX})
+if (DEFINED ENV{CONDA_PREFIX})
+    list(APPEND MPI_HOME ENV{CONDA_PREFIX}/bin/)
+endif ()
+find_package(MPI REQUIRED)
 
 add_subdirectory(src)
 
