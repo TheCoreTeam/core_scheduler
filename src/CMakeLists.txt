@@ -32,13 +32,12 @@ target_compile_options(dllm_core PRIVATE
 
 target_include_directories(dllm_core PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/../include
-        ${NCCL_INCLUDE_DIRS}
 )
 
-target_link_libraries(dllm_core PRIVATE CUDA::cudart CUDA::cublas MPI::MPI_CXX ${NCCL_LIBRARIES})
+target_link_libraries(dllm_core PRIVATE CUDA::cudart CUDA::cublas MPI::MPI_CXX nvidia::nccl)
 target_link_libraries(dllm_core PRIVATE fmt::fmt-header-only)
 target_link_libraries(dllm_core PUBLIC spdlog::spdlog_header_only)
-target_link_libraries(dllm_core PRIVATE nvidia::cutlass::cutlass)
+target_link_libraries(dllm_core PRIVATE nvidia::cutlass::cute)
 
 if (DLLM_ENABLE_FLASH_ATTENTION)
     add_subdirectory(flash_attention)
@@ -49,4 +48,4 @@ endif ()
 add_library(dllm INTERFACE)
 
 target_link_libraries(dllm INTERFACE dllm_core dllm_flash_attention_plugin)
-target_link_libraries(dllm INTERFACE nvidia::cutlass::cutlass)
+target_link_libraries(dllm INTERFACE nvidia::cutlass::cute)

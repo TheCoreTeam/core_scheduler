@@ -22,11 +22,11 @@ struct ThreadStreamMpi {
   void submit(const TaskMpi &task) = delete;
 
  private:
-  std::thread thread{};
   std::queue<TaskMpi> taskQueue{};
   std::mutex queueMutex{};
   std::condition_variable cv{};
   std::mutex cvMutex{};
   std::atomic<bool> shutDown{false};
+  std::thread thread{};
 };
 }  // namespace dllm

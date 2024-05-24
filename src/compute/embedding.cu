@@ -265,10 +265,10 @@ __device__ __forceinline__ void stochastic_rounding(float in, half* out,
                                                     unsigned int random) {
   *out = (float)in;  // todo - implement this...
 }
-__device__ __forceinline__ void stochastic_rounding(float in, float* out,
-                                                    unsigned int random) {
-  *out = in;  // dummy function for when floatX is float (FP32 mode)
-}
+// __device__ __forceinline__ void stochastic_rounding(float in, float* out,
+//                                                     unsigned int random) {
+//   *out = in;  // dummy function for when floatX is float (FP32 mode)
+// }
 
 template <typename T>
 __device__ void atomicStochasticAdd(T* address, float val0, float val1,

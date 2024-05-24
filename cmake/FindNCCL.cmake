@@ -1,4 +1,3 @@
-# https://github.com/pytorch/pytorch/blob/main/cmake/Modules/FindNCCL.cmake
 # Find the nccl libraries
 #
 # The following variables are optionally searched for defaults
@@ -11,88 +10,101 @@
 #  NCCL_INCLUDE_DIRS
 #  NCCL_LIBRARIES
 #
-# The path hints include CUDA_TOOLKIT_ROOT_DIR seeing as some folks
-# install NCCL in the same location as the CUDA toolkit.
-# See https://github.com/caffe2/caffe2/issues/1601
+# Adapted from https://github.com/pytorch/pytorch/blob/master/cmake/Modules/FindNCCL.cmake
 
 set(NCCL_INCLUDE_DIR $ENV{NCCL_INCLUDE_DIR} CACHE PATH "Folder contains NVIDIA NCCL headers")
 set(NCCL_LIB_DIR $ENV{NCCL_LIB_DIR} CACHE PATH "Folder contains NVIDIA NCCL libraries")
-set(NCCL_VERSION $ENV{NCCL_VERSION} CACHE STRING "Version of NCCL to build with")
+set(_NCCL_VERSION $ENV{NCCL_VERSION} CACHE STRING "Version of NCCL to build with")
 
-# Add CONDA_PREFIX paths if available
 if (DEFINED ENV{CONDA_PREFIX})
     list(APPEND NCCL_INCLUDE_DIR $ENV{CONDA_PREFIX}/include)
     list(APPEND NCCL_LIB_DIR $ENV{CONDA_PREFIX}/lib)
-endif()
+endif ()
 
-if ($ENV{NCCL_ROOT_DIR})
-  message(WARNING "NCCL_ROOT_DIR is deprecated. Please set NCCL_ROOT instead.")
-endif()
 list(APPEND NCCL_ROOT $ENV{NCCL_ROOT_DIR} ${CUDA_TOOLKIT_ROOT_DIR})
 # Compatible layer for CMake <3.12. NCCL_ROOT will be accounted in for searching paths and libraries for CMake >=3.12.
 list(APPEND CMAKE_PREFIX_PATH ${NCCL_ROOT})
 
 find_path(NCCL_INCLUDE_DIRS
-  NAMES nccl.h
-  HINTS ${NCCL_INCLUDE_DIR})
+        NAMES nccl.h
+        HINTS
+        ${NCCL_INCLUDE_DIR}
+        $ENV{CUDNN_ROOT_DIR}
+        $ENV{CUDA_PATH}
+        $ENV{CUDNN_ROOT_DIR}
+        $ENV{CUDA_TOOLKIT_ROOT_DIR}
+        $ENV{NCCL}
+        /usr/include
+        PATH_SUFFIXES
+        include
+)
 
 if (USE_STATIC_NCCL)
-  MESSAGE(STATUS "USE_STATIC_NCCL is set. Linking with static NCCL library.")
-  SET(NCCL_LIBNAME "nccl_static")
-  if (NCCL_VERSION)  # Prefer the versioned library if a specific NCCL version is specified
-    set(CMAKE_FIND_LIBRARY_SUFFIXES ".a.${NCCL_VERSION}" ${CMAKE_FIND_LIBRARY_SUFFIXES})
-  endif()
-else()
-  SET(NCCL_LIBNAME "nccl")
-  if (NCCL_VERSION)  # Prefer the versioned library if a specific NCCL version is specified
-    set(CMAKE_FIND_LIBRARY_SUFFIXES ".so.${NCCL_VERSION}" ${CMAKE_FIND_LIBRARY_SUFFIXES})
-  endif()
-endif()
+    MESSAGE(STATUS "USE_STATIC_NCCL is set. Linking with static NCCL library.")
+    SET(NCCL_LIBNAME "nccl_static")
+    if (_NCCL_VERSION)  # Prefer the versioned library if a specific NCCL version is specified
+        set(CMAKE_FIND_LIBRARY_SUFFIXES ".a.${_NCCL_VERSION}" ${CMAKE_FIND_LIBRARY_SUFFIXES})
+    endif ()
+else ()
+    SET(NCCL_LIBNAME "nccl")
+    if (_NCCL_VERSION)  # Prefer the versioned library if a specific NCCL version is specified
+        set(CMAKE_FIND_LIBRARY_SUFFIXES ".so.${_NCCL_VERSION}" ${CMAKE_FIND_LIBRARY_SUFFIXES})
+    endif ()
+endif ()
+
+# Read version from header
+if (EXISTS "${NCCL_INCLUDE_DIRS}/nccl.h")
+    file(READ ${NCCL_INCLUDE_DIRS}/nccl.h NCCL_HEADER_CONTENTS)
+endif ()
+if (NCCL_HEADER_CONTENTS)
+    string(REGEX MATCH "define NCCL_MAJOR * +([0-9]+)"
+            _NCCL_VERSION_MAJOR "${NCCL_HEADER_CONTENTS}")
+    string(REGEX REPLACE "define NCCL_MAJOR * +([0-9]+)" "\\1"
+            _NCCL_VERSION_MAJOR "${_NCCL_VERSION_MAJOR}")
+    string(REGEX MATCH "define NCCL_MINOR * +([0-9]+)"
+            _NCCL_VERSION_MINOR "${NCCL_HEADER_CONTENTS}")
+    string(REGEX REPLACE "define NCCL_MINOR * +([0-9]+)" "\\1"
+            _NCCL_VERSION_MINOR "${_NCCL_VERSION_MINOR}")
+    string(REGEX MATCH "define NCCL_PATCH * +([0-9]+)"
+            _NCCL_VERSION_PATCH "${NCCL_HEADER_CONTENTS}")
+    string(REGEX REPLACE "define NCCL_PATCH * +([0-9]+)" "\\1"
+            _NCCL_VERSION_PATCH "${_NCCL_VERSION_PATCH}")
+    if (NOT _NCCL_VERSION_MAJOR)
+        set(_NCCL_VERSION "?")
+    else ()
+        set(_NCCL_VERSION "${_NCCL_VERSION_MAJOR}.${_NCCL_VERSION_MINOR}.${_NCCL_VERSION_PATCH}")
+    endif ()
+endif ()
 
 find_library(NCCL_LIBRARIES
-  NAMES ${NCCL_LIBNAME}
-  HINTS ${NCCL_LIB_DIR})
+        NAMES ${NCCL_LIBNAME}
+        HINTS
+        ${NCCL_LIB_DIR}
+        ${CUDA_TOOLKIT_ROOT}
+        $ENV{CUDA_PATH}
+        $ENV{CUDNN_ROOT_DIR}
+        $ENV{CUDA_TOOLKIT_ROOT_DIR}
+        $ENV{NCCL}
+        /usr/lib/x86_64-linux-gnu/
+        PATH_SUFFIXES
+        lib
+        lib64
+)
 
 include(FindPackageHandleStandardArgs)
-find_package_handle_standard_args(NCCL DEFAULT_MSG NCCL_INCLUDE_DIRS NCCL_LIBRARIES)
+find_package_handle_standard_args(NCCL
+        REQUIRED_VARS NCCL_INCLUDE_DIRS NCCL_LIBRARIES
+        VERSION_VAR _NCCL_VERSION)
 
-if(NCCL_FOUND)  # obtaining NCCL version and some sanity checks
-  set (NCCL_HEADER_FILE "${NCCL_INCLUDE_DIRS}/nccl.h")
-  message (STATUS "Determining NCCL version from ${NCCL_HEADER_FILE}...")
-  set (OLD_CMAKE_REQUIRED_INCLUDES ${CMAKE_REQUIRED_INCLUDES})
-  list (APPEND CMAKE_REQUIRED_INCLUDES ${NCCL_INCLUDE_DIRS})
-  include(CheckCXXSymbolExists)
-  check_cxx_symbol_exists(NCCL_VERSION_CODE nccl.h NCCL_VERSION_DEFINED)
+if (NCCL_FOUND)  # obtaining NCCL version and some sanity checks
+    message(STATUS "Found NCCL ${_NCCL_VERSION} (include: ${NCCL_INCLUDE_DIRS}, library: ${NCCL_LIBRARIES})")
+    mark_as_advanced(NCCL_ROOT_DIR NCCL_INCLUDE_DIRS NCCL_LIBRARIES NCCL_VERSION)
+endif ()
 
-  if (NCCL_VERSION_DEFINED)
-    set(file "${PROJECT_BINARY_DIR}/detect_nccl_version.cc")
-    file(WRITE ${file} "
-      #include <iostream>
-      #include <nccl.h>
-      int main()
-      {
-        std::cout << NCCL_MAJOR << '.' << NCCL_MINOR << '.' << NCCL_PATCH << std::endl;
-
-        int x;
-        ncclGetVersion(&x);
-        return x == NCCL_VERSION_CODE;
-      }
-")
-    try_run(NCCL_VERSION_MATCHED compile_result ${PROJECT_BINARY_DIR} ${file}
-          RUN_OUTPUT_VARIABLE NCCL_VERSION_FROM_HEADER
-          CMAKE_FLAGS  "-DINCLUDE_DIRECTORIES=${NCCL_INCLUDE_DIRS}"
-          LINK_LIBRARIES ${NCCL_LIBRARIES})
-    if (NOT NCCL_VERSION_MATCHED)
-      message(FATAL_ERROR "Found NCCL header version and library version do not match! \
-(include: ${NCCL_INCLUDE_DIRS}, library: ${NCCL_LIBRARIES}) Please set NCCL_INCLUDE_DIR and NCCL_LIB_DIR manually.")
-    endif()
-    message(STATUS "NCCL version: ${NCCL_VERSION_FROM_HEADER}")
-  else()
-    message(STATUS "NCCL version < 2.3.5-5")
-  endif ()
-  set (CMAKE_REQUIRED_INCLUDES ${OLD_CMAKE_REQUIRED_INCLUDES})
-
-  message(STATUS "Found NCCL (include: ${NCCL_INCLUDE_DIRS}, library: ${NCCL_LIBRARIES})")
-  mark_as_advanced(NCCL_ROOT_DIR NCCL_INCLUDE_DIRS NCCL_LIBRARIES)
-endif()
-
+if (NCCL_FOUND AND NOT TARGET nvidia::nccl)
+    add_library(nvidia::nccl UNKNOWN IMPORTED)
+    set_target_properties(nvidia::nccl PROPERTIES
+            IMPORTED_LOCATION "${NCCL_LIBRARIES}"
+            INTERFACE_INCLUDE_DIRECTORIES "${NCCL_INCLUDE_DIRS}"
+            IMPORTED_LINK_INTERFACE_LANGUAGES "C")
+endif ()

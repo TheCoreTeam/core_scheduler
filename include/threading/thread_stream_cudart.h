@@ -23,11 +23,11 @@ struct ThreadStreamCudart {
   void submit(const TaskCudart &task) = delete;
 
  private:
-  std::thread thread{};
   std::queue<TaskCudart> taskQueue{};
   std::mutex queueMutex{};
   std::condition_variable cv{};
   std::mutex cvMutex{};
   std::atomic<bool> shutDown{false};
+  std::thread thread{};
 };
 }  // namespace dllm
