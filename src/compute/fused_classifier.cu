@@ -178,7 +178,7 @@ __device__ auto prepare_softmax_blockwide3(const int idx, const floatX* inp,
 
   // Block Max Reduction -> Maths -> Block Sum Reduction
   UpperType block_maxval =
-      blockReduce(warpReduceMax<UpperType>, thread_maxval, true, -INFINITY);
+      blockReduce(warpReduceMax<UpperType>, thread_maxval, false, -INFINITY);
   thread_sumval *= std::exp(thread_maxval - block_maxval);
   UpperType block_sumval = blockReduce(warpReduceSum<UpperType>, thread_sumval);
 
