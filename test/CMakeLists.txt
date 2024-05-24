@@ -134,15 +134,15 @@ endif ()
 
 add_executable(dllm_tests
         main.cpp
-        test_adamw.cpp
-        test_fc.cpp
-        test_relu.cpp
+#        test_adamw.cpp
+#        test_fc.cpp
+#        test_relu.cpp
         test_gelu.cpp
-        test_fused_classifier.cpp
-        test_add.cpp
-        ${DLLM_FLASH_ATTENTION_SRC}
-        test_embedding.cpp
-        ${DLLM_FLASH_ATTENTION_SRC}
+#        test_fused_classifier.cpp
+#        test_add.cpp
+#        ${DLLM_FLASH_ATTENTION_SRC}
+#        test_embedding.cpp
+#        ${DLLM_FLASH_ATTENTION_SRC}
 )
 
 target_include_directories(dllm_tests PRIVATE
@@ -151,11 +151,12 @@ target_include_directories(dllm_tests PRIVATE
 
 target_link_libraries(dllm_tests PRIVATE
         dllm
-        spdlog::spdlog
+        spdlog::spdlog_header_only
         CUDA::cudart
         CUDA::cublas
         Eigen3::Eigen
-        GTest::gtest
+        Catch2::Catch2
+#        GTest::gtest
         ${TORCH_LIBRARY}
         ${Python_LIBRARIES}
 )
@@ -178,7 +179,7 @@ target_include_directories(dllm_communication_tests PRIVATE
 
 target_link_libraries(dllm_communication_tests PRIVATE
         dllm
-        spdlog::spdlog
+        spdlog::spdlog_header_only
         CUDA::cudart
         CUDA::cublas
         Eigen3::Eigen

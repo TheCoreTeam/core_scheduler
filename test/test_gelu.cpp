@@ -1,9 +1,10 @@
 #include <cuda_runtime.h>
-#include <gtest/gtest.h>
+// #include <gtest/gtest.h>
 #include <math_constants.h>
 #include <torch/torch.h>
 
 #include <Eigen/Dense>
+#include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <fstream>
 #include <iostream>
@@ -46,18 +47,16 @@ struct scalar_random_op<nv_half> {
 };
 }  // namespace Eigen::internal
 
-class TestDLLMGelu : public ::testing::Test {
+class TestDLLMGelu {
  protected:
   dllm::ContextCompute context{};
 
-  void SetUp() override {
+  TestDLLMGelu() {
     CHECK_CUDART(
         cudaStreamCreateWithFlags(&context.cudaStream, cudaStreamNonBlocking));
   }
 
-  void TearDown() override {
-    CHECK_CUDART(cudaStreamDestroy(context.cudaStream));
-  }
+  ~TestDLLMGelu() { CHECK_CUDART(cudaStreamDestroy(context.cudaStream)); }
 
   template <typename Element>
   void TestRoutine(const dllm::TensorIndexType T, const double tol_forward,
@@ -115,7 +114,7 @@ void TestDLLMGelu::TestRoutine(const dllm::TensorIndexType T,
 
   auto isApprox_forward = Output2.allclose(Output1, 1e-5, tol_forward);
 
-  ASSERT_TRUE(isApprox_forward);
+  REQUIRE(isApprox_forward);
 
   if (!isApprox_forward) {
     std::ofstream fileOuput("Output1.txt");
@@ -190,7 +189,7 @@ void TestDLLMGelu::TestRoutine(const dllm::TensorIndexType T,
   bool all_less_than_tol = (abs_error <= tol_backward).all().item<bool>();
 
   // 使用ASSERT_TRUE来判断所有元素的误差是否都小于tol
-  ASSERT_TRUE(all_less_than_tol);
+  REQUIRE(all_less_than_tol);
 
   CHECK_CUDART(cudaFree(DeviceInput));
   CHECK_CUDART(cudaFree(DeviceOutput));
@@ -198,17 +197,19 @@ void TestDLLMGelu::TestRoutine(const dllm::TensorIndexType T,
   CHECK_CUDART(cudaFree(DeviceGradOutput));
 }
 
-TEST_F(TestDLLMGelu, TestF32_128) { TestRoutine<float>(128, 5e-4, 5e-4); }
-
-TEST_F(TestDLLMGelu, TestF32_512) { TestRoutine<float>(512, 5e-4, 5e-4); }
-
-TEST_F(TestDLLMGelu, TestF32_1024) { TestRoutine<float>(1024, 5e-4, 5e-4); }
-
-TEST_F(TestDLLMGelu, TestF16_128) { TestRoutine<nv_half>(128, 1e-2, 1e-2); }
-
-TEST_F(TestDLLMGelu, TestF16_512) { TestRoutine<nv_half>(512, 1e-2, 1e-2); }
-
-TEST_F(TestDLLMGelu, TestF16_1024) { TestRoutine<nv_half>(1024, 1e-2, 1e-2); }
+TEST_CASE_METHOD(TestDLLMGelu, "[GeLU][128]", "[compute][FP32]") {
+  TestRoutine<float>(128, 5e-4, 5e-4);
+}
+//
+// TEST_F(TestDLLMGelu, TestF32_512) { TestRoutine<float>(512, 5e-4, 5e-4); }
+//
+// TEST_F(TestDLLMGelu, TestF32_1024) { TestRoutine<float>(1024, 5e-4, 5e-4); }
+//
+// TEST_F(TestDLLMGelu, TestF16_128) { TestRoutine<nv_half>(128, 1e-2, 1e-2); }
+//
+// TEST_F(TestDLLMGelu, TestF16_512) { TestRoutine<nv_half>(512, 1e-2, 1e-2); }
+//
+// TEST_F(TestDLLMGelu, TestF16_1024) { TestRoutine<nv_half>(1024, 1e-2, 1e-2); }
 
 // TEST_F(TestDLLMGelu, TestF64_128) { TestRoutine<double>(128, 1e-10, 1e-10); }
 

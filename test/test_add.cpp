@@ -1,4 +1,5 @@
 #include <cuda_runtime.h>
+#include <fmt/format.h>
 #include <gtest/gtest.h>
 #include <torch/torch.h>
 
@@ -12,19 +13,19 @@ struct TypeTrait;
 template <>
 struct TypeTrait<float> {
   static constexpr at::ScalarType dtype = torch::kFloat;
-  static constexpr std::string label = "float";
+  static constexpr auto label = "float";
 };
 
 template <>
 struct TypeTrait<nv_half> {
   static constexpr at::ScalarType dtype = torch::kHalf;
-  static constexpr std::string label = "half";
+  static constexpr auto label = "half";
 };
 
 template <>
 struct TypeTrait<double> {
   static constexpr at::ScalarType dtype = torch::kDouble;
-  static constexpr std::string label = "double";
+  static constexpr auto label = "double";
 };
 
 template <typename Element>
@@ -146,11 +147,12 @@ void TestDLLMResidual<Element>::TestForwardRoutine() {
   ASSERT_TRUE(is_approx_output);
 
   if (!is_approx_output) {
-    std::ofstream file_output_ref("output" + TypeTrait<Element>::label +
-                                  ".txt");
+    std::ofstream file_output_ref(
+        fmt::format("output_{}.txt", TypeTrait<Element>::label));
     file_output_ref << output << std::endl;
     file_output_ref.close();
-    std::ofstream file_output("my_output" + TypeTrait<Element>::label + ".txt");
+    std::ofstream file_output(
+        fmt::format("my_output_{}.txt", TypeTrait<Element>::label));
     file_output << my_output << std::endl;
     file_output.close();
   }
@@ -201,23 +203,23 @@ void TestDLLMResidual<Element>::TestBackwardRoutine() {
   auto is_approx_grad_residual = grad_B.allclose(my_grad_residual);
 
   if (!is_approx_grad_input) {
-    std::ofstream file_weight_ref("grad_input" + TypeTrait<Element>::label +
-                                  ".txt");
+    std::ofstream file_weight_ref(
+        fmt::format("grad_input_{}.txt", TypeTrait<Element>::label));
     file_weight_ref << grad_A << std::endl;
     file_weight_ref.close();
-    std::ofstream file_weight("my_grad_input" + TypeTrait<Element>::label +
-                              ".txt");
+    std::ofstream file_weight(
+        fmt::format("my_grad_input_{}.txt", TypeTrait<Element>::label));
     file_weight << my_grad_input << std::endl;
     file_weight.close();
   }
 
   if (!is_approx_grad_residual) {
-    std::ofstream file_bias_ref("grad_residual" + TypeTrait<Element>::label +
-                                ".txt");
+    std::ofstream file_bias_ref(
+        fmt::format("grad_residual_{}.txt", TypeTrait<Element>::label));
     file_bias_ref << grad_B << std::endl;
     file_bias_ref.close();
-    std::ofstream file_bias("my_grad_residual" + TypeTrait<Element>::label +
-                            ".txt");
+    std::ofstream file_bias(
+        fmt::format("my_grad_residual_{}.txt", TypeTrait<Element>::label));
     file_bias << my_grad_residual << std::endl;
     file_bias.close();
   }
