@@ -1,5 +1,7 @@
 #include "threading/thread_stream_nccl.h"
 
+#include <c10/cuda/CUDAGuard.h>
+#include <c10/cuda/CUDAStream.h>
 #include <cuda_runtime.h>
 #include <pthread.h>
 #include <sched.h>
@@ -32,6 +34,11 @@ void threadTask(const ncclUniqueId id, const int ncclWorldSize,
   CHECK_NCCL(ncclCommInitRank(&context.ncclComm, ncclWorldSize, id, ncclRank));
   context.ncclRank = ncclRank;
   context.commSize = ncclWorldSize;
+  const auto stream = c10::cuda::getStreamFromExternal(
+      context.cudaStream, static_cast<c10::DeviceIndex>(deviceRank));
+  c10::cuda::CUDAStreamGuard streamGuard{stream};
+  c10::cuda::CUDAGuard deviceGuard{static_cast<c10::DeviceIndex>(deviceRank)};
+
   while (!shutDown->load()) {
     TaskNccl task;
     std::unique_lock lock{*queueMutex};
