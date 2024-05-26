@@ -97,8 +97,4 @@ inline const TensorFuture &Tensor::future() const { return *future_; }
 inline void Tensor::wait() const { future().wait(); }
 
 inline Tensor::operator at::Tensor() const { return tensor(); }
-
-inline std::ostream &operator<<(std::ostream &out, const Tensor &t) {
-  return std::cout << t.tensor() << std::endl;
-}
 }  // namespace dllm
