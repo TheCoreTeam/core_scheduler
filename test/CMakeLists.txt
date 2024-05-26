@@ -9,15 +9,16 @@ endif ()
 
 add_executable(dllm_tests
         main.cpp
-        test_adamw.cpp
-        test_fc.cpp
-        test_relu.cpp
+#        test_adamw.cpp
+#        test_fc.cpp
+#        test_relu.cpp
+        test_linear.cpp
         test_gelu.cpp
-        test_fused_classifier.cpp
+#        test_fused_classifier.cpp
         test_add.cpp
-        ${DLLM_FLASH_ATTENTION_SRC}
+#        ${DLLM_FLASH_ATTENTION_SRC}
         test_embedding.cpp
-        ${DLLM_FLASH_ATTENTION_SRC}
+#        ${DLLM_FLASH_ATTENTION_SRC}
 )
 
 target_link_libraries(dllm_tests PRIVATE

@@ -1,65 +1,56 @@
 #include "compute/gelu.h"
 
+#include <torch/nn/functional/activation.h>
+
+#include "internal_utils.h"
 #include "logger.h"
-#include "util.h"
 
 namespace dllm::compute::GeLU {
-void forwardKernel(cudaStream_t cudaStream, Tensor1D &output,
-                   const Tensor1D &input);
-
-void backwardKernel(cudaStream_t cudaStream, Tensor1D &dinput,
-                    const Tensor1D &input, const Tensor1D &doutput);
-
-TaskCompute forward(const std::shared_ptr<Tensor1D> &output,
-                    const std::shared_ptr<const Tensor1D> &input) {
-  if (output->layout.shape<0>() != input->layout.shape<0>()) {
-    SPDLOG_LOGGER_CRITICAL(&logger(), "Input data dim not same");
-  }
+TaskCompute forward(const std::shared_ptr<Tensor> &output,
+                    const std::shared_ptr<const Tensor> &input) {
   auto task = TaskCompute{
-      [output = output, input = input, outputfuture = *output->future,
+      [output = output, input = input, outputfuture = output->future(),
        inputFuture =
-           input->future->wFuture](const ContextCompute *context) mutable {
+           input->future().wFuture](const ContextCompute *context) mutable {
         {
-          util::FutureGuard outputrGuard{outputfuture.rFuture};
-          util::FutureGuard outputwGuard{outputfuture.wFuture};
+          util::FutureGuard outputGuard{outputfuture};
           util::FutureGuard inputGuard{inputFuture};
-          forwardKernel(context->cudaStream, *output, *input);
+          output->tensor() = torch::gelu(input->tensor());
         }
         CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
         output.reset();
         input.reset();
       }};
   const TaskFuture future = task.get_future();
-  input->future->rFuture = future;
-  output->future->wFuture = future;
+  input->future().rFuture = future;
+  output->future().wFuture = future;
   return task;
 }
 
-TaskCompute backward(const std::shared_ptr<Tensor1D> &dinput,
-                     const std::shared_ptr<const Tensor1D> &input,
-                     const std::shared_ptr<const Tensor1D> &doutput) {
-  if (doutput->layout.shape() != input->layout.shape()) {
-    SPDLOG_LOGGER_CRITICAL(&logger(), "Input data dim not same");
-  }
-  auto task = TaskCompute{
-      [doutput = doutput, input = input, dinput = dinput,
-       dinputfuture = *dinput->future, doutputfuture = doutput->future->wFuture,
-       inputFuture =
-           input->future->wFuture](const ContextCompute *context) mutable {
-        util::FutureGuard dinputRGuard{dinputfuture.rFuture};
-        util::FutureGuard dinputWGuard{dinputfuture.wFuture};
-        util::FutureGuard dyGuard{doutputfuture};
-        util::FutureGuard wGuard{inputFuture};
-        backwardKernel(context->cudaStream, *dinput, *input, *doutput);
-        CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
-        dinput.reset();
-        input.reset();
-        doutput.reset();
-      }};
+TaskCompute backward(const std::shared_ptr<Tensor> &dinput,
+                     const std::shared_ptr<const Tensor> &input,
+                     const std::shared_ptr<const Tensor> &doutput) {
+  auto task = TaskCompute{[doutput = doutput, input = input, dinput = dinput,
+                           dinputFuture = dinput->future(),
+                           doutputFuture = doutput->future().wFuture,
+                           inputFuture = input->future().wFuture](
+                              const ContextCompute *context) mutable {
+    {
+      util::FutureGuard dinputGuard{dinputFuture};
+      util::FutureGuard doutGuard{doutputFuture};
+      util::FutureGuard inputGuard{inputFuture};
+      dinput->tensor() =
+          torch::gelu_backward(doutput->tensor(), input->tensor());
+    }
+    CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
+    dinput.reset();
+    input.reset();
+    doutput.reset();
+  }};
   const TaskFuture future = task.get_future();
-  dinput->future->wFuture = future;
-  doutput->future->rFuture = future;
-  input->future->rFuture = future;
+  dinput->future().wFuture = future;
+  doutput->future().rFuture = future;
+  input->future().rFuture = future;
   return task;
 }
 }  // namespace dllm::compute::GeLU

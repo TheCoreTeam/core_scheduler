@@ -1,82 +1,102 @@
 #include "compute/embedding.h"
 
+#include <torch/nn/functional/embedding.h>
+
+#include "internal_utils.h"
 #include "logger.h"
-#include "util.h"
 
-namespace dllm::compute::embedding {
-void forwardKernel(cudaStream_t cudaStream, Tensor3D &output,
-                   const Tensor2D &input, const Tensor2D &wte,
-                   const Tensor2D &wpe);
-void backwardKernel(cudaStream_t cudaStream, const Tensor3D &grad_output,
-                    Tensor2D &grad_input, Tensor2D &grad_wte,
-                    Tensor2D &grad_wpe);
-
-TaskCompute forward(const std::shared_ptr<Tensor3D> &output,
-                    const std::shared_ptr<const Tensor2D> &input,
-                    const std::shared_ptr<const Tensor2D> &wte,
-                    const std::shared_ptr<const Tensor2D> &wpe) {
-  if (output->layout.shape<0>() != input->layout.shape<0>()) {
-    SPDLOG_LOGGER_CRITICAL(&logger(), "Input data dim not same");
+namespace dllm::compute {
+std::shared_ptr<Embedding::State> Embedding::init(
+    int64_t num_embeddings, int64_t embedding_dim,
+    c10::optional<int64_t> padding_idx, c10::optional<double> max_norm,
+    double norm_type, bool scale_grad_by_freq, bool sparse,
+    const c10::optional<at::Device> device,
+    const c10::optional<at::ScalarType> dtype) {
+  auto weight = std::make_shared<Tensor>(at::normal(
+      0, 1, {num_embeddings, embedding_dim}, {}, dtype, {}, device, {}));
+  if (padding_idx != c10::nullopt) {
+    if (*padding_idx > 0) {
+      TORCH_CHECK(*padding_idx < weight->tensor().size(0),
+                  "Padding_idx must be within num_embeddings");
+    } else if (*padding_idx < 0) {
+      TORCH_CHECK(*padding_idx >= -weight->tensor().size(0),
+                  "Padding_idx must be within num_embedding");
+      padding_idx = weight->tensor().size(0) + *padding_idx;
+    }
+  } else {
+    padding_idx = -1;
   }
-  auto task = TaskCompute{
-      [input = input, output = output, wte = wte, wpe = wpe,
-       futureOutput = *output->future, futureInput = input->future->wFuture,
-       futureWte = wte->future->wFuture, futureWpe = wpe->future->wFuture](
-          const ContextCompute *context) mutable {
-        util::FutureGuard OutputrGuard{futureOutput.rFuture};
-        util::FutureGuard OutputwGuard{futureOutput.wFuture};
-        util::FutureGuard InputGuard{futureInput};
-        util::FutureGuard wteGuard{futureWte};
-        util::FutureGuard wpeGuard{futureWpe};
 
-        forwardKernel(context->cudaStream, *output, *input, *wte, *wpe);
-        CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
-        input.reset();
-        output.reset();
-        wte.reset();
-        wpe.reset();
-      }};
+  TORCH_CHECK(max_norm == c10::nullopt)
+  // if (max_norm != c10::nullopt) {
+  //   input_ = input_.contiguous();
+  //   _no_grad_embedding_renorm_(weight, input_, *max_norm, norm_type);
+  // }
+
+  return std::make_shared<State>(std::move(weight), num_embeddings,
+                                 padding_idx.value(), max_norm, norm_type,
+                                 scale_grad_by_freq, sparse);
+}
+
+TaskCompute Embedding::forward(const std::shared_ptr<Tensor> &output,
+                               const std::shared_ptr<const Tensor> &indices,
+                               const std::shared_ptr<const State> &state) {
+  auto task = TaskCompute{[state = state, output = output, indices = indices,
+                           outputFuture = output->future(),
+                           weightFuture = indices->future().wFuture,
+                           indicesFuture = state->weight->future().wFuture](
+                              const ContextCompute *context) mutable {
+    {
+      util::FutureGuard utputrGuard{outputFuture};
+      util::FutureGuard weightGuard{weightFuture};
+      util::FutureGuard indicesGuard{indicesFuture};
+
+      output->tensor() = torch::embedding(
+          state->weight->tensor(), indices->tensor(), state->padding_idx,
+          state->scale_grad_by_freq, state->sparse);
+    }
+    CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
+    state.reset();
+    output.reset();
+    indices.reset();
+  }};
   const TaskFuture future = task.get_future();
-  input->future->rFuture = future;
-  wte->future->rFuture = future;
-  wpe->future->rFuture = future;
-  output->future->wFuture = future;
+  state->weight->future().rFuture = future;
+  indices->future().rFuture = future;
+  output->future().wFuture = future;
   return task;
 }
 
-TaskCompute backward(const std::shared_ptr<Tensor2D> &grad_input,
-                     const std::shared_ptr<Tensor2D> &grad_wte,
-                     const std::shared_ptr<Tensor2D> &grad_wpe,
-                     const std::shared_ptr<const Tensor3D> &grad_output) {
-  if (grad_output->layout.shape<2>() != grad_wte->layout.shape<1>()) {
-    SPDLOG_LOGGER_CRITICAL(&logger(), "Grad_output data dim not same");
-  }
-  auto task = TaskCompute{
-      [grad_input = grad_input, grad_output = grad_output, grad_wte = grad_wte,
-       grad_wpe = grad_wpe, futureDWte = *grad_wte->future,
-       futureDWpe = *grad_wpe->future,
-       futureDOutput = grad_output->future->wFuture,
-       futureDInput =
-           grad_input->future->wFuture](const ContextCompute *context) mutable {
-        util::FutureGuard dwteRGuard{futureDWte.rFuture};
-        util::FutureGuard dwteWGuard{futureDWte.wFuture};
-        util::FutureGuard dwpeRGuard{futureDWpe.rFuture};
-        util::FutureGuard dwpeWGuard{futureDWpe.wFuture};
-        util::FutureGuard doutputGuard{futureDOutput};
-        util::FutureGuard inputGuard{futureDInput};
-        backwardKernel(context->cudaStream, *grad_output, *grad_input,
-                       *grad_wte, *grad_wpe);
-        CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
-        grad_output.reset();
-        grad_input.reset();
-        grad_wte.reset();
-        grad_wpe.reset();
-      }};
+TaskCompute Embedding::backward(
+    const std::shared_ptr<Tensor> &grad_weight,
+    const std::shared_ptr<const Tensor> &grad_output,
+    const std::shared_ptr<const Tensor> &indices,
+    const std::shared_ptr<const State> &state) {
+  auto task = TaskCompute{[grad_weight = grad_weight, grad_output = grad_output,
+                           indices = indices, state = state,
+                           grad_weight_future = grad_weight->future(),
+                           grad_output_future = grad_output->future().wFuture,
+                           indicesFuture = indices->future().wFuture,
+                           weightFuture = state->weight->future().wFuture](
+                              const ContextCompute *context) mutable {
+    util::FutureGuard grad_weightGuard{grad_weight_future};
+    util::FutureGuard grad_output_Guard{grad_output_future};
+    util::FutureGuard indicesGuard{indicesFuture};
+    util::FutureGuard weighGuard{weightFuture};
+    grad_weight->tensor() = torch::embedding_backward(
+        grad_output->tensor(), indices->tensor(), state->num_weights,
+        state->padding_idx, state->scale_grad_by_freq, state->sparse);
+    CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
+    grad_weight.reset();
+    grad_output.reset();
+    indices.reset();
+    state.reset();
+  }};
   const TaskFuture future = task.get_future();
-  grad_wpe->future->wFuture = future;
-  grad_wte->future->wFuture = future;
-  grad_output->future->rFuture = future;
-  grad_input->future->rFuture = future;
+  grad_weight->future().wFuture = future;
+  grad_output->future().rFuture = future;
+  indices->future().rFuture = future;
+  state->weight->future().rFuture = future;
   return task;
 }
-}  // namespace dllm::compute::embedding
+}  // namespace dllm::compute

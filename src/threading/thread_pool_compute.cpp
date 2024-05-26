@@ -1,8 +1,9 @@
 #include "threading/thread_pool_compute.h"
 
+#include <c10/cuda/CUDAGuard.h>
+#include <c10/cuda/CUDAStream.h>
 #include <cublas_v2.h>
 #include <cuda_runtime.h>
-#include <mpi.h>
 #include <pthread.h>
 #include <sched.h>
 
@@ -44,6 +45,12 @@ void threadTask(const int localRank, std::queue<TaskCompute> *taskQueue,
   }
   CHECK_CUBLAS(cublasCreate_v2(&context.cublasHandle));
   CHECK_CUBLAS(cublasSetStream_v2(context.cublasHandle, context.cudaStream));
+  const auto stream = c10::cuda::getStreamFromExternal(
+      context.cudaStream, static_cast<c10::DeviceIndex>(context.deviceRank));
+  c10::cuda::CUDAStreamGuard streamGuard{stream};
+  c10::cuda::CUDAGuard deviceGuard{
+      static_cast<c10::DeviceIndex>(context.deviceRank)};
+
   while (!shutDown->load()) {
     TaskCompute task;
     std::unique_lock lock{*queueMutex};
