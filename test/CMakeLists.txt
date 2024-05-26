@@ -26,7 +26,6 @@ target_link_libraries(dllm_tests PRIVATE
         spdlog::spdlog_header_only
         CUDA::cudart
         CUDA::cublas
-        Eigen3::Eigen
         GTest::gtest
         torch
 )
@@ -52,7 +51,6 @@ target_link_libraries(dllm_communication_tests PRIVATE
         spdlog::spdlog_header_only
         CUDA::cudart
         CUDA::cublas
-        Eigen3::Eigen
         GTest::gtest
         MPI::MPI_CXX
         nvidia::nccl

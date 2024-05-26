@@ -39,17 +39,11 @@ find_package(MPI REQUIRED)
 
 add_subdirectory(src)
 
-set(DLLM_EIGEN_ADDED OFF)
 if (DLLM_ENABLE_TESTS)
     find_package(GTest REQUIRED)
-    find_package(Eigen3 REQUIRED)
-    set(DLLM_EIGEN_ADDED ON)
-
     add_subdirectory(test)
 endif ()
 
 if (DLLM_ENABLE_EXAMPLES)
-    find_package(Eigen3 REQUIRED)
-
     add_subdirectory(example)
 endif ()

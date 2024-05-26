@@ -1,10 +1,5 @@
-#include <cuda_runtime.h>
 #include <gtest/gtest.h>
 #include <torch/torch.h>
-
-#include <Eigen/Dense>
-#include <fstream>
-#include <iostream>
 
 #include "compute/embedding.h"
 #include "threading/thread_pool_compute.h"

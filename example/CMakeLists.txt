@@ -5,7 +5,6 @@ function(create_executable target_name source_files)
             spdlog::spdlog_header_only
             CUDA::cudart
             CUDA::cublas
-            Eigen3::Eigen
             MPI::MPI_CXX
             ${NCCL_LIBRARIES}
     )
