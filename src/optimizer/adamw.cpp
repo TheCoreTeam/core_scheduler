@@ -1,6 +1,7 @@
 #include "optimizer/adamw.h"
 
 #include "memory/malloc_from_mem_internal.h"
+#include "tensor_friend.h"
 #include "util.h"
 
 namespace dllm::optimizer {
@@ -25,8 +26,10 @@ TaskCompute AdamW<false>::init(std::shared_ptr<State> &state,
   const auto size = cute::size(layout);
   auto task = TaskCompute{
       [size = size, state = state](const ContextCompute *context) mutable {
-        state->m->resetData(memory::mallocFromMemPool(size, dtype, context));
-        state->v->resetData(memory::mallocFromMemPool(size, dtype, context));
+        TensorFriend::resetTensorData(
+            state->m, memory::mallocFromMemPool(size, dtype, context));
+        TensorFriend::resetTensorData(
+            state->v, memory::mallocFromMemPool(size, dtype, context));
         CHECK_CUDART(cudaMemsetAsync(state->m->data(), 0, toByte(dtype) * size,
                                      context->cudaStream));
         CHECK_CUDART(cudaMemsetAsync(state->v->data(), 0, toByte(dtype) * size,
@@ -84,9 +87,12 @@ TaskCompute AdamW<true>::init(std::shared_ptr<State> &state,
   auto task = TaskCompute{
       [layout = layout, state = state](const ContextCompute *context) mutable {
         const auto size = cute::size(layout);
-        state->m->resetData(memory::mallocFromMemPool(size, dtype, context));
-        state->v->resetData(memory::mallocFromMemPool(size, dtype, context));
-        state->vMax->resetData(memory::mallocFromMemPool(size, dtype, context));
+        TensorFriend::resetTensorData(
+            state->m, memory::mallocFromMemPool(size, dtype, context));
+        TensorFriend::resetTensorData(
+            state->v, memory::mallocFromMemPool(size, dtype, context));
+        TensorFriend::resetTensorData(
+            state->vMax, memory::mallocFromMemPool(size, dtype, context));
         CHECK_CUDART(cudaMemsetAsync(state->m->data(), 0,
                                      toByte(dtype) * cute::size(layout),
                                      context->cudaStream));

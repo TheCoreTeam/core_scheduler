@@ -1,12 +1,7 @@
-#include <cublas_v2.h>
-#include <cuda_runtime.h>
 #include <gtest/gtest.h>
 #include <torch/torch.h>
 
-#include <Eigen/Dense>
-
 #include "compute/linear.h"
-#include "internal_utils.h"
 #include "logger.h"
 #include "threading/thread_pool_compute.h"
 

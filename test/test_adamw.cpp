@@ -5,6 +5,7 @@
 #include <fstream>
 
 #include "logger.h"
+#include "memory/allocate.h"
 #include "memory/cuda_memcpy.h"
 #include "optimizer/adamw.h"
 #include "tensor.h"
@@ -61,18 +62,23 @@ void TestDLLMAdamW::TestRoutine(const dllm::TensorIndexType size) {
   auto shape = cute::make_shape(size);
   auto layout = cute::make_layout(shape, cute::GenRowMajor{});
 
-  void *xDevice, *dxDevice;
-  CHECK_CUDART(cudaMalloc(&xDevice, sizeof(Element) * cute::size(layout)));
-  CHECK_CUDART(cudaMalloc(&dxDevice, sizeof(Element) * cute::size(layout)));
-  auto xTensor = std::make_shared<dllm::Tensor1D>(
-      xDevice, layout, dllm::toDtype<Element>(), dllm::CUDA);
-  auto dxTensor = std::make_shared<dllm::Tensor1D>(
-      dxDevice, layout, dllm::toDtype<Element>(), dllm::CUDA);
-
   CHECK_CUDART(cudaDeviceSynchronize());
 
   dllm::ThreadStreamCudart h2d{0}, d2h{0};
   dllm::ThreadPoolCompute tp{0, 1};
+
+  std::shared_ptr<dllm::Tensor1D> xTensor;
+  {
+    auto task = dllm::memory::allocateRowMajor(
+        xTensor, {size}, dllm::toDtype<Element>(), dllm::CUDA);
+    h2d.submit(std::move(task));
+  }
+  std::shared_ptr<dllm::Tensor1D> dxTensor;
+  {
+    auto task = dllm::memory::allocateRowMajor(
+        dxTensor, {size}, dllm::toDtype<Element>(), dllm::CUDA);
+    h2d.submit(std::move(task));
+  }
 
   using AdamW = dllm::optimizer::AdamW<>;
   using State = AdamW::State;
@@ -135,9 +141,6 @@ void TestDLLMAdamW::TestRoutine(const dllm::TensorIndexType size) {
   ASSERT_NEAR((xHost - xHostRef).matrix().norm(), 0, 1e-4);
   ASSERT_NEAR((mHost - mHostRef).matrix().norm(), 0, 1e-4);
   ASSERT_NEAR((vHost - vHostRef).matrix().norm(), 0, 1e-4);
-
-  CHECK_CUDART(cudaFree(xDevice));
-  CHECK_CUDART(cudaFree(dxDevice));
 }
 
 TEST_F(TestDLLMAdamW, TestF32_128) { TestRoutine<float>(128); }

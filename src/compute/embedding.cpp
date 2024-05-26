@@ -6,7 +6,7 @@
 #include "logger.h"
 
 namespace dllm::compute {
-std::shared_ptr<Embedding::State> Embedding::init(
+std::shared_ptr<Embedding::ForwardState> Embedding::init(
     int64_t num_embeddings, int64_t embedding_dim,
     c10::optional<int64_t> padding_idx, c10::optional<double> max_norm,
     double norm_type, bool scale_grad_by_freq, bool sparse,
@@ -33,14 +33,14 @@ std::shared_ptr<Embedding::State> Embedding::init(
   //   _no_grad_embedding_renorm_(weight, input_, *max_norm, norm_type);
   // }
 
-  return std::make_shared<State>(std::move(weight), num_embeddings,
+  return std::make_shared<ForwardState>(std::move(weight), num_embeddings,
                                  padding_idx.value(), max_norm, norm_type,
                                  scale_grad_by_freq, sparse);
 }
 
 TaskCompute Embedding::forward(const std::shared_ptr<Tensor> &output,
                                const std::shared_ptr<const Tensor> &indices,
-                               const std::shared_ptr<const State> &state) {
+                               const std::shared_ptr<const ForwardState> &state) {
   auto task = TaskCompute{[state = state, output = output, indices = indices,
                            outputFuture = output->future(),
                            weightFuture = indices->future().wFuture,
@@ -71,7 +71,7 @@ TaskCompute Embedding::backward(
     const std::shared_ptr<Tensor> &grad_weight,
     const std::shared_ptr<const Tensor> &grad_output,
     const std::shared_ptr<const Tensor> &indices,
-    const std::shared_ptr<const State> &state) {
+    const std::shared_ptr<const ForwardState> &state) {
   auto task = TaskCompute{[grad_weight = grad_weight, grad_output = grad_output,
                            indices = indices, state = state,
                            grad_weight_future = grad_weight->future(),

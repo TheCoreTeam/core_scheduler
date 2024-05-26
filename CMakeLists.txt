@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.25)
-project(dllm LANGUAGES CXX CUDA)
+project(dllm LANGUAGES CXX)
 
 if (NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release)
@@ -15,7 +15,7 @@ endif ()
 set(BUILD_TESTING OFF)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
-set(CMAKE_CUDA_ARCHITECTURES "80;86;90a")
+#set(CMAKE_CUDA_ARCHITECTURES "80;86;90a")
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_CURRENT_SOURCE_DIR}/cmake/)
 
@@ -24,6 +24,7 @@ option(DLLM_ENABLE_EXAMPLES "" ON)
 option(DLLM_ENABLE_FLASH_ATTENTION "" ON)
 
 find_package(CUDAToolkit REQUIRED)
+find_package(OpenMP REQUIRED)
 find_package(Torch REQUIRED)
 find_package(CUDNN REQUIRED)
 #find_package(CuTe REQUIRED)
@@ -39,17 +40,11 @@ find_package(MPI REQUIRED)
 
 add_subdirectory(src)
 
-set(DLLM_EIGEN_ADDED OFF)
 if (DLLM_ENABLE_TESTS)
     find_package(GTest REQUIRED)
-    find_package(Eigen3 REQUIRED)
-    set(DLLM_EIGEN_ADDED ON)
-
     add_subdirectory(test)
 endif ()
 
 if (DLLM_ENABLE_EXAMPLES)
-    find_package(Eigen3 REQUIRED)
-
     add_subdirectory(example)
 endif ()
