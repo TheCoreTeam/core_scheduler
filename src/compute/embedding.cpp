@@ -73,7 +73,7 @@ TaskCompute Embedding::forward(const std::shared_ptr<State> &state,
 }
 
 TaskCompute Embedding::backward(
-    const std::shared_ptr<const State> &state,
+    const std::shared_ptr<State> &state,
     const std::shared_ptr<Tensor> &grad_weight,
     const std::shared_ptr<const Tensor> &grad_output) {
   auto task =
@@ -104,6 +104,8 @@ TaskCompute Embedding::backward(
   grad_output->future().rFuture = future;
   state->backward.indices->future().rFuture = future;
   state->forward.weight->future().rFuture = future;
+  // decrease counter
+  state->backward.indices.reset();
   return task;
 }
 }  // namespace dllm::compute

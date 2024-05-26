@@ -53,10 +53,12 @@ void TestDLLMGelu::TestRoutine(const int T, const double tol_forward,
   // 应用GELU激活函数
   auto Output1 = torch::gelu(input1);
 
+  auto state = dllm::compute::GeLU::init();
+
   const auto tensorOutput = std::make_shared<dllm::Tensor>();
   {
     auto task = dllm::compute::GeLU::forward(
-        tensorOutput, std::make_shared<dllm::Tensor>(input2));
+        state, tensorOutput, std::make_shared<dllm::Tensor>(input2));
     tp.submit(std::move(task));
     tensorOutput->wait();
   }
@@ -72,8 +74,7 @@ void TestDLLMGelu::TestRoutine(const int T, const double tol_forward,
   const auto tensorGradInput = std::make_shared<dllm::Tensor>();
   {
     auto task = dllm::compute::GeLU::backward(
-        tensorGradInput, std::make_shared<dllm::Tensor>(input2),
-        std::make_shared<dllm::Tensor>(GradOutput));
+        state, tensorGradInput, std::make_shared<dllm::Tensor>(GradOutput));
     tp.submit(std::move(task));
     tensorGradInput->wait();
   }

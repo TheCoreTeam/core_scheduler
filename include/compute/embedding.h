@@ -32,7 +32,7 @@ struct Embedding {
                              const std::shared_ptr<Tensor> &output,
                              const std::shared_ptr<const Tensor> &indices);
 
-  static TaskCompute backward(const std::shared_ptr<const State> &state,
+  static TaskCompute backward(const std::shared_ptr<State> &state,
                               const std::shared_ptr<Tensor> &grad_weight,
                               const std::shared_ptr<const Tensor> &grad_output);
 };

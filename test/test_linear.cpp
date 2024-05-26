@@ -33,72 +33,43 @@ class LinearThreadPoolComputeTestFixture : public ::testing::Test {
 
 namespace {
 template <typename Element>
-void TestThreadPoolComputeForwardT(dllm::ThreadPoolCompute &threadPool) {
-  const int m = 128, n = 2048, k = 512, s = 3;
-  const torch::Device device = torch::kCUDA;
-  const torch::Dtype dtype = TypeToTorch<Element>::type;
-  const auto option = torch::TensorOptions().dtype(dtype).device(device);
-  auto x = std::make_shared<dllm::Tensor>(at::randn({m, s, k}, option));
-  auto w = std::make_shared<dllm::Tensor>(at::randn({n, k}, option));
-  auto y = std::make_shared<dllm::Tensor>();
-
-  {
-    auto task = dllm::compute::Linear::forward(y, x, w);
-    threadPool.submit(std::move(task));
-    y->wait();
-  }
-
-  ASSERT_TRUE(
-      torch::allclose(y->tensor(), torch::linear(x->tensor(), w->tensor())));
-}
-}  // namespace
-
-TEST_F(LinearThreadPoolComputeTestFixture, TestForwardF16) {
-  TestThreadPoolComputeForwardT<nv_half>(threadPool);
-}
-TEST_F(LinearThreadPoolComputeTestFixture, TestForwardF32) {
-  TestThreadPoolComputeForwardT<float>(threadPool);
-}
-TEST_F(LinearThreadPoolComputeTestFixture, TestForwardF64) {
-  TestThreadPoolComputeForwardT<double>(threadPool);
-}
-
-namespace {
-template <typename Element>
 void TestThreadPoolComputeBackwardT(dllm::ThreadPoolCompute &threadPool) {
   const int m = 32, n = 16, k = 4, s = 3;
   const torch::Device device = torch::kCUDA;
   const torch::Dtype dtype = TypeToTorch<Element>::type;
   const auto option = torch::TensorOptions().dtype(dtype).device(device);
   auto x = std::make_shared<dllm::Tensor>(at::randn({m, s, k}, option));
-  auto w = std::make_shared<dllm::Tensor>(at::randn({n, k}, option));
   auto y = std::make_shared<dllm::Tensor>();
   auto dx = std::make_shared<dllm::Tensor>();
-  auto dw = std::make_shared<dllm::Tensor>(torch::zeros_like(w->tensor()));
+
+  auto state = dllm::compute::Linear::init(k, n, false, device, dtype);
+  auto dw = std::make_shared<dllm::Tensor>(
+      torch::zeros_like(state->forward.weight->tensor()));
 
   auto xRef = x->tensor().clone().requires_grad_(true);
-  auto wRef = w->tensor().clone().requires_grad_(true);
+  auto wRef = state->forward.weight->tensor().clone().requires_grad_(true);
   auto yRef = torch::linear(xRef, wRef);
   auto yGrad = torch::randn_like(yRef);
   yRef.backward(yGrad);
 
   {
-    auto task = dllm::compute::Linear::forward(y, x, w);
+    auto task = dllm::compute::Linear::forward(state, y, x);
     threadPool.submit(std::move(task));
   }
   {
     auto task = dllm::compute::Linear::backwardInput(
-        dx, std::make_shared<dllm::Tensor>(yGrad), w);
+        state, dx, std::make_shared<dllm::Tensor>(yGrad));
     threadPool.submit(std::move(task));
   }
   {
     auto task = dllm::compute::Linear::backwardWeight(
-        dw, std::make_shared<dllm::Tensor>(yGrad), x);
+        state, dw, std::make_shared<dllm::Tensor>(yGrad));
     threadPool.submit(std::move(task));
   }
   dx->wait();
   dw->wait();
 
+  ASSERT_TRUE(torch::allclose(y->tensor(), yRef));
   ASSERT_TRUE(torch::allclose(dx->tensor(), xRef.grad()));
   ASSERT_TRUE(torch::allclose(dw->tensor(), wRef.grad()));
 }
