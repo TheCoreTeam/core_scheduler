@@ -29,9 +29,9 @@ target_include_directories(dllm_core PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/../include
 )
 
-target_link_libraries(dllm_core PRIVATE CUDA::cudart CUDA::cublas MPI::MPI_CXX nvidia::nccl)
+target_link_libraries(dllm_core PRIVATE CUDA::cudart CUDA::cublas)
 target_link_libraries(dllm_core PRIVATE fmt::fmt-header-only)
-target_link_libraries(dllm_core PUBLIC spdlog::spdlog_header_only torch)
+target_link_libraries(dllm_core PUBLIC spdlog::spdlog_header_only OpenMP::OpenMP_CXX nvidia::nccl MPI::MPI_CXX torch)
 
 if (DLLM_ENABLE_FLASH_ATTENTION)
     add_subdirectory(flash_attention)
