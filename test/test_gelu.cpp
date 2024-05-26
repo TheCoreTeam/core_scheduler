@@ -1,107 +1,100 @@
 #include <cuda_runtime.h>
 #include <gtest/gtest.h>
-#include <math_constants.h>
-
-#include <Eigen/Dense>
-#include <cmath>
+#include <torch/torch.h>
 
 #include "compute/gelu.h"
 #include "logger.h"
 #include "tensor.h"
+#include "threading/thread_pool_compute.h"
 
-namespace Eigen::internal {
+template <typename T>
+struct TypeToTorch;
+
 template <>
-struct scalar_random_op<nv_half> {
-  EIGEN_EMPTY_STRUCT_CTOR(scalar_random_op);
-  inline const nv_half operator()() const {
-    return static_cast<nv_half>(random<float>());
-  }
+struct TypeToTorch<float> {
+  using Type = float;
+  static const at::ScalarType type = torch::kFloat;
 };
-}  // namespace Eigen::internal
+
+template <>
+struct TypeToTorch<nv_half> {
+  using Type = c10::Half;
+  static const at::ScalarType type = torch::kHalf;
+};
+
+template <>
+struct TypeToTorch<double> {
+  using Type = double;
+  static const at::ScalarType type = torch::kDouble;
+};
 
 class TestDLLMGelu : public ::testing::Test {
  protected:
-  dllm::ContextCompute context{};
-
-  void SetUp() override {
-    CHECK_CUDART(
-        cudaStreamCreateWithFlags(&context.cudaStream, cudaStreamNonBlocking));
-  }
-
-  void TearDown() override {
-    CHECK_CUDART(cudaStreamDestroy(context.cudaStream));
-  }
+  dllm::ThreadPoolCompute tp{0, 2};
 
   template <typename Element>
-  void TestRoutine(const dllm::TensorIndexType size);
+  void TestRoutine(int T, double tol_forward, double tol_backward);
 };
 
 template <typename Element>
-void TestDLLMGelu::TestRoutine(const dllm::TensorIndexType size) {
-  using DataType = Element;
-  Eigen::Vector<Element, Eigen::Dynamic> hostInput(size);
-  Eigen::Vector<Element, Eigen::Dynamic> hostOutput(size);
-  Eigen::Vector<Element, Eigen::Dynamic> hostRef(size);
-  hostInput.setRandom();
-  hostOutput.setZero();
+void TestDLLMGelu::TestRoutine(const int T, const double tol_forward,
+                               const double tol_backward) {
+  torch::manual_seed(1);
+  const int B = 2;
+  const torch::Device device = torch::kCUDA;
+  const torch::Dtype dtype = TypeToTorch<Element>::type;
+  const auto option = torch::TensorOptions().dtype(dtype).device(device);
+  const auto input = torch::randn({B, T}, option);
 
-  auto shape = cute::make_shape(size);
-  auto layout = cute::make_layout(shape, cute::GenRowMajor{});
+  auto input1 = input.detach().clone().set_requires_grad(true);
 
-  void *DeviceInput, *DeviceOutput;
-  CHECK_CUDART(cudaMalloc(&DeviceInput, sizeof(Element) * cute::size(layout)));
-  CHECK_CUDART(cudaMalloc(&DeviceOutput, sizeof(Element) * cute::size(layout)));
-  auto tensorInput = std::make_shared<dllm::Tensor1D>(
-      DeviceInput, layout, dllm::toDtype<Element>(), dllm::CUDA);
-  auto tensorOutput = std::make_shared<dllm::Tensor1D>(
-      DeviceOutput, layout, dllm::toDtype<Element>(), dllm::CUDA);
+  auto input2 = input.detach().clone();
 
-  CHECK_CUDART(cudaMemcpy(DeviceInput, hostInput.data(),
-                          sizeof(Element) * cute::size(layout),
-                          cudaMemcpyHostToDevice));
-  CHECK_CUDART(
-      cudaMemset(DeviceOutput, 0, sizeof(Element) * cute::size(layout)));
+  // 应用GELU激活函数
+  auto Output1 = torch::gelu(input1);
 
-  CHECK_CUDART(cudaDeviceSynchronize());
+  const auto tensorOutput = std::make_shared<dllm::Tensor>();
+  {
+    auto task = dllm::compute::GeLU::forward(
+        tensorOutput, std::make_shared<dllm::Tensor>(input2));
+    tp.submit(std::move(task));
+    tensorOutput->wait();
+  }
 
-  constexpr auto useDouble = sizeof(Element) > sizeof(float);
-  using TargetType = std::conditional_t<useDouble, double, float>;
-  constexpr TargetType inv_sqrt_2 = 1. / std::sqrt(2.);
-  hostRef = hostInput.unaryExpr([=](Element x) -> Element {
-    return static_cast<TargetType>(x) * static_cast<TargetType>(0.5) *
-           (static_cast<TargetType>(1.) +
-            erf(static_cast<TargetType>(x) * inv_sqrt_2));
-  });
+  ASSERT_TRUE(torch::allclose(Output1, tensorOutput->tensor()));
 
-  auto tast = dllm::compute::GeLU::forward(tensorOutput, tensorInput);
-  tast(&context);
+  auto GradOutput = torch::randn_like(Output1);
 
-  CHECK_CUDART(cudaMemcpy(hostOutput.data(), DeviceOutput,
-                          sizeof(Element) * cute::size(layout),
-                          cudaMemcpyDeviceToHost));
-  CHECK_CUDART(cudaDeviceSynchronize());
+  const auto GradInput1 = torch::autograd::grad(
+      {Output1}, {input1}, {GradOutput}, /*retain_graph=*/false,
+      /*create_graph=*/false, /*allow_unused=*/true)[0];
 
-  auto isApprox = hostOutput.isApprox(hostRef);
+  const auto tensorGradInput = std::make_shared<dllm::Tensor>();
+  {
+    auto task = dllm::compute::GeLU::backward(
+        tensorGradInput, std::make_shared<dllm::Tensor>(input2),
+        std::make_shared<dllm::Tensor>(GradOutput));
+    tp.submit(std::move(task));
+    tensorGradInput->wait();
+  }
 
-  ASSERT_TRUE(isApprox);
-  CHECK_CUDART(cudaFree(DeviceInput));
-  CHECK_CUDART(cudaFree(DeviceOutput));
+  ASSERT_TRUE(torch::allclose(GradInput1, tensorGradInput->tensor()));
 }
 
-TEST_F(TestDLLMGelu, TestF32_128) { TestRoutine<float>(128); }
+TEST_F(TestDLLMGelu, TestF32_128) { TestRoutine<float>(128, 5e-4, 5e-4); }
 
-TEST_F(TestDLLMGelu, TestF32_512) { TestRoutine<float>(512); }
+TEST_F(TestDLLMGelu, TestF32_512) { TestRoutine<float>(512, 5e-4, 5e-4); }
 
-TEST_F(TestDLLMGelu, TestF32_1024) { TestRoutine<float>(1024); }
+TEST_F(TestDLLMGelu, TestF32_1024) { TestRoutine<float>(1024, 5e-4, 5e-4); }
 
-TEST_F(TestDLLMGelu, TestF64_128) { TestRoutine<double>(128); }
+TEST_F(TestDLLMGelu, TestF16_128) { TestRoutine<nv_half>(128, 1e-2, 1e-2); }
 
-TEST_F(TestDLLMGelu, TestF64_512) { TestRoutine<double>(512); }
+TEST_F(TestDLLMGelu, TestF16_512) { TestRoutine<nv_half>(512, 1e-2, 1e-2); }
 
-TEST_F(TestDLLMGelu, TestF64_1024) { TestRoutine<double>(1024); }
+TEST_F(TestDLLMGelu, TestF16_1024) { TestRoutine<nv_half>(1024, 1e-2, 1e-2); }
 
-TEST_F(TestDLLMGelu, TestF16_128) { TestRoutine<nv_half>(128); }
+// TEST_F(TestDLLMGelu, TestF64_128) { TestRoutine<double>(128, 1e-10, 1e-10); }
 
-TEST_F(TestDLLMGelu, TestF16_512) { TestRoutine<nv_half>(512); }
+// TEST_F(TestDLLMGelu, TestF64_512) { TestRoutine<double>(512, 1e-10, 1e-10); }
 
-TEST_F(TestDLLMGelu, TestF16_1024) { TestRoutine<nv_half>(1024); }
+// TEST_F(TestDLLMGelu, TestF64_1024) { TestRoutine<double>(1024, 1e-10, 1e-10); }

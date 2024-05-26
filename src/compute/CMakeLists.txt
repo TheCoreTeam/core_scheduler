@@ -1,17 +1,13 @@
 set(DLLM_COMPUTE_SRCS
-        ${CMAKE_CURRENT_SOURCE_DIR}/mse.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/mse.cu
-        ${CMAKE_CURRENT_SOURCE_DIR}/relu.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/relu.cu
+#        ${CMAKE_CURRENT_SOURCE_DIR}/mse.cpp
+#        ${CMAKE_CURRENT_SOURCE_DIR}/mse.cu
+#        ${CMAKE_CURRENT_SOURCE_DIR}/relu.cpp
+#        ${CMAKE_CURRENT_SOURCE_DIR}/relu.cu
         ${CMAKE_CURRENT_SOURCE_DIR}/gelu.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/gelu.cu
-        ${CMAKE_CURRENT_SOURCE_DIR}/init.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/init.cu
-        ${CMAKE_CURRENT_SOURCE_DIR}/random.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/random.cu
-        ${CMAKE_CURRENT_SOURCE_DIR}/fc.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/matmul.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/fused_classifier.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/fused_classifier.cu
+#        ${CMAKE_CURRENT_SOURCE_DIR}/fused_classifier.cpp
+#        ${CMAKE_CURRENT_SOURCE_DIR}/fused_classifier.cu
+        ${CMAKE_CURRENT_SOURCE_DIR}/add.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/embedding.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/linear.cpp
 )
 set(DLLM_COMPUTE_SRCS ${DLLM_COMPUTE_SRCS} PARENT_SCOPE)

@@ -1,5 +1,7 @@
 #include "threading/thread_stream_cudart.h"
 
+#include <c10/cuda/CUDAGuard.h>
+#include <c10/cuda/CUDAStream.h>
 #include <cuda_runtime.h>
 #include <pthread.h>
 #include <sched.h>
@@ -27,7 +29,12 @@ void threadTask(const int deviceRank, std::queue<TaskCudart> *taskQueue,
   CHECK_CUDART(cudaSetDevice(deviceRank));
   CHECK_CUDART(
       cudaStreamCreateWithFlags(&context.cudaStream, cudaStreamNonBlocking));
-  CHECK_CUDART(cudaDeviceGetDefaultMemPool(&context.memPool, deviceRank));
+  const auto stream = c10::cuda::getStreamFromExternal(
+      context.cudaStream, static_cast<c10::DeviceIndex>(context.deviceRank));
+  c10::cuda::CUDAStreamGuard streamGuard{stream};
+  c10::cuda::CUDAGuard deviceGuard{
+    static_cast<c10::DeviceIndex>(context.deviceRank)};
+
   while (!shutDown->load()) {
     TaskCudart task;
     std::unique_lock lock{*queueMutex};

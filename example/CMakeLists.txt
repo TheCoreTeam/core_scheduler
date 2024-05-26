@@ -2,7 +2,7 @@ function(create_executable target_name source_files)
     add_executable(${target_name} ${source_files})
     target_link_libraries(${target_name} PRIVATE
             dllm
-            spdlog::spdlog
+            spdlog::spdlog_header_only
             CUDA::cudart
             CUDA::cublas
             Eigen3::Eigen

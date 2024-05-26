@@ -7,7 +7,7 @@ Conda packages:
 conda create -n dllm
 conda activate dllm
 conda install cuda-toolkit -c nvidia
-conda install gcc gxx mpich nccl -c conda-forge
+conda install gcc gxx mpich nccl libarrow-dataset -c conda-forge
 ```
 
 For Ubuntu 20.04 users, you may need to use the system packages:
@@ -23,6 +23,7 @@ git submodule update --recursive
 mkdir build
 cd build
 cmake ..
+# if you don't want to compile flash attention, use cmake -DDLLM_ENABLE_FLASH_ATTENTION=OFF ..
 make -j dllm_tests
 ./test/dllm_tests
 ```

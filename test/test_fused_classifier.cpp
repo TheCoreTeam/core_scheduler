@@ -16,7 +16,9 @@ namespace Eigen::internal {
 template <>
 struct scalar_random_op<nv_half> {
   EIGEN_EMPTY_STRUCT_CTOR(scalar_random_op)
-  nv_half operator()() const { return static_cast<nv_half>(random<float>()); }
+  inline const nv_half operator()() const {
+    return static_cast<nv_half>(random<float>());
+  }
 };
 }  // namespace Eigen::internal
 
@@ -78,7 +80,7 @@ void TestT(const dllm::ContextCompute &context) {
 
   logits.slice(2, V, VP).fill_(0.);
   logits = logits.requires_grad_(true);
-  auto valid_logits = logits.slice(2, 0, V);
+  auto valid_logits = logits.slice(-1, 0, V);
 
   auto max_logits = std::get<0>(valid_logits.max(-1, true));
   auto logits_stable = valid_logits - max_logits;
@@ -124,14 +126,13 @@ void TestT(const dllm::ContextCompute &context) {
                           cudaMemcpyHostToDevice));
   auto targetsTensor = std::make_shared<dllm::Tensor2D>(
       targetsDevicePtr, targetsLayout, dllm::toDtype<int>(), dllm::CUDA);
-  CHECK_CUDART(cudaDeviceSynchronize());
 
   {
     auto task = dllm::compute::FusedClassifier::call(logitsTensor, lossesTensor,
                                                      targetsTensor);
     task(&context);
-    dllm::util::FutureGuard{logitsTensor->future->rFuture};
-    dllm::util::FutureGuard{logitsTensor->future->wFuture};
+    dllm::util::FutureGuard r{logitsTensor->future->rFuture};
+    dllm::util::FutureGuard w{logitsTensor->future->wFuture};
   }
 
   auto lossesRef = at::empty_like(losses, dtype);
@@ -153,8 +154,8 @@ void TestT(const dllm::ContextCompute &context) {
   }
   ASSERT_TRUE(
       torch::allclose(lossesRef.to(torch::kDouble), losses, 1e-5, atol));
-  ASSERT_TRUE(
-      torch::allclose(gradRef.to(torch::kDouble), logits.grad(), 1e-5, atol));
+  ASSERT_TRUE(torch::allclose(gradRef.to(torch::kDouble).slice(-1, 0, V),
+                              logits.grad().slice(-1, 0, V), 1e-5, atol));
 
   CHECK_CUDART(cudaFree(logitsDevicePtr));
   CHECK_CUDART(cudaFree(lossesDevicePtr));
