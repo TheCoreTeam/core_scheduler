@@ -1,6 +1,3 @@
-set(DLLM_MEMORY_SRCS "")
-add_subdirectory(memory)
-
 set(DLLM_COMPUTE_SRCS "")
 add_subdirectory(compute)
 
@@ -16,8 +13,6 @@ add_subdirectory(threading)
 add_library(dllm_core SHARED
         logger.cpp
         tensor.cpp
-#        random.cpp
-#        ${DLLM_MEMORY_SRCS}
         ${DLLM_COMPUTE_SRCS}
 #        ${DLLM_COMMUNICATION_SRCS}
 #        ${DLLM_OPTIMIZER_SRCS}
@@ -37,7 +32,6 @@ target_include_directories(dllm_core PUBLIC
 target_link_libraries(dllm_core PRIVATE CUDA::cudart CUDA::cublas MPI::MPI_CXX nvidia::nccl)
 target_link_libraries(dllm_core PRIVATE fmt::fmt-header-only)
 target_link_libraries(dllm_core PUBLIC spdlog::spdlog_header_only torch)
-target_link_libraries(dllm_core PRIVATE nvidia::cutlass::cute)
 
 if (DLLM_ENABLE_FLASH_ATTENTION)
     add_subdirectory(flash_attention)
@@ -48,4 +42,3 @@ endif ()
 add_library(dllm INTERFACE)
 
 target_link_libraries(dllm INTERFACE dllm_core dllm_flash_attention_plugin)
-target_link_libraries(dllm INTERFACE nvidia::cutlass::cute)
