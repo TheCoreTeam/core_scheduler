@@ -70,17 +70,14 @@ void TestEmbedding::TestRoutine(const double tol_forward,
 
   auto output1 = at::embedding(wte1, input1);
 
-  dllm::compute::Embedding::SharedForwardState forwardState;
-  dllm::compute::Embedding::init(forwardState, vocab, d, {}, {}, {}, {}, {},
-                                 device, dtype);
-  forwardState->weight->tensor().copy_(wte1.detach());
+  auto state = dllm::compute::Embedding::init(vocab, d, {}, {}, {}, {}, {},
+                                              device, dtype);
+  state->forward.weight->tensor().copy_(wte1.detach());
 
-  dllm::compute::Embedding::SharedBackwardState backwardState;
   const auto output2 = std::make_shared<dllm::Tensor>();
   {
     auto task = dllm::compute::Embedding::forward(
-        backwardState, forwardState, output2,
-        std::make_shared<dllm::Tensor>(input));
+        state, output2, std::make_shared<dllm::Tensor>(input));
     tp.submit(std::move(task));
     output2->wait();
   }
@@ -100,7 +97,7 @@ void TestEmbedding::TestRoutine(const double tol_forward,
   const auto grad2 = std::make_shared<dllm::Tensor>();
   {
     auto task = dllm::compute::Embedding::backward(
-        grad2, backwardState, std::make_shared<dllm::Tensor>(grad_output));
+        state, grad2, std::make_shared<dllm::Tensor>(grad_output));
     tp.submit(std::move(task));
     grad2->wait();
   }
