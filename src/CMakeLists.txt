@@ -43,4 +43,4 @@ endif ()
 
 add_library(dllm INTERFACE)
 
-target_link_libraries(dllm INTERFACE dllm_core dllm_flash_attention_plugin)
+target_link_libraries(dllm INTERFACE dllm_core)
