@@ -4,58 +4,71 @@
 
 #include "internal_utils.h"
 #include "logger.h"
+#include "nvtx_helper.h"
+#include "tensor_friend.h"
 
 namespace dllm::compute {
-std::shared_ptr<GeLU::State> GeLU::init() { return std::make_shared<State>(); }
+TaskCompute GeLU::init(std::shared_ptr<State> &state) {
+  state = std::make_shared<State>();
+  return TaskCompute{[](const ContextCompute *) {}};
+}
 
 TaskCompute GeLU::forward(const std::shared_ptr<State> &state,
                           const std::shared_ptr<Tensor> &output,
-                          const std::shared_ptr<const Tensor> &input) {
+                          const std::shared_ptr<const ReadOnlyTensor> &input) {
   auto task = TaskCompute{
       [output = output, input = input, outputfuture = output->future(),
        inputFuture =
-           input->future().wFuture](const ContextCompute *context) mutable {
+           input->future()](const ContextCompute *context) mutable {
+        DLLM_NVTX_RANGE_FN("dllm::compute::GeLU::forward");
         {
           util::FutureGuard outputGuard{outputfuture};
           util::FutureGuard inputGuard{inputFuture};
-          output->tensor() = torch::gelu(input->tensor());
+          DLLM_EXTRACT_TENSOR(output) = torch::gelu(DLLM_EXTRACT_TENSOR(input));
+          output.reset();
+          input.reset();
         }
         CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
-        output.reset();
-        input.reset();
       }};
   const TaskFuture future = task.get_future();
-  input->future().rFuture = future;
-  output->future().wFuture = future;
+  input->resetFuture(future);
+  output->resetFuture(future);
   state->backward.input = input;
+  // size
+  output->sizes() = input->sizes();
   return task;
 }
 
-TaskCompute GeLU::backward(const std::shared_ptr<State> &state,
-                           const std::shared_ptr<Tensor> &dinput,
-                           const std::shared_ptr<const Tensor> &doutput) {
+TaskCompute GeLU::backward(
+    const std::shared_ptr<State> &state, const std::shared_ptr<Tensor> &dinput,
+    const std::shared_ptr<const ReadOnlyTensor> &doutput) {
   auto task =
       TaskCompute{[doutput = doutput, input = state->backward.input,
                    dinput = dinput, dinputFuture = dinput->future(),
-                   doutputFuture = doutput->future().wFuture,
-                   inputFuture = state->backward.input->future().wFuture](
+                   doutputFuture = doutput->future(),
+                   inputFuture = state->backward.input->future()](
                       const ContextCompute *context) mutable {
+        DLLM_NVTX_RANGE_FN("dllm::compute::GeLU::backward");
         {
           util::FutureGuard dinputGuard{dinputFuture};
           util::FutureGuard doutGuard{doutputFuture};
           util::FutureGuard inputGuard{inputFuture};
-          dinput->tensor() =
-              torch::gelu_backward(doutput->tensor(), input->tensor());
+          DLLM_EXTRACT_TENSOR(dinput) = torch::gelu_backward(
+              DLLM_EXTRACT_TENSOR(doutput), DLLM_EXTRACT_TENSOR(input));
+          dinput.reset();
+          input.reset();
+          doutput.reset();
         }
         CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
-        dinput.reset();
-        input.reset();
-        doutput.reset();
       }};
   const TaskFuture future = task.get_future();
-  dinput->future().wFuture = future;
-  doutput->future().rFuture = future;
-  state->backward.input->future().rFuture = future;
+  dinput->resetFuture(future);
+  doutput->resetFuture(future);
+  state->backward.input->resetFuture(future);
+  // size
+  dinput->sizes() = doutput->sizes();
+  // decrease counter
+  state->backward.input.reset();
   return task;
 }
 }  // namespace dllm::compute

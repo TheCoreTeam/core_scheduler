@@ -8,20 +8,22 @@ struct GeLU {
     struct Forward {
     } forward;
     struct Backward {
-      std::shared_ptr<const Tensor> input;
+      std::shared_ptr<const ReadOnlyTensor> input = nullptr;
     } backward;
     struct Args {
     } args;
   };
 
-  static std::shared_ptr<State> init();
+  static TaskCompute init(std::shared_ptr<State> &state);
 
-  static TaskCompute forward(const std::shared_ptr<State> &state,
-                             const std::shared_ptr<Tensor> &output,
-                             const std::shared_ptr<const Tensor> &input);
+  static TaskCompute forward(
+      const std::shared_ptr<State> &state,
+      const std::shared_ptr<Tensor> &output,
+      const std::shared_ptr<const ReadOnlyTensor> &input);
 
-  static TaskCompute backward(const std::shared_ptr<State> &state,
-                              const std::shared_ptr<Tensor> &dinput,
-                              const std::shared_ptr<const Tensor> &doutput);
+  static TaskCompute backward(
+      const std::shared_ptr<State> &state,
+      const std::shared_ptr<Tensor> &dinput,
+      const std::shared_ptr<const ReadOnlyTensor> &doutput);
 };
 }  // namespace dllm::compute

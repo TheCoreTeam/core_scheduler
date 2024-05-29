@@ -9,29 +9,31 @@ endif ()
 
 add_executable(dllm_tests
         main.cpp
-#        test_adamw.cpp
-#        test_fc.cpp
-#        test_relu.cpp
+        #        test_adamw.cpp
+        #        test_relu.cpp
+        #        test_linear.cpp
         test_linear.cpp
         test_gelu.cpp
-#        test_fused_classifier.cpp
-        test_add.cpp
-#        ${DLLM_FLASH_ATTENTION_SRC}
+        test_init.cpp
+        #        test_fused_classifier.cpp
+        test_flash_attention.cpp
+        #        test_add.cpp
+        #        ${DLLM_FLASH_ATTENTION_SRC}
         test_embedding.cpp
-#        ${DLLM_FLASH_ATTENTION_SRC}
+        #        ${DLLM_FLASH_ATTENTION_SRC}
 )
 
 target_link_libraries(dllm_tests PRIVATE
         dllm
         spdlog::spdlog_header_only
-        CUDA::cudart
+        CUDA::cudart_static
         CUDA::cublas
         GTest::gtest
         torch
 )
 
 target_compile_options(dllm_tests PRIVATE
-        $<$<CONFIG:Release>:-O3>
+        $<$<CONFIG:Release>:-Ofast>
         $<$<CONFIG:Debug>:-O0>
 )
 
@@ -49,7 +51,7 @@ target_include_directories(dllm_communication_tests PRIVATE
 target_link_libraries(dllm_communication_tests PRIVATE
         dllm
         spdlog::spdlog_header_only
-        CUDA::cudart
+        CUDA::cudart_static
         CUDA::cublas
         GTest::gtest
         MPI::MPI_CXX

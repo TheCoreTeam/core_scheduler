@@ -2,7 +2,10 @@
 #include <torch/torch.h>
 
 #include "compute/embedding.h"
+#include "compute/utils.h"
+#include "memory/to_torch.h"
 #include "threading/thread_pool_compute.h"
+#include "threading/thread_stream_cudart.h"
 
 template <typename T>
 struct TypeToTorch;
@@ -28,6 +31,7 @@ struct TypeToTorch<double> {
 class TestEmbedding : public ::testing::Test {
  protected:
   dllm::ThreadPoolCompute tp{0, 2};
+  dllm::ThreadStreamCudart stream{0};
 
   template <typename Element>
   void TestRoutine(const double tol_forward, const double tol_backward);
@@ -50,61 +54,63 @@ void TestEmbedding::TestRoutine(const double tol_forward,
 
   torch::Device device = torch::kCUDA;
   torch::Dtype dtype = TypeToTorch<Element>::type;
-  auto wte = torch::randn({vocab, d},
-                          torch::TensorOptions().dtype(dtype).device(device));
-  auto input = torch::randint(
-      0, 3, {B, T}, torch::TensorOptions().dtype(torch::kInt).device(device));
-  auto input_wpe =
-      torch::range(0, T - 1,
-                   torch::TensorOptions().dtype(torch::kInt).device(device))
-          .repeat({B, 1});
 
-  auto input1 = input.detach().clone();
-  auto wte1 = wte.to(TypeToTorch<Element>::type)
-                  .detach()
-                  .clone()
-                  .set_requires_grad(true);
-
-  auto input2 = input.detach().clone();
-  auto wte2 = wte.detach().clone();
-
-  auto output1 = at::embedding(wte1, input1);
-
-  auto state = dllm::compute::Embedding::init(vocab, d, {}, {}, {}, {}, {},
-                                              device, dtype);
-  state->forward.weight->tensor().copy_(wte1.detach());
-
-  const auto output2 = std::make_shared<dllm::Tensor>();
+  const auto input = dllm::Tensor::create();
+  std::shared_ptr<dllm::compute::Embedding::State> state;
   {
-    auto task = dllm::compute::Embedding::forward(
-        state, output2, std::make_shared<dllm::Tensor>(input));
+    auto task = dllm::compute::Utils::randint(
+        input, 0, 3, {B, T},
+        torch::TensorOptions().dtype(torch::kInt).device(device));
     tp.submit(std::move(task));
-    output2->wait();
+  }
+  {
+    auto task = dllm::compute::Embedding::init(state, vocab, d, {}, {}, {}, {},
+                                               {}, device, dtype);
+    tp.submit(std::move(task));
   }
 
-  ASSERT_TRUE(torch::allclose(output1, output2->tensor()));
-  // backward check
-  auto grad_output = torch::rand_like(output1);
-
-  // 计算梯度
-  auto grads = torch::autograd::grad(
-      {output1}, {wte1}, {grad_output}, /*retain_graph=*/false,
-      /*create_graph=*/false, /*allow_unused=*/true);
-
-  // Access and print gradients
-  auto grad_wte = grads[0];
-
-  const auto grad2 = std::make_shared<dllm::Tensor>();
+  const auto output = dllm::Tensor::create();
   {
-    auto task = dllm::compute::Embedding::backward(
-        state, grad2, std::make_shared<dllm::Tensor>(grad_output));
+    auto task = dllm::compute::Embedding::forward(state, output, input);
     tp.submit(std::move(task));
-    grad2->wait();
+    output->wait();
   }
-  ASSERT_TRUE(torch::allclose(grad_wte, grad2->tensor()));
+  const auto grad_output = dllm::Tensor::create();
+  {
+    auto task = dllm::compute::Utils::randn_like(grad_output, output);
+    tp.submit(std::move(task));
+  }
+  {
+    auto task = dllm::compute::Embedding::backward(state, grad_output);
+    tp.submit(std::move(task));
+  }
+
+  torch::Tensor input_torch;
+  {
+    auto task = dllm::memory::toTorch(input_torch, input);
+    stream.submit(std::move(task));
+    input->wait();
+  }
+  torch::Tensor weight_torch;
+  {
+    auto task = dllm::memory::toTorch(weight_torch, state->forward.weight);
+    stream.submit(std::move(task));
+    state->forward.weight->wait();
+  }
+  weight_torch.requires_grad_(true);
+  auto output_torch = at::embedding(weight_torch, input_torch);
+  torch::Tensor grad_output_torch;
+  {
+    auto task = dllm::memory::toTorch(grad_output_torch, grad_output);
+    stream.submit(std::move(task));
+    grad_output->wait();
+  }
+  output_torch.backward(grad_output_torch);
+
+  ASSERT_TRUE(torch::allclose(output, output_torch));
+  ASSERT_TRUE(torch::allclose(state->forward.grad_weight, weight_torch.grad()));
 }
 
 TEST_F(TestEmbedding, TestFloat) { TestRoutine<float>(1e-5, 1e-5); }
 
-TEST_F(TestEmbedding, TestHalf) { TestRoutine<half>(1e-5, 1e-2);
-}
+TEST_F(TestEmbedding, TestHalf) { TestRoutine<half>(1e-5, 1e-2); }

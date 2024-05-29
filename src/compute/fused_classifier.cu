@@ -281,7 +281,7 @@ class NvtxRange {
   }
   ~NvtxRange() { nvtxRangePop(); }
 };
-#define NVTX_RANGE_FN() NvtxRange nvtx_range(__FUNCTION__)
+#define DLLM_NVTX_RANGE_FN() NvtxRange nvtx_range(__FUNCTION__)
 
 template <typename Fn>
 __inline__ __attribute__((always_inline)) void autoDispatch(const Dtype dtype,
@@ -308,7 +308,7 @@ void fused_classifier(cudaStream_t stream,
                       const double dloss,
                       const std::shared_ptr<const Tensor2D>& targets,
                       const long B, const long T, const long V, const long P) {
-  NVTX_RANGE_FN();
+  DLLM_NVTX_RANGE_FN();
   auto f = [&](auto dummy) {
     using Dtype = std::decay_t<decltype(dummy)>;
     const int block_size = 1024;

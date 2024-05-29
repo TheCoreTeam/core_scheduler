@@ -1,39 +1,46 @@
 #pragma once
+#ifdef DLLM_ENABLE_INTERNAL_BUILD
 // This is an internal file, never use it unless you know what you are doing
+#include <memory>
+
 #include "tensor.h"
 
 namespace dllm {
 struct TensorFriend {
-  template <int N>
-  static void resetTensorData(Tensor<N> &tensor,
-                              typename Tensor<N>::DataPtr ptr) {
-    *tensor.data_ = std::move(ptr);
+  template <typename... Args>
+  static std::shared_ptr<Tensor> create(Args &&...args) {
+    return std::make_shared<Tensor>(Tensor{std::forward<Args>(args)...});
   }
 
-  template <int N>
-  static void resetTensorData(const std::shared_ptr<Tensor<N>> &tensor,
-                              typename Tensor<N>::DataPtr ptr) {
-    resetTensorData(*tensor, std::move(ptr));
+  template <typename... Args>
+  static std::shared_ptr<const ReadOnlyTensor> create_read_only(
+      Args &&...args) {
+    return std::make_shared<const ReadOnlyTensor>(
+        ReadOnlyTensor{std::forward<Args>(args)...});
   }
 
-  template <int N>
-  static auto getTensorDataPtr(const Tensor<N> &tensor) {
-    return tensor.data_;
+  static auto &extract_future_ptr(
+      const std::shared_ptr<const ReadOnlyTensor> &tensor) {
+    return tensor->future_;
   }
 
-  template <int N>
-  static auto getTensorDataPtr(const std::shared_ptr<const Tensor<N>> &tensor) {
-    return getTensorDataPtr(*tensor);
+  static auto &extract_future_ptr(const std::shared_ptr<Tensor> &tensor) {
+    return tensor->future_;
   }
 
-  template <int N>
-  static auto getTensorDataPtr(Tensor<N> &tensor) {
-    return tensor.data_;
+  static auto &extract_tensor(const std::shared_ptr<Tensor> &tensor) {
+    return tensor->tensor_;
   }
 
-  template <int N>
-  static auto getTensorDataPtr(const std::shared_ptr<Tensor<N>> &tensor) {
-    return getTensorDataPtr(*tensor);
+  static auto &extract_tensor(
+      const std::shared_ptr<const ReadOnlyTensor> &tensor) {
+    return tensor->tensor_;
   }
 };
+
+#define DLLM_EXTRACT_TENSOR(tensor) \
+  ::dllm::TensorFriend::extract_tensor((tensor))
 }  // namespace dllm
+#else
+#error "You should not include this file in your program!"
+#endif
