@@ -18,7 +18,7 @@ add_library(dllm_core SHARED
         tensor.cpp
         ${DLLM_COMPUTE_SRCS}
         ${DLLM_MEMORY_SRCS}
-        #        ${DLLM_COMMUNICATION_SRCS}
+        ${DLLM_COMMUNICATION_SRCS}
         ${DLLM_OPTIMIZER_SRCS}
         ${DLLM_THREADING_SRCS}
 )
@@ -36,7 +36,7 @@ target_include_directories(dllm_core PUBLIC
 
 target_link_libraries(dllm_core PRIVATE CUDA::cudart_static CUDA::cublas CUDA::nvtx3)
 target_link_libraries(dllm_core PRIVATE fmt::fmt-header-only)
-target_link_libraries(dllm_core PUBLIC spdlog::spdlog_header_only OpenMP::OpenMP_CXX nvidia::nccl MPI::MPI_CXX torch)
+target_link_libraries(dllm_core PUBLIC spdlog::spdlog_header_only OpenMP::OpenMP_CXX nvidia::nccl MPI::MPI_C torch)
 
 target_compile_definitions(dllm_core PRIVATE -DDLLM_ENABLE_INTERNAL_BUILD)
 

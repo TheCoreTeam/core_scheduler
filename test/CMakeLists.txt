@@ -41,7 +41,7 @@ target_link_libraries(dllm_communication_tests PRIVATE
         CUDA::cudart_static
         CUDA::cublas
         GTest::gtest
-        MPI::MPI_CXX
+        MPI::MPI_C
         nvidia::nccl
         torch
 )

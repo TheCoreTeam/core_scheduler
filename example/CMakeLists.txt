@@ -5,7 +5,7 @@ function(create_executable target_name source_files)
             spdlog::spdlog_header_only
             CUDA::cudart_static
             CUDA::cublas
-            MPI::MPI_CXX
+            MPI::MPI_C
             ${NCCL_LIBRARIES}
     )
     target_compile_options(${target_name} PRIVATE

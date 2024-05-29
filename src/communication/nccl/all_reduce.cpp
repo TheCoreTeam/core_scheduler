@@ -1,74 +1,104 @@
 #include "communication/nccl/all_reduce.h"
 
 #include <nccl.h>
+#include <torch/csrc/autograd/generated/variable_factories.h>
 
-#include "dtensor_nccl.h"
+#include "internal_utils.h"
 #include "logger.h"
-#include "util.h"
+#include "tensor_friend.h"
 
 namespace dllm::communication {
-TaskNccl AllReduce<NCCL>::run(const std::shared_ptr<const Tensor1D> &tensorSend,
-                              const std::shared_ptr<Tensor1D> &tensorReceive,
-                              const Operation operation) {
-  if (cute::size(tensorSend->layout) != cute::size(tensorReceive->layout)) {
+namespace {
+constexpr ncclRedOp_t toNcclRedOp(const Operation operation) {
+  switch (operation) {
+    case SUM:
+      return ncclSum;
+    default:
+      return static_cast<ncclRedOp_t>(0);
+  }
+}
+
+ncclDataType_t toNcclDataType(const at::ScalarType dtype) {
+  switch (dtype) {
+    case at::kDouble:
+      return ncclFloat64;
+    case at::kFloat:
+      return ncclFloat32;
+    case at::kHalf:
+      return ncclFloat16;
+    case at::kBFloat16:
+      return ncclBfloat16;
+    default:
+      return static_cast<ncclDataType_t>(0);
+  }
+}
+}  // namespace
+
+TaskNccl AllReduce<NCCL>::run(
+    const std::shared_ptr<Tensor> &tensorReceive,
+    const std::shared_ptr<const ReadOnlyTensor> &tensorSend,
+    const Operation operation) {
+  if (tensorReceive->sizes() != tensorSend->sizes()) {
     SPDLOG_LOGGER_CRITICAL(&logger(),
                            "sendbuff is not the same as the recvbuff");
   }
-  if (tensorSend->deviceType != CUDA || tensorReceive->deviceType != CUDA) {
-    SPDLOG_LOGGER_CRITICAL(&logger(), "NCCL backend only supports CUDA tensor");
+  if (DLLM_EXTRACT_TENSOR(tensorReceive).defined() &&
+      !DLLM_EXTRACT_TENSOR(tensorReceive).is_contiguous()) {
+    SPDLOG_LOGGER_CRITICAL(&logger(), "receive tensor not contiguout");
   }
-  if (tensorSend->dtype != tensorReceive->dtype) {
-    SPDLOG_LOGGER_CRITICAL(&logger(),
-                           "sendbuff's dtype is different from the recvbuff's");
-  }
-  auto task =
-      TaskNccl{[tensorSend = tensorSend, tensorReceive = tensorReceive,
-                operation = operation, futureReceive = *tensorReceive->future,
-                futureSend = tensorSend->future->rFuture](
-                   const ContextNccl *context) mutable {
+  auto task = TaskNccl{
+      [tensorSend = tensorSend, tensorReceive = tensorReceive,
+       operation = operation, futureReceive = tensorReceive->future(),
+       futureSend = tensorSend->future()](const ContextNccl *context) mutable {
         {
+          const auto count = tensorSend->numel();
           util::FutureGuard guardSend{futureSend};
-          util::FutureGuard guardRReceive{futureReceive.rFuture};
-          util::FutureGuard guardWReceive{futureReceive.wFuture};
-          CHECK_NCCL(ncclAllReduce(tensorSend->data(), tensorReceive->data(),
-                                   cute::size(tensorSend->layout),
-                                   util::toNcclDataType(tensorSend->dtype),
-                                   util::toNcclRedOp(operation),
-                                   context->ncclComm, context->cudaStream));
+          util::FutureGuard guardReceive{futureReceive};
+          if (!DLLM_EXTRACT_TENSOR(tensorReceive).defined()) {
+            DLLM_EXTRACT_TENSOR(tensorReceive) =
+                torch::empty_like(DLLM_EXTRACT_TENSOR(tensorSend));
+          }
+          const auto tensorSendContiguout =
+              DLLM_EXTRACT_TENSOR(tensorSend).contiguous();
+          CHECK_NCCL(ncclAllReduce(
+              tensorSendContiguout.data_ptr(),
+              DLLM_EXTRACT_TENSOR(tensorReceive).data_ptr(), count,
+              toNcclDataType(DLLM_EXTRACT_TENSOR(tensorSend).scalar_type()),
+              toNcclRedOp(operation), context->ncclComm, context->cudaStream));
+          CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
         }
-        CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
         tensorReceive.reset();
         tensorSend.reset();
       }};
   const TaskFuture future = task.get_future();
-  tensorSend->future->rFuture = future;
-  tensorReceive->future->wFuture = future;
+  tensorSend->resetFuture(future);
+  tensorReceive->resetFuture(future);
+  tensorReceive->sizes() = tensorSend->sizes();
   return task;
 }
 
-TaskNccl AllReduce<NCCL>::runInplace(const std::shared_ptr<Tensor1D> &tensor,
+TaskNccl AllReduce<NCCL>::runInplace(const std::shared_ptr<Tensor> &tensor,
                                      const Operation operation) {
-  if (tensor->deviceType != CUDA) {
-    SPDLOG_LOGGER_CRITICAL(&logger(), "NCCL backend only supports CUDA tensor");
+  if (DLLM_EXTRACT_TENSOR(tensor).defined() &&
+      !DLLM_EXTRACT_TENSOR(tensor).is_contiguous()) {
+    SPDLOG_LOGGER_CRITICAL(&logger(), "tensor not contiguout");
   }
   auto task =
       TaskNccl{[tensor = tensor, operation = operation,
-                future = *tensor->future](const ContextNccl *context) mutable {
-        // Be careful: possible deadlock
+                future = tensor->future()](const ContextNccl *context) mutable {
         {
-          util::FutureGuard rGuard{future.rFuture};
-          util::FutureGuard wGuard{future.wFuture};
+          const auto count = tensor->numel();
+          util::FutureGuard guard{future};
           CHECK_NCCL(ncclAllReduce(
-              tensor->data(), tensor->data(), cute::size(tensor->layout),
-              util::toNcclDataType(tensor->dtype), util::toNcclRedOp(operation),
-              context->ncclComm, context->cudaStream));
+              DLLM_EXTRACT_TENSOR(tensor).data_ptr(),
+              DLLM_EXTRACT_TENSOR(tensor).data_ptr(), count,
+              toNcclDataType(DLLM_EXTRACT_TENSOR(tensor).scalar_type()),
+              toNcclRedOp(operation), context->ncclComm, context->cudaStream));
         }
         CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
         tensor.reset();
       }};
-  const TaskFuture future = task.get_future();
-  tensor->future->rFuture = future;
-  tensor->future->wFuture = future;
+  tensor->resetFuture(task.get_future());
   return task;
 }
 }  // namespace dllm::communication
