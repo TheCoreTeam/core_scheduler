@@ -1,11 +1,13 @@
-#include <cuda_runtime.h>
 #include <gtest/gtest.h>
 #include <torch/torch.h>
 
 #include "compute/gelu.h"
+#include "compute/utils.h"
 #include "logger.h"
+#include "memory/to_torch.h"
 #include "tensor.h"
 #include "threading/thread_pool_compute.h"
+#include "threading/thread_stream_cudart.h"
 
 template <typename T>
 struct TypeToTorch;
@@ -31,6 +33,7 @@ struct TypeToTorch<double> {
 class TestDLLMGelu : public ::testing::Test {
  protected:
   dllm::ThreadPoolCompute tp{0, 2};
+  dllm::ThreadStreamCudart stream{0};
 
   template <typename Element>
   void TestRoutine(int T, double tol_forward, double tol_backward);
@@ -44,42 +47,58 @@ void TestDLLMGelu::TestRoutine(const int T, const double tol_forward,
   const torch::Device device = torch::kCUDA;
   const torch::Dtype dtype = TypeToTorch<Element>::type;
   const auto option = torch::TensorOptions().dtype(dtype).device(device);
-  const auto input = torch::randn({B, T}, option);
+
+  const auto input2 = dllm::Tensor::create();
+  const auto tensorGradInput = dllm::Tensor::create();
+  const auto tensorOutput = dllm::Tensor::create();
+  const auto GradOutput_ = dllm::Tensor::create();
+  std::shared_ptr<dllm::compute::GeLU::State> state;
+  {
+    auto task = dllm::compute::Utils::randn(input2, {B, T}, option);
+    tp.submit(std::move(task));
+  }
+  {
+    auto task = dllm::compute::GeLU::init(state);
+    tp.submit(std::move(task));
+  }
+  {
+    auto task = dllm::compute::GeLU::forward(state, tensorOutput, input2);
+    tp.submit(std::move(task));
+  }
+  {
+    auto task = dllm::compute::Utils::randn_like(GradOutput_, tensorOutput);
+    tp.submit(std::move(task));
+  }
+  {
+    auto task =
+        dllm::compute::GeLU::backward(state, tensorGradInput, GradOutput_);
+    tp.submit(std::move(task));
+  }
+
+  torch::Tensor input;
+  torch::Tensor GradOutput;
+  {
+    auto task = dllm::memory::toTorch(input, input2);
+    stream.submit(std::move(task));
+    input2->wait();
+  }
+  {
+    auto task = dllm::memory::toTorch(GradOutput, GradOutput_);
+    stream.submit(std::move(task));
+    GradOutput_->wait();
+  }
 
   auto input1 = input.detach().clone().set_requires_grad(true);
 
-  auto input2 = input.detach().clone();
-
   // 应用GELU激活函数
   auto Output1 = torch::gelu(input1);
-
-  auto state = dllm::compute::GeLU::init();
-
-  const auto tensorOutput = std::make_shared<dllm::Tensor>();
-  {
-    auto task = dllm::compute::GeLU::forward(
-        state, tensorOutput, std::make_shared<dllm::Tensor>(input2));
-    tp.submit(std::move(task));
-    tensorOutput->wait();
-  }
-
-  ASSERT_TRUE(torch::allclose(Output1, tensorOutput->tensor()));
-
-  auto GradOutput = torch::randn_like(Output1);
 
   const auto GradInput1 = torch::autograd::grad(
       {Output1}, {input1}, {GradOutput}, /*retain_graph=*/false,
       /*create_graph=*/false, /*allow_unused=*/true)[0];
 
-  const auto tensorGradInput = std::make_shared<dllm::Tensor>();
-  {
-    auto task = dllm::compute::GeLU::backward(
-        state, tensorGradInput, std::make_shared<dllm::Tensor>(GradOutput));
-    tp.submit(std::move(task));
-    tensorGradInput->wait();
-  }
-
-  ASSERT_TRUE(torch::allclose(GradInput1, tensorGradInput->tensor()));
+  ASSERT_TRUE(at::allclose(Output1, tensorOutput));
+  ASSERT_TRUE(at::allclose(GradInput1, tensorGradInput));
 }
 
 TEST_F(TestDLLMGelu, TestF32_128) { TestRoutine<float>(128, 5e-4, 5e-4); }

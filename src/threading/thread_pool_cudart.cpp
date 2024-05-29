@@ -36,7 +36,13 @@ void threadTask(const int localRank, std::queue<TaskCudart> *taskQueue,
     }
     lock.unlock();
     if (task.valid()) {
-      task(&context);
+      try {
+        task(&context);
+      } catch (const std::exception &e) {
+        SPDLOG_LOGGER_CRITICAL(&::dllm::logger(), "Task failed with error: {}",
+                               e.what());
+        throw;
+      }
       task = {};
     } else {
       std::unique_lock<std::mutex> uniqueLock{*cvMutex};
@@ -71,7 +77,11 @@ void ThreadPoolCudart::submit(TaskCudart &&task) {
 
 ThreadPoolCudart::ThreadPoolCudart(const int localRank, const int threadNum,
                                    const std::vector<int> &bindingMap) {
-  if (!bindingMap.empty() && bindingMap.size() != threadNum) {
+  if (threadNum <= 0) {
+    SPDLOG_LOGGER_CRITICAL(&logger(), "Wrong thread num");
+  }
+  if (!bindingMap.empty() &&
+      bindingMap.size() != static_cast<std::size_t>(threadNum)) {
     SPDLOG_LOGGER_CRITICAL(&logger(), "bindingMap size incorrect");
   }
   threadVector.reserve(threadNum);

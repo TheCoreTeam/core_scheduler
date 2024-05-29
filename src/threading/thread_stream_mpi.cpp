@@ -32,7 +32,13 @@ void threadTask(const ContextMpi context, std::queue<TaskMpi> *taskQueue,
     }
     lock.unlock();
     if (task.valid()) {
-      task(&context);
+      try {
+        task(&context);
+      } catch (const std::exception &e) {
+        SPDLOG_LOGGER_CRITICAL(&::dllm::logger(), "Task failed with error: {}",
+                               e.what());
+        throw;
+      }
     } else {
       std::unique_lock<std::mutex> uniqueLock{*cvMutex};
       cv->wait(uniqueLock,

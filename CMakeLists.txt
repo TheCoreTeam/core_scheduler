@@ -5,6 +5,11 @@ if (NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release)
 endif ()
 
+# Enable sanitizer compilation
+# Env variable: ASAN_OPTIONS=detect_odr_violation=0:protect_shadow_gap=0
+# add_compile_options(-fsanitize=address,undefined)
+# link_libraries(-fsanitize=address,undefined)
+
 include(CheckIPOSupported)
 check_ipo_supported(RESULT IPOResult)
 if (IPOResult)
@@ -22,6 +27,7 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_CURRENT_SOURCE_DIR}/cmake/)
 option(DLLM_ENABLE_TESTS "" ON)
 option(DLLM_ENABLE_EXAMPLES "" ON)
 option(DLLM_ENABLE_FLASH_ATTENTION "" ON)
+option(DLLM_ENABLE_INTERNAL_BUILD "" OFF)
 
 find_package(CUDAToolkit REQUIRED)
 find_package(OpenMP REQUIRED)
@@ -32,7 +38,6 @@ find_package(NCCL REQUIRED)
 find_package(fmt REQUIRED)
 find_package(spdlog REQUIRED)
 
-message(STATUS $ENV{CONDA_PREFIX})
 if (DEFINED ENV{CONDA_PREFIX})
     list(APPEND MPI_HOME ENV{CONDA_PREFIX}/bin/)
 endif ()

@@ -3,7 +3,7 @@ function(create_executable target_name source_files)
     target_link_libraries(${target_name} PRIVATE
             dllm
             spdlog::spdlog_header_only
-            CUDA::cudart
+            CUDA::cudart_static
             CUDA::cublas
             MPI::MPI_CXX
             ${NCCL_LIBRARIES}

@@ -4,6 +4,6 @@
 
 namespace dllm::compute::Add {
 TaskCompute forward(const std::shared_ptr<Tensor>& output,
-                    const std::shared_ptr<const Tensor>& A,
-                    const std::shared_ptr<const Tensor>& B);
+                    const std::shared_ptr<const ReadOnlyTensor>& A,
+                    const std::shared_ptr<const ReadOnlyTensor>& B);
 }  // namespace dllm::compute::Add

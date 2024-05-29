@@ -44,7 +44,13 @@ void threadTask(const int deviceRank, std::queue<TaskCudart> *taskQueue,
     }
     lock.unlock();
     if (task.valid()) {
-      task(&context);
+      try {
+        task(&context);
+      } catch (const std::exception &e) {
+        SPDLOG_LOGGER_CRITICAL(&::dllm::logger(), "Task failed with error: {}",
+                               e.what());
+        throw;
+      }
       task = {};
     } else {
       std::unique_lock<std::mutex> uniqueLock{*cvMutex};
