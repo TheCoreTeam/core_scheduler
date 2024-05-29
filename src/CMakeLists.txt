@@ -41,12 +41,6 @@ if (DLLM_ENABLE_INTERNAL_BUILD)
     target_compile_definitions(dllm_core PRIVATE -DDLLM_ENABLE_INTERNAL_BUILD)
 endif ()
 
-if (DLLM_ENABLE_FLASH_ATTENTION)
-    add_subdirectory(flash_attention)
-else ()
-    add_library(dllm_flash_attention_plugin INTERFACE)
-endif ()
-
 add_library(dllm INTERFACE)
 
-target_link_libraries(dllm INTERFACE dllm_core dllm_flash_attention_plugin)
+target_link_libraries(dllm INTERFACE dllm_core)

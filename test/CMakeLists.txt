@@ -1,12 +1,3 @@
-if (DLLM_ENABLE_FLASH_ATTENTION)
-    set(DLLM_FLASH_ATTENTION_SRC
-            test_flash_attention.cpp
-            test_layernorm.cpp
-    )
-else ()
-    set(DLLM_FLASH_ATTENTION_SRC)
-endif ()
-
 add_executable(dllm_tests
         main.cpp
         #        test_adamw.cpp
