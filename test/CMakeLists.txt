@@ -1,17 +1,13 @@
 add_executable(dllm_tests
         main.cpp
-        #        test_adamw.cpp
+        test_adamw.cpp
         #        test_relu.cpp
-        #        test_linear.cpp
         test_linear.cpp
         test_gelu.cpp
         test_init.cpp
-        #        test_fused_classifier.cpp
         test_flash_attention.cpp
-        #        test_add.cpp
-        #        ${DLLM_FLASH_ATTENTION_SRC}
+#        test_add.cpp
         test_embedding.cpp
-        #        ${DLLM_FLASH_ATTENTION_SRC}
 )
 
 target_link_libraries(dllm_tests PRIVATE

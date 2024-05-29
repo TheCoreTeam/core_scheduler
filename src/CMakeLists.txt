@@ -19,14 +19,15 @@ add_library(dllm_core SHARED
         ${DLLM_COMPUTE_SRCS}
         ${DLLM_MEMORY_SRCS}
         #        ${DLLM_COMMUNICATION_SRCS}
-        #        ${DLLM_OPTIMIZER_SRCS}
+        ${DLLM_OPTIMIZER_SRCS}
         ${DLLM_THREADING_SRCS}
 )
 
 target_compile_options(dllm_core PRIVATE
-        $<$<CONFIG:Release>:-Ofast -Wall>
-        $<$<CONFIG:Debug>:-O0 -Wall>
-        $<$<COMPILE_LANGUAGE:CUDA>:--expt-relaxed-constexpr --extended-lambda -Wall>
+        $<$<AND:$<CONFIG:Release>,$<COMPILE_LANGUAGE:CUDA>>:--expt-relaxed-constexpr;--extended-lambda;-O3;-Wall;-Xcompiler;-Ofast;-Wall>
+        $<$<AND:$<CONFIG:Debug>,$<COMPILE_LANGUAGE:CUDA>>:-G;--expt-relaxed-constexpr;--extended-lambda;-O0;-Wall;-Xcompiler;-Ofast;-Wall>
+        $<$<AND:$<CONFIG:Release>,$<NOT:$<COMPILE_LANGUAGE:CUDA>>>:-Ofast;-Wall>
+        $<$<AND:$<CONFIG:Debug>,$<NOT:$<COMPILE_LANGUAGE:CUDA>>>:-O0;-Wall>
 )
 
 target_include_directories(dllm_core PUBLIC
@@ -37,9 +38,7 @@ target_link_libraries(dllm_core PRIVATE CUDA::cudart_static CUDA::cublas CUDA::n
 target_link_libraries(dllm_core PRIVATE fmt::fmt-header-only)
 target_link_libraries(dllm_core PUBLIC spdlog::spdlog_header_only OpenMP::OpenMP_CXX nvidia::nccl MPI::MPI_CXX torch)
 
-if (DLLM_ENABLE_INTERNAL_BUILD)
-    target_compile_definitions(dllm_core PRIVATE -DDLLM_ENABLE_INTERNAL_BUILD)
-endif ()
+target_compile_definitions(dllm_core PRIVATE -DDLLM_ENABLE_INTERNAL_BUILD)
 
 add_library(dllm INTERFACE)
 

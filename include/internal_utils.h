@@ -1,5 +1,6 @@
 #pragma once
-
+#ifdef DLLM_ENABLE_INTERNAL_BUILD
+// This is an internal file, never use it unless you know what you are doing
 namespace dllm::util {
 struct TensorFriend {};
 
@@ -27,3 +28,6 @@ struct FutureGuard {
   void reset() const { future = {}; }
 };
 }  // namespace dllm::util
+#else
+#error "You should not include this file in your program!"
+#endif
