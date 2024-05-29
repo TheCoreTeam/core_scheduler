@@ -63,6 +63,14 @@ struct ReadOnlyTensor {
     return dim >= 0 ? sizes()[dim] : sizes()[sizes().size() + dim];
   }
 
+  [[nodiscard]] auto numel() const {
+    int64_t c = 1;
+    for (const auto s : sizes()) {
+      c *= s;
+    }
+    return c;
+  }
+
   void wait() const {
     if (future().valid()) {
       future().wait();

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.25)
-project(dllm LANGUAGES CXX CUDA)
+project(dllm LANGUAGES C CXX CUDA)
 
 if (NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release)
@@ -39,7 +39,7 @@ find_package(spdlog REQUIRED)
 if (DEFINED ENV{CONDA_PREFIX})
     list(APPEND MPI_HOME ENV{CONDA_PREFIX}/bin/)
 endif ()
-find_package(MPI REQUIRED)
+find_package(MPI COMPONENTS C REQUIRED)
 
 add_subdirectory(src)
 
