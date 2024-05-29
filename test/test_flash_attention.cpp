@@ -50,8 +50,7 @@ void TestT(dllm::ThreadPoolCompute& tp) {
   const torch::Dtype dtype = TypeToTorch<Element>::type;
   const auto option = torch::TensorOptions().dtype(dtype).device(device);
   torch::manual_seed(1);
-  int B = 15, T = 7, n_head = 8, n_embd = n_head * 8
-  ;
+  int B = 15, T = 7, n_head = 8, n_embd = n_head * 8;
   auto qkv = dllm::Tensor::create();
   {
     auto task = dllm::compute::Utils::rand(qkv, {B, T, n_embd * 3}, option);
