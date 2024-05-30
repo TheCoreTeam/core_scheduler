@@ -4,6 +4,7 @@
 
 #include "internal_utils.h"
 #include "logger.h"
+#include "nvtx_helper.h"
 #include "tensor_friend.h"
 #include "threading/task_compute.h"
 
@@ -49,6 +50,7 @@ TaskCompute AdamW<false>::step(
       [args = state->args, m = m, v = v, w = w, dw = dw, wFuture = w->future(),
        mFuture = m->future(), vFuture = v->future(),
        dwFuture = dw->future()](const ContextCompute *context) mutable {
+        DLLM_NVTX_RANGE_FN("dllm::optimizer::AdamW<false>::step");
         util::FutureGuard wGuard{wFuture};
         util::FutureGuard mGuard{mFuture};
         util::FutureGuard vGuard{vFuture};
@@ -103,6 +105,7 @@ TaskCompute AdamW<true>::step(const std::shared_ptr<State> &state,
       [args = state->args, m = m, v = v, vMax = vMax, w = w, dw = dw,
        wFuture = w->future(), mFuture = m->future(), vFuture = v->future(),
        dwFuture = dw->future()](const ContextCompute *context) mutable {
+        DLLM_NVTX_RANGE_FN("dllm::optimizer::AdamW<true>::step");
         util::FutureGuard wGuard{wFuture};
         util::FutureGuard mGuard{mFuture};
         util::FutureGuard vGuard{vFuture};

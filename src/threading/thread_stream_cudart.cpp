@@ -17,15 +17,15 @@ void setThreadAffinity(std::thread &th, const int coreId) {
 
   int rc =
       pthread_setaffinity_np(th.native_handle(), sizeof(cpu_set_t), &cpuset);
-  if (rc != 0) {
-    SPDLOG_LOGGER_CRITICAL(&logger(), "core binding error with code {}", rc);
-  }
+  DLLM_ASSERT_TRUE(rc == 0, "core binding error with code {}", rc);
 }
 
 void threadTask(const int deviceRank, std::queue<TaskCudart> *taskQueue,
                 std::mutex *queueMutex, std::condition_variable *cv,
-                std::mutex *cvMutex, const std::atomic<bool> *shutDown) {
+                std::mutex *cvMutex, const std::atomic<bool> *shutDown,
+                std::barrier<> *barrier) {
   ContextCudart context;
+  barrier->arrive_and_wait();
   CHECK_CUDART(cudaSetDevice(deviceRank));
   CHECK_CUDART(
       cudaStreamCreateWithFlags(&context.cudaStream, cudaStreamNonBlocking));
@@ -33,7 +33,7 @@ void threadTask(const int deviceRank, std::queue<TaskCudart> *taskQueue,
       context.cudaStream, static_cast<c10::DeviceIndex>(context.deviceRank));
   c10::cuda::CUDAStreamGuard streamGuard{stream};
   c10::cuda::CUDAGuard deviceGuard{
-    static_cast<c10::DeviceIndex>(context.deviceRank)};
+      static_cast<c10::DeviceIndex>(context.deviceRank)};
 
   while (!shutDown->load()) {
     TaskCudart task;
@@ -47,9 +47,7 @@ void threadTask(const int deviceRank, std::queue<TaskCudart> *taskQueue,
       try {
         task(&context);
       } catch (const std::exception &e) {
-        SPDLOG_LOGGER_CRITICAL(&::dllm::logger(), "Task failed with error: {}",
-                               e.what());
-        throw;
+        DLLM_ASSERT_TRUE(false, "Task failed with error: {}", e.what());
       }
       task = {};
     } else {
@@ -83,10 +81,11 @@ void ThreadStreamCudart::submit(TaskCudart &&task) {
 
 ThreadStreamCudart::ThreadStreamCudart(
     const int deviceRank, const std::optional<const int> bindingMap)
-    : thread{threadTask, deviceRank, &taskQueue, &queueMutex,
-             &cv,        &cvMutex,   &shutDown} {
+    : barrier_{2}, thread{threadTask, deviceRank, &taskQueue, &queueMutex,
+                          &cv,        &cvMutex,   &shutDown,  &barrier_} {
   if (bindingMap.has_value()) {
     setThreadAffinity(thread, bindingMap.value());
   }
+  barrier_.arrive_and_wait();
 }
 }  // namespace dllm

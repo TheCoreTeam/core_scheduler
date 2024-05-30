@@ -15,14 +15,14 @@ void setThreadAffinity(std::thread &th, const int coreId) {
 
   int rc =
       pthread_setaffinity_np(th.native_handle(), sizeof(cpu_set_t), &cpuset);
-  if (rc != 0) {
-    SPDLOG_LOGGER_CRITICAL(&logger(), "core binding error with code {}", rc);
-  }
+  DLLM_ASSERT_TRUE(rc == 0, "core binding error with code {}", rc);
 }
 
-void threadTask(const ContextMpi context, std::queue<TaskMpi> *taskQueue,
+void threadTask(const ContextMpi *context, std::queue<TaskMpi> *taskQueue,
                 std::mutex *queueMutex, std::condition_variable *cv,
-                std::mutex *cvMutex, const std::atomic<bool> *shutDown) {
+                std::mutex *cvMutex, const std::atomic<bool> *shutDown,
+                std::barrier<> *barrier) {
+  barrier->arrive_and_wait();
   while (!shutDown->load()) {
     TaskMpi task;
     std::unique_lock lock{*queueMutex};
@@ -33,11 +33,9 @@ void threadTask(const ContextMpi context, std::queue<TaskMpi> *taskQueue,
     lock.unlock();
     if (task.valid()) {
       try {
-        task(&context);
+        task(context);
       } catch (const std::exception &e) {
-        SPDLOG_LOGGER_CRITICAL(&::dllm::logger(), "Task failed with error: {}",
-                               e.what());
-        throw;
+        DLLM_ASSERT_TRUE(false, "Task failed with error: {}", e.what());
       }
     } else {
       std::unique_lock<std::mutex> uniqueLock{*cvMutex};
@@ -67,12 +65,18 @@ void ThreadStreamMpi::submit(TaskMpi &&task) {
   cv.notify_one();
 }
 
-ThreadStreamMpi::ThreadStreamMpi(const ContextMpi context,
+int64_t ThreadStreamMpi::commSize() const { return context_.commSize; }
+
+int64_t ThreadStreamMpi::rank() const { return context_.mpiRank; }
+
+ThreadStreamMpi::ThreadStreamMpi(const ContextMpi &context,
                                  const std::optional<const int> bindingMap)
-    : thread{threadTask, context,  &taskQueue, &queueMutex,
-             &cv,        &cvMutex, &shutDown} {
+    : context_{context}, barrier_{2}, thread{threadTask,  &context_, &taskQueue,
+                                             &queueMutex, &cv,       &cvMutex,
+                                             &shutDown,   &barrier_} {
   if (bindingMap.has_value()) {
     setThreadAffinity(thread, bindingMap.value());
   }
+  barrier_.arrive_and_wait();
 }
 }  // namespace dllm

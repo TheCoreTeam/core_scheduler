@@ -1,5 +1,6 @@
 #pragma once
 #include <atomic>
+#include <barrier>
 #include <condition_variable>
 #include <future>
 #include <mutex>
@@ -24,6 +25,7 @@ struct ThreadPoolCompute {
   void submit(const TaskCompute &task) = delete;
 
  private:
+  std::barrier<> barrier_;
   std::vector<std::thread> threadVector{};
   std::queue<TaskCompute> taskQueue{};
   std::mutex queueMutex{};

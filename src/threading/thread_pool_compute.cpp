@@ -18,15 +18,15 @@ void setThreadAffinity(std::thread &th, const int coreId) {
 
   int rc =
       pthread_setaffinity_np(th.native_handle(), sizeof(cpu_set_t), &cpuset);
-  if (rc != 0) {
-    SPDLOG_LOGGER_CRITICAL(&logger(), "core binding error with code {}", rc);
-  }
+  DLLM_ASSERT_TRUE(rc == 0, "core binding error with code {}", rc);
 }
 
 void threadTask(const int localRank, std::queue<TaskCompute> *taskQueue,
                 std::mutex *queueMutex, std::condition_variable *cv,
-                std::mutex *cvMutex, const std::atomic<bool> *shutDown) {
+                std::mutex *cvMutex, const std::atomic<bool> *shutDown,
+                std::barrier<> *barrier) {
   ContextCompute context{.deviceRank = localRank};
+  barrier->arrive_and_wait();
   CHECK_CUDART(cudaSetDevice(localRank));
   CHECK_CUDART(
       cudaStreamCreateWithFlags(&context.cudaStream, cudaStreamNonBlocking));
@@ -63,9 +63,7 @@ void threadTask(const int localRank, std::queue<TaskCompute> *taskQueue,
       try {
         task(&context);
       } catch (const std::exception &e) {
-        SPDLOG_LOGGER_CRITICAL(&::dllm::logger(), "Task failed with error: {}",
-                               e.what());
-        throw;
+        DLLM_ASSERT_TRUE(false, "Task failed with error: {}", e.what());
       }
       task = {};
     } else {
@@ -101,23 +99,22 @@ void ThreadPoolCompute::submit(TaskCompute &&task) {
 }
 
 ThreadPoolCompute::ThreadPoolCompute(const int localRank, const int threadNum,
-                                     const std::vector<int> &bindingMap) {
-  if (threadNum <= 0) {
-    SPDLOG_LOGGER_CRITICAL(&logger(), "Wrong thread num");
-  }
-  if (!bindingMap.empty() &&
-      bindingMap.size() != static_cast<std::size_t>(threadNum)) {
-    SPDLOG_LOGGER_CRITICAL(&logger(), "bindingMap size incorrect");
-  }
+                                     const std::vector<int> &bindingMap)
+    : barrier_{threadNum + 1} {
+  DLLM_ASSERT_TRUE(threadNum > 0, "Wrong thread num");
+  DLLM_ASSERT_TRUE(bindingMap.empty() ||
+                       bindingMap.size() == static_cast<std::size_t>(threadNum),
+                   "bindingMap size mismathches with threadNum");
   threadVector.reserve(threadNum);
   for (int i = 0; i < threadNum; ++i) {
     threadVector.emplace_back(threadTask, localRank, &taskQueue, &queueMutex,
-                              &cv, &cvMutex, &shutDown);
+                              &cv, &cvMutex, &shutDown, &barrier_);
   }
   if (!bindingMap.empty()) {
     for (int i = 0; i < threadNum; ++i) {
       setThreadAffinity(threadVector[i], bindingMap[i]);
     }
   }
+  barrier_.arrive_and_wait();
 }
 }  // namespace dllm
