@@ -1,4 +1,4 @@
-#include "communication/nccl/all_gather.h"
+#include "communication/all_gather.h"
 
 #include <nccl.h>
 #include <torch/csrc/autograd/generated/variable_factories.h>
@@ -29,10 +29,9 @@ TaskNccl AllGather<NCCL>::run(
     const std::shared_ptr<Tensor> &tensorReceive,
     const std::shared_ptr<const ReadOnlyTensor> &tensorSend,
     const int64_t receiveCount) {
-  if (DLLM_EXTRACT_TENSOR(tensorReceive).defined() &&
-      !DLLM_EXTRACT_TENSOR(tensorReceive).is_contiguous()) {
-    SPDLOG_LOGGER_CRITICAL(&logger(), "receive tensor not contiguout");
-  }
+  DLLM_ASSERT_TRUE(!DLLM_EXTRACT_TENSOR(tensorReceive).defined() ||
+                       DLLM_EXTRACT_TENSOR(tensorReceive).is_contiguous(),
+                   "receive tensor not contiguout");
   auto task = TaskNccl{
       [receiveCount = receiveCount, tensorSend = tensorSend,
        tensorReceive = tensorReceive, futureReceive = tensorReceive->future(),
@@ -65,10 +64,9 @@ TaskNccl AllGather<NCCL>::run(
 }
 
 TaskNccl AllGather<NCCL>::runInplace(const std::shared_ptr<Tensor> &tensor) {
-  if (DLLM_EXTRACT_TENSOR(tensor).defined() &&
-      !DLLM_EXTRACT_TENSOR(tensor).is_contiguous()) {
-    SPDLOG_LOGGER_CRITICAL(&logger(), "tensor not contiguout");
-  }
+  DLLM_ASSERT_TRUE(!DLLM_EXTRACT_TENSOR(tensor).defined() ||
+                       DLLM_EXTRACT_TENSOR(tensor).is_contiguous(),
+                   "tensor tensor not contiguout");
   auto task = TaskNccl{[tensor = tensor, future = tensor->future()](
                            const ContextNccl *context) mutable {
     {

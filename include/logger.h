@@ -1,42 +1,31 @@
 #pragma once
+#include <fmt/format.h>
 #include <spdlog/spdlog.h>
 
-namespace dllm {
-#define CHECK_CUDART(statement)                                             \
-  do {                                                                      \
-    auto code = statement;                                                  \
-    if (code != cudaSuccess) {                                              \
-      SPDLOG_LOGGER_CRITICAL(&::dllm::logger(), "cuda Failed with code {}", \
-                             static_cast<int>(code));                       \
-    }                                                                       \
-  } while (0)
+#include <string>
 
-#define CHECK_CUBLAS(statement)                                               \
+namespace dllm {
+#define DLLM_ASSERT_TRUE(statement, ...)                                      \
   do {                                                                        \
-    auto code = statement;                                                    \
-    if (code != CUBLAS_STATUS_SUCCESS) {                                      \
-      SPDLOG_LOGGER_CRITICAL(&::dllm::logger(), "cuBlas Failed with code {}", \
-                             static_cast<int>(code));                         \
+    if (!(statement)) {                                                       \
+      std::string errorMessage =                                              \
+          fmt::format("Assert '{}' failed: '{}'", #statement, ##__VA_ARGS__); \
+      SPDLOG_LOGGER_CRITICAL(&::dllm::logger(), errorMessage);                \
+      throw std::runtime_error(errorMessage);                                 \
     }                                                                         \
   } while (0)
 
-#define CHECK_MPI(statement)                                               \
-  do {                                                                     \
-    auto code = statement;                                                 \
-    if (code != MPI_SUCCESS) {                                             \
-      SPDLOG_LOGGER_CRITICAL(&::dllm::logger(), "MPI Failed with code {}", \
-                             static_cast<int>(code));                      \
-    }                                                                      \
-  } while (0)
+#define CHECK_CUDART(statement) \
+  DLLM_ASSERT_TRUE((statement) == cudaSuccess, "No further message")
 
-#define CHECK_NCCL(statement)                                               \
-  do {                                                                      \
-    auto code = statement;                                                  \
-    if (code != ncclSuccess) {                                              \
-      SPDLOG_LOGGER_CRITICAL(&::dllm::logger(), "nccl Failed with code {}", \
-                             static_cast<int>(code));                       \
-    }                                                                       \
-  } while (0)
+#define CHECK_CUBLAS(statement) \
+  DLLM_ASSERT_TRUE((statement) == CUBLAS_STATUS_SUCCESS, "No further message")
+
+#define CHECK_MPI(statement) \
+  DLLM_ASSERT_TRUE((statement) == MPI_SUCCESS, "No further message")
+
+#define CHECK_NCCL(statement) \
+  DLLM_ASSERT_TRUE((statement) == ncclSuccess, "No further message")
 
 spdlog::logger &logger();
 }  // namespace dllm

@@ -12,10 +12,8 @@ namespace dllm::compute::Add {
 TaskCompute forward(const std::shared_ptr<Tensor>& output,
                     const std::shared_ptr<const ReadOnlyTensor>& A,
                     const std::shared_ptr<const ReadOnlyTensor>& B) {
-  if (A->sizes() != B->sizes()) {
-    SPDLOG_LOGGER_CRITICAL(&::dllm::logger(),
-                           "We do not supprot implicit broadcast add now!");
-  }
+  DLLM_ASSERT_TRUE(A->sizes() == B->sizes(),
+                   "We do not supprot implicit broadcast add now!");
   auto task =
       TaskCompute{[output = output, A = A, B = B, AFuture = A->future(),
                    BFuture = B->future(), outputFuture = output->future()](

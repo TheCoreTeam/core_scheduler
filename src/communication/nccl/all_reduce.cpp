@@ -1,4 +1,4 @@
-#include "communication/nccl/all_reduce.h"
+#include "communication/all_reduce.h"
 
 #include <nccl.h>
 #include <torch/csrc/autograd/generated/variable_factories.h>
@@ -38,14 +38,11 @@ TaskNccl AllReduce<NCCL>::run(
     const std::shared_ptr<Tensor> &tensorReceive,
     const std::shared_ptr<const ReadOnlyTensor> &tensorSend,
     const Operation operation) {
-  if (tensorReceive->sizes() != tensorSend->sizes()) {
-    SPDLOG_LOGGER_CRITICAL(&logger(),
-                           "sendbuff is not the same as the recvbuff");
-  }
-  if (DLLM_EXTRACT_TENSOR(tensorReceive).defined() &&
-      !DLLM_EXTRACT_TENSOR(tensorReceive).is_contiguous()) {
-    SPDLOG_LOGGER_CRITICAL(&logger(), "receive tensor not contiguout");
-  }
+  DLLM_ASSERT_TRUE(tensorReceive->sizes() == tensorSend->sizes(),
+                   "sendbuff is not the same as the recvbuff");
+  DLLM_ASSERT_TRUE(!DLLM_EXTRACT_TENSOR(tensorReceive).defined() ||
+                       DLLM_EXTRACT_TENSOR(tensorReceive).is_contiguous(),
+                   "receive tensor not contiguout");
   auto task = TaskNccl{
       [tensorSend = tensorSend, tensorReceive = tensorReceive,
        operation = operation, futureReceive = tensorReceive->future(),
@@ -79,10 +76,9 @@ TaskNccl AllReduce<NCCL>::run(
 
 TaskNccl AllReduce<NCCL>::runInplace(const std::shared_ptr<Tensor> &tensor,
                                      const Operation operation) {
-  if (DLLM_EXTRACT_TENSOR(tensor).defined() &&
-      !DLLM_EXTRACT_TENSOR(tensor).is_contiguous()) {
-    SPDLOG_LOGGER_CRITICAL(&logger(), "tensor not contiguout");
-  }
+  DLLM_ASSERT_TRUE(!DLLM_EXTRACT_TENSOR(tensor).defined() ||
+                       DLLM_EXTRACT_TENSOR(tensor).is_contiguous(),
+                   "tensor tensor not contiguout");
   auto task =
       TaskNccl{[tensor = tensor, operation = operation,
                 future = tensor->future()](const ContextNccl *context) mutable {

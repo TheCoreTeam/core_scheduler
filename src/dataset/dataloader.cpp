@@ -17,9 +17,7 @@ void setThreadAffinity(std::thread &th, const int coreId) {
 
   const int rc =
       pthread_setaffinity_np(th.native_handle(), sizeof(cpu_set_t), &cpuset);
-  if (rc != 0) {
-    SPDLOG_LOGGER_CRITICAL(&logger(), "core binding error with code {}", rc);
-  }
+  DLLM_ASSERT_TRUE(rc == 0, "core binding error with code {}", rc);
 }
 
 struct LlmDataLoaderImpl {

@@ -15,9 +15,7 @@ void setThreadAffinity(std::thread &th, const int coreId) {
 
   int rc =
       pthread_setaffinity_np(th.native_handle(), sizeof(cpu_set_t), &cpuset);
-  if (rc != 0) {
-    SPDLOG_LOGGER_CRITICAL(&logger(), "core binding error with code {}", rc);
-  }
+  DLLM_ASSERT_TRUE(rc == 0, "core binding error with code {}", rc);
 }
 
 void threadTask(const ContextMpi context, std::queue<TaskMpi> *taskQueue,
@@ -35,9 +33,7 @@ void threadTask(const ContextMpi context, std::queue<TaskMpi> *taskQueue,
       try {
         task(&context);
       } catch (const std::exception &e) {
-        SPDLOG_LOGGER_CRITICAL(&::dllm::logger(), "Task failed with error: {}",
-                               e.what());
-        throw;
+        DLLM_ASSERT_TRUE(false, "Task failed with error: {}", e.what());
       }
     } else {
       std::unique_lock<std::mutex> uniqueLock{*cvMutex};
