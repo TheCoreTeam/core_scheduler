@@ -2,6 +2,7 @@
 
 #include <ATen/Dispatch.h>
 #include <mpi.h>
+#include <nccl.h>
 #include <torch/csrc/autograd/generated/variable_factories.h>
 
 #include <limits>
@@ -12,15 +13,15 @@
 #include "tensor_friend.h"
 
 namespace dllm::communication {
-TaskMpi AllToAll<MPI>::run(
+TaskNccl AllToAll<NCCL>::run(
     const std::shared_ptr<Tensor> &tensorReceive,
     const std::shared_ptr<const ReadOnlyTensor> &tensorSend,
     const int64_t commSize) {
-  auto task = TaskMpi{[tensorSend = tensorSend, tensorReceive = tensorReceive,
-                       futureReceive = tensorReceive->future(),
-                       futureSend = tensorSend->future()](
-                          const ContextMpi *context) mutable {
-    DLLM_NVTX_RANGE_FN("dllm::communication::AllToAll<MPI>::run");
+  auto task = TaskNccl{[tensorSend = tensorSend, tensorReceive = tensorReceive,
+                        futureReceive = tensorReceive->future(),
+                        futureSend = tensorSend->future()](
+                           const ContextNccl *context) mutable {
+    DLLM_NVTX_RANGE_FN("dllm::communication::AllToAll<NCCL>::run");
     {
       util::FutureGuard sendGuard{futureSend};
       util::FutureGuard receiveGuard{futureReceive};
@@ -29,10 +30,8 @@ TaskMpi AllToAll<MPI>::run(
           at::ScalarType::Half, at::ScalarType::BFloat16,
           DLLM_EXTRACT_TENSOR(tensorSend).scalar_type(), "Find size in byte",
           [&] { byteScaleSend = sizeof(scalar_t); });
-      const int64_t countSend =
+      const int64_t byteSend =
           DLLM_EXTRACT_TENSOR(tensorSend).numel() * byteScaleSend;
-      DLLM_ASSERT_TRUE(countSend <= std::numeric_limits<int>::max(),
-                       "Do not support very large message");
       if (!DLLM_EXTRACT_TENSOR(tensorReceive).defined()) {
         DLLM_EXTRACT_TENSOR(tensorReceive) = torch::empty(
             tensorSend->sizes(), DLLM_EXTRACT_TENSOR(tensorSend).options());
@@ -41,21 +40,29 @@ TaskMpi AllToAll<MPI>::run(
           at::ScalarType::Half, at::ScalarType::BFloat16,
           DLLM_EXTRACT_TENSOR(tensorReceive).scalar_type(), "Find size in byte",
           [&] { byteScaleReceive = sizeof(scalar_t); });
-      const int64_t countReceive =
+      const int64_t byteReceive =
           DLLM_EXTRACT_TENSOR(tensorReceive).numel() * byteScaleReceive;
-      DLLM_ASSERT_TRUE(countSend <= std::numeric_limits<int>::max(),
-                       "Do not support very large message");
-
       const auto tensorSendContiguout =
           DLLM_EXTRACT_TENSOR(tensorSend).contiguous();
       if (!DLLM_EXTRACT_TENSOR(tensorReceive).is_contiguous()) {
         DLLM_EXTRACT_TENSOR(tensorReceive) =
             DLLM_EXTRACT_TENSOR(tensorReceive).contiguous();
       }
-      CHECK_MPI(MPI_Alltoall(tensorSendContiguout.data_ptr(), countSend,
-                             MPI_BYTE,
-                             DLLM_EXTRACT_TENSOR(tensorReceive).data_ptr(),
-                             countReceive, MPI_BYTE, context->mpiComm));
+      DLLM_ASSERT_TRUE(
+          DLLM_EXTRACT_TENSOR(tensorReceive).device().type() == at::kCUDA,
+          "NCCL backend only support CUDA GPUs");
+      DLLM_ASSERT_TRUE(
+          DLLM_EXTRACT_TENSOR(tensorSend).device().type() == at::kCUDA,
+          "NCCL backend only support CUDA GPUs");
+      CHECK_NCCL(ncclGroupStart());
+      for (int r = 0; r < context->commSize; r++) {
+        CHECK_NCCL(ncclSend(tensorSendContiguout.data_ptr(), byteSend, ncclInt8,
+                            r, context->ncclComm, context->cudaStream));
+        CHECK_NCCL(ncclRecv(DLLM_EXTRACT_TENSOR(tensorReceive).data_ptr(),
+                            byteReceive, ncclInt8, r, context->ncclComm,
+                            context->cudaStream));
+      }
+      CHECK_NCCL(ncclGroupEnd());
     }
     tensorSend.reset();
     tensorReceive.reset();
@@ -71,28 +78,37 @@ TaskMpi AllToAll<MPI>::run(
   return task;
 }
 
-TaskMpi AllToAll<MPI>::runInplace(const std::shared_ptr<Tensor> &tensor) {
-  auto task = TaskMpi{[tensor = tensor, future = tensor->future()](
-                          const ContextMpi *context) mutable {
-    DLLM_NVTX_RANGE_FN("dllm::communication::AllToAll<MPI>::runInplace");
+TaskNccl AllToAll<NCCL>::runInplace(const std::shared_ptr<Tensor> &tensor) {
+  auto task = TaskNccl{[tensor = tensor, future = tensor->future()](
+                           const ContextNccl *context) mutable {
+    DLLM_NVTX_RANGE_FN("dllm::communication::AllToAll<NCCL>::runInplace");
     util::FutureGuard guard{future};
     int64_t byteScale;
     AT_DISPATCH_FLOATING_TYPES_AND2(
         at::ScalarType::Half, at::ScalarType::BFloat16,
         DLLM_EXTRACT_TENSOR(tensor).scalar_type(), "Find size in byte",
         [&] { byteScale = sizeof(scalar_t); });
-    const int64_t count =
+    const int64_t byte =
         DLLM_EXTRACT_TENSOR(tensor).numel() * byteScale / context->commSize;
-    DLLM_ASSERT_TRUE(count <= std::numeric_limits<int>::max(),
-                     "Do not support very large message");
     if (!DLLM_EXTRACT_TENSOR(tensor).is_contiguous()) {
       DLLM_EXTRACT_TENSOR(tensor) = DLLM_EXTRACT_TENSOR(tensor).contiguous();
     }
-    DLLM_WARN_TRUE(DLLM_EXTRACT_TENSOR(tensor).is_cpu(),
-                   "MPI non CPU version is very slow");
-    CHECK_MPI(MPI_Alltoall(MPI_IN_PLACE, 0, MPI_DATATYPE_NULL,
-                           DLLM_EXTRACT_TENSOR(tensor).data_ptr(), count,
-                           MPI_BYTE, context->mpiComm));
+    DLLM_ASSERT_TRUE(DLLM_EXTRACT_TENSOR(tensor).device().type() == at::kCUDA,
+                     "NCCL backend only support CUDA GPUs");
+    CHECK_NCCL(ncclGroupStart());
+    const auto base_ptr =
+        static_cast<std::byte *>(DLLM_EXTRACT_TENSOR(tensor).data_ptr());
+    for (int r = 0; r < context->commSize; r++) {
+      if (r != context->ncclRank) {
+        const auto *send_ptr = base_ptr + context->ncclRank * byte;
+        auto *recv_ptr = base_ptr + r * byte;
+        CHECK_NCCL(ncclSend(send_ptr, byte, ncclInt8, r, context->ncclComm,
+                            context->cudaStream));
+        CHECK_NCCL(ncclRecv(recv_ptr, byte, ncclInt8, r, context->ncclComm,
+                            context->cudaStream));
+      }
+    }
+    CHECK_NCCL(ncclGroupEnd());
     tensor.reset();
   }};
   tensor->resetFuture(task.get_future());

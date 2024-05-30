@@ -18,9 +18,11 @@ void setThreadAffinity(std::thread &th, const int coreId) {
   DLLM_ASSERT_TRUE(rc == 0, "core binding error with code {}", rc);
 }
 
-void threadTask(const ContextMpi context, std::queue<TaskMpi> *taskQueue,
+void threadTask(const ContextMpi *context, std::queue<TaskMpi> *taskQueue,
                 std::mutex *queueMutex, std::condition_variable *cv,
-                std::mutex *cvMutex, const std::atomic<bool> *shutDown) {
+                std::mutex *cvMutex, const std::atomic<bool> *shutDown,
+                std::barrier<> *barrier) {
+  barrier->arrive_and_wait();
   while (!shutDown->load()) {
     TaskMpi task;
     std::unique_lock lock{*queueMutex};
@@ -31,7 +33,7 @@ void threadTask(const ContextMpi context, std::queue<TaskMpi> *taskQueue,
     lock.unlock();
     if (task.valid()) {
       try {
-        task(&context);
+        task(context);
       } catch (const std::exception &e) {
         DLLM_ASSERT_TRUE(false, "Task failed with error: {}", e.what());
       }
@@ -63,12 +65,18 @@ void ThreadStreamMpi::submit(TaskMpi &&task) {
   cv.notify_one();
 }
 
-ThreadStreamMpi::ThreadStreamMpi(const ContextMpi context,
+int64_t ThreadStreamMpi::commSize() const { return context_.commSize; }
+
+int64_t ThreadStreamMpi::rank() const { return context_.mpiRank; }
+
+ThreadStreamMpi::ThreadStreamMpi(const ContextMpi &context,
                                  const std::optional<const int> bindingMap)
-    : thread{threadTask, context,  &taskQueue, &queueMutex,
-             &cv,        &cvMutex, &shutDown} {
+    : context_{context}, barrier_{2}, thread{threadTask,  &context_, &taskQueue,
+                                             &queueMutex, &cv,       &cvMutex,
+                                             &shutDown,   &barrier_} {
   if (bindingMap.has_value()) {
     setThreadAffinity(thread, bindingMap.value());
   }
+  barrier_.arrive_and_wait();
 }
 }  // namespace dllm

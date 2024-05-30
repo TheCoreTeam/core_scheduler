@@ -5,6 +5,7 @@
 
 #include "internal_utils.h"
 #include "logger.h"
+#include "nvtx_helper.h"
 #include "tensor_friend.h"
 
 namespace dllm::communication {
@@ -20,7 +21,7 @@ ncclDataType_t toNcclDataType(const at::ScalarType dtype) {
     case at::kBFloat16:
       return ncclBfloat16;
     default:
-      return static_cast<ncclDataType_t>(0);
+      DLLM_ASSERT_TRUE(false, "unsupported data type for NCCL all gather");
   }
 }
 }  // namespace
@@ -36,6 +37,7 @@ TaskNccl AllGather<NCCL>::run(
       [receiveCount = receiveCount, tensorSend = tensorSend,
        tensorReceive = tensorReceive, futureReceive = tensorReceive->future(),
        futureSend = tensorSend->future()](const ContextNccl *context) mutable {
+        DLLM_NVTX_RANGE_FN("dllm::communication::AllGather<NCCL>::run");
         {
           const auto count = tensorSend->numel();
           util::FutureGuard guardReceive{futureReceive};
@@ -46,6 +48,16 @@ TaskNccl AllGather<NCCL>::run(
           }
           const auto tensorSendContiguout =
               DLLM_EXTRACT_TENSOR(tensorSend).contiguous();
+          if (!DLLM_EXTRACT_TENSOR(tensorReceive).is_contiguous()) {
+            DLLM_EXTRACT_TENSOR(tensorReceive) =
+                DLLM_EXTRACT_TENSOR(tensorReceive).contiguous();
+          }
+          DLLM_ASSERT_TRUE(
+              DLLM_EXTRACT_TENSOR(tensorReceive).device().type() == at::kCUDA,
+              "NCCL backend only support CUDA GPUs");
+          DLLM_ASSERT_TRUE(
+              DLLM_EXTRACT_TENSOR(tensorSend).device().type() == at::kCUDA,
+              "NCCL backend only support CUDA GPUs");
           CHECK_NCCL(ncclAllGather(
               DLLM_EXTRACT_TENSOR(tensorSend).data_ptr(),
               DLLM_EXTRACT_TENSOR(tensorReceive).data_ptr(), count,
@@ -64,14 +76,20 @@ TaskNccl AllGather<NCCL>::run(
 }
 
 TaskNccl AllGather<NCCL>::runInplace(const std::shared_ptr<Tensor> &tensor) {
-  DLLM_ASSERT_TRUE(!DLLM_EXTRACT_TENSOR(tensor).defined() ||
-                       DLLM_EXTRACT_TENSOR(tensor).is_contiguous(),
-                   "tensor tensor not contiguout");
   auto task = TaskNccl{[tensor = tensor, future = tensor->future()](
                            const ContextNccl *context) mutable {
+    DLLM_NVTX_RANGE_FN("dllm::communication::AllGather<NCCL>::runInplace");
     {
       const auto count = tensor->numel();
       util::FutureGuard guard{future};
+      if (!DLLM_EXTRACT_TENSOR(tensor).is_contiguous()) {
+        DLLM_EXTRACT_TENSOR(tensor) = DLLM_EXTRACT_TENSOR(tensor).contiguous();
+      }
+      DLLM_ASSERT_TRUE(count % context->commSize == 0,
+                       "transfer volume {} is not dividable by commSize {}",
+                       count, context->commSize);
+      DLLM_ASSERT_TRUE(DLLM_EXTRACT_TENSOR(tensor).device().type() == at::kCUDA,
+                       "NCCL backend only support CUDA GPUs");
       CHECK_NCCL(ncclAllGather(
           DLLM_EXTRACT_TENSOR(tensor).data_ptr(),
           DLLM_EXTRACT_TENSOR(tensor).data_ptr(), count / context->commSize,

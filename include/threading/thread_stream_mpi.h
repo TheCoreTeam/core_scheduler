@@ -1,6 +1,7 @@
 #pragma once
 
 #include <atomic>
+#include <barrier>
 #include <condition_variable>
 #include <future>
 #include <mutex>
@@ -13,7 +14,8 @@
 
 namespace dllm {
 struct ThreadStreamMpi {
-  ThreadStreamMpi(ContextMpi context, std::optional<const int> bindingMap = {});
+  explicit ThreadStreamMpi(const ContextMpi &context,
+                           std::optional<const int> bindingMap = {});
 
   ~ThreadStreamMpi();
 
@@ -21,7 +23,13 @@ struct ThreadStreamMpi {
 
   void submit(const TaskMpi &task) = delete;
 
+  [[nodiscard]] int64_t commSize() const;
+
+  [[nodiscard]] int64_t rank() const;
+
  private:
+  const ContextMpi context_;
+  std::barrier<> barrier_;
   std::queue<TaskMpi> taskQueue{};
   std::mutex queueMutex{};
   std::condition_variable cv{};

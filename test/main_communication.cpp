@@ -2,10 +2,12 @@
 #include <mpi.h>
 #include <nccl.h>
 
+#include "logger.h"
+
 int main(int argc, char **argv) {
-  MPI_Init(&argc, &argv);
+  CHECK_MPI(MPI_Init(&argc, &argv));
   ::testing::InitGoogleTest(&argc, argv);
-  auto error = RUN_ALL_TESTS();
-  MPI_Finalize();
+  const auto error = RUN_ALL_TESTS();
+  CHECK_MPI(MPI_Finalize());
   return error;
 }

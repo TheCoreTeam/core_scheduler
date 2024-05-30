@@ -1,6 +1,7 @@
 #pragma once
 
 #include <atomic>
+#include <barrier>
 #include <condition_variable>
 #include <future>
 #include <mutex>
@@ -23,6 +24,7 @@ struct ThreadStreamCudart {
   void submit(const TaskCudart &task) = delete;
 
  private:
+  std::barrier<> barrier_;
   std::queue<TaskCudart> taskQueue{};
   std::mutex queueMutex{};
   std::condition_variable cv{};

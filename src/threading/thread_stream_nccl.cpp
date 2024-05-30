@@ -6,6 +6,8 @@
 #include <pthread.h>
 #include <sched.h>
 
+#include <barrier>
+
 #include "logger.h"
 
 namespace dllm {
@@ -20,16 +22,17 @@ void setThreadAffinity(std::thread &th, const int coreId) {
   DLLM_ASSERT_TRUE(rc == 0, "core binding error with code {}", rc);
 }
 
-void threadTask(const ncclUniqueId id, const int ncclWorldSize,
+void threadTask(const ncclUniqueId *id, const int ncclWorldSize,
                 const int ncclRank, const int deviceRank,
                 std::queue<TaskNccl> *taskQueue, std::mutex *queueMutex,
                 std::condition_variable *cv, std::mutex *cvMutex,
-                const std::atomic<bool> *shutDown) {
+                const std::atomic<bool> *shutDown, std::barrier<> *barrier) {
   ContextNccl context;
+  barrier->arrive_and_wait();
   CHECK_CUDART(cudaSetDevice(deviceRank));
   CHECK_CUDART(
       cudaStreamCreateWithFlags(&context.cudaStream, cudaStreamNonBlocking));
-  CHECK_NCCL(ncclCommInitRank(&context.ncclComm, ncclWorldSize, id, ncclRank));
+  CHECK_NCCL(ncclCommInitRank(&context.ncclComm, ncclWorldSize, *id, ncclRank));
   context.ncclRank = ncclRank;
   context.commSize = ncclWorldSize;
   const auto stream = c10::cuda::getStreamFromExternal(
@@ -82,14 +85,22 @@ void ThreadStreamNccl::submit(TaskNccl &&task) {
   cv.notify_one();
 }
 
-ThreadStreamNccl::ThreadStreamNccl(const ncclUniqueId id,
+int64_t ThreadStreamNccl::commSize() const { return commSize_; };
+
+int64_t ThreadStreamNccl::rank() const { return rank_; };
+
+ThreadStreamNccl::ThreadStreamNccl(const ncclUniqueId &id,
                                    const int ncclWorldSize, const int ncclRank,
                                    const int deviceRank,
                                    const std::optional<const int> bindingMap)
-    : thread{threadTask, id,          ncclWorldSize, ncclRank, deviceRank,
-             &taskQueue, &queueMutex, &cv,           &cvMutex, &shutDown} {
+    : commSize_{ncclWorldSize},
+      rank_{ncclRank},
+      barrier_{2},
+      thread{threadTask,  &id, ncclWorldSize, ncclRank,  deviceRank, &taskQueue,
+             &queueMutex, &cv, &cvMutex,      &shutDown, &barrier_} {
   if (bindingMap.has_value()) {
     setThreadAffinity(thread, bindingMap.value());
   }
+  barrier_.arrive_and_wait();
 }
 }  // namespace dllm

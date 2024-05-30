@@ -1,90 +1,94 @@
-#include "communication/mpi/all_gather.h"
+#include "communication/all_gather.h"
 
 #include <mpi.h>
+#include <tensor_friend.h>
+#include <torch/csrc/autograd/generated/variable_factories.h>
 
-#include "dtensor_mpi.h"
+#include "internal_utils.h"
 #include "logger.h"
-#include "util.h"
+#include "nvtx_helper.h"
 
 namespace dllm::communication {
-TaskMpi AllGather<MPI>::run(const std::shared_ptr<const Tensor1D> &tensorSend,
-                            const std::shared_ptr<Tensor1D> &tensorReceive) {
-  if (tensorSend->dtype != tensorReceive->dtype) {
-    SPDLOG_LOGGER_CRITICAL(&logger(),
-                           "sendbuff's dtype is different from the recvbuff's");
-  }
-
+TaskMpi AllGather<MPI>::run(
+    const std::shared_ptr<Tensor> &tensorReceive,
+    const std::shared_ptr<const ReadOnlyTensor> &tensorSend,
+    const int64_t receiveCount) {
   auto task = TaskMpi{[tensorSend = tensorSend, tensorReceive = tensorReceive,
-                       futureReceive = *tensorReceive->future,
-                       futureSend = tensorSend->future->rFuture](
+                       futureReceive = tensorReceive->future(),
+                       futureSend = tensorSend->future()](
                           const ContextMpi *context) mutable {
-    const MPI_Datatype sendtype = [&]() {
-      switch (tensorSend->dtype) {
-        case R_64F:
-          return MPI_DOUBLE;
-        case R_32F:
-          return MPI_FLOAT;
-        default:
-          SPDLOG_LOGGER_CRITICAL(&logger(),
-                                 "Not supported MPI all-reduce datatype");
-          return reinterpret_cast<MPI_Datatype>(0);
-      }
-    }();
-    const MPI_Datatype recvtype = [&]() {
-      switch (tensorReceive->dtype) {
-        case R_64F:
-          return MPI_DOUBLE;
-        case R_32F:
-          return MPI_FLOAT;
-        default:
-          SPDLOG_LOGGER_CRITICAL(&logger(),
-                                 "Not supported MPI all-reduce datatype");
-          return reinterpret_cast<MPI_Datatype>(0);
-      }
-    }();
+    DLLM_NVTX_RANGE_FN("dllm::communication::AllGather<MPI>::run");
+    util::FutureGuard guardReceive{futureReceive};
     util::FutureGuard guardSend{futureSend};
-    util::FutureGuard guardRReceive{futureReceive.rFuture};
-    util::FutureGuard guardWReceive{futureReceive.wFuture};
-    CHECK_MPI(MPI_Allgather_c(
-        tensorSend->data(), cute::size(tensorSend->layout), sendtype,
-        tensorReceive->data(), cute::size(tensorSend->layout), recvtype,
-        context->mpiComm));
+    if (!DLLM_EXTRACT_TENSOR(tensorReceive).defined()) {
+      DLLM_EXTRACT_TENSOR(tensorReceive) = torch::empty(
+          {tensorReceive->numel()}, DLLM_EXTRACT_TENSOR(tensorSend).options());
+    }
+    int64_t byteScaleSend;
+    AT_DISPATCH_FLOATING_TYPES_AND2(
+        at::ScalarType::Half, at::ScalarType::BFloat16,
+        DLLM_EXTRACT_TENSOR(tensorSend).scalar_type(), "Find size in byte",
+        [&] { byteScaleSend = sizeof(scalar_t); });
+    const int64_t byteSend =
+        DLLM_EXTRACT_TENSOR(tensorSend).numel() * byteScaleSend;
+    DLLM_ASSERT_TRUE(byteSend <= std::numeric_limits<int>::max(),
+                     "Do not support very large message");
+    int64_t byteScaleReceive;
+    AT_DISPATCH_FLOATING_TYPES_AND2(
+        at::ScalarType::Half, at::ScalarType::BFloat16,
+        DLLM_EXTRACT_TENSOR(tensorReceive).scalar_type(), "Find size in byte",
+        [&] { byteScaleReceive = sizeof(scalar_t); });
+    const int64_t byteReceive =
+        DLLM_EXTRACT_TENSOR(tensorReceive).numel() * byteScaleReceive;
+    DLLM_ASSERT_TRUE(byteReceive <= std::numeric_limits<int>::max(),
+                     "Do not support very large message");
+    const auto tensorSendContiguous =
+        DLLM_EXTRACT_TENSOR(tensorSend).contiguous();
+    if (!DLLM_EXTRACT_TENSOR(tensorReceive).is_contiguous()) {
+      DLLM_EXTRACT_TENSOR(tensorReceive) =
+          DLLM_EXTRACT_TENSOR(tensorReceive).contiguous();
+    }
+    CHECK_MPI(MPI_Allgather(tensorSendContiguous.data_ptr(), byteSend, MPI_BYTE,
+                            DLLM_EXTRACT_TENSOR(tensorReceive).data_ptr(),
+                            byteReceive, MPI_BYTE, context->mpiComm));
     tensorSend.reset();
     tensorReceive.reset();
   }};
   const TaskFuture future = task.get_future();
-  tensorSend->future->rFuture = future;
-  tensorReceive->future->wFuture = future;
+  tensorSend->resetFuture(future);
+  tensorReceive->resetFuture(future);
+  tensorReceive->sizes() = IntArray{receiveCount};
   return task;
 }
 
-TaskMpi AllGather<MPI>::runInplace(const std::shared_ptr<Tensor1D> &tensor) {
-  auto task = TaskMpi{[tensor = tensor, future = *tensor->future](
+TaskMpi AllGather<MPI>::runInplace(const std::shared_ptr<Tensor> &tensor) {
+  auto task = TaskMpi{[tensor = tensor, future = tensor->future()](
                           const ContextMpi *context) mutable {
-    // Be careful: possible deadlock
-    const MPI_Datatype datatype = [&]() {
-      switch (tensor->dtype) {
-        case R_64F:
-          return MPI_DOUBLE;
-        case R_32F:
-          return MPI_FLOAT;
-        default:
-          SPDLOG_LOGGER_CRITICAL(&logger(),
-                                 "Not supported MPI all-reduce datatype");
-          return reinterpret_cast<MPI_Datatype>(0);
-      }
-    }();
-    util::FutureGuard rGuard{future.rFuture};
-    util::FutureGuard wGuard{future.wFuture};
-    CHECK_MPI(MPI_Allgather_c(MPI_IN_PLACE, 0, MPI_DATATYPE_NULL,
-                              tensor->data(),
-                              cute::size(tensor->layout) / context->commSize,
-                              datatype, context->mpiComm));
+    DLLM_NVTX_RANGE_FN("dllm::communication::AllGather<MPI>::runInplace");
+    util::FutureGuard guard{future};
+    int64_t byteScale;
+    AT_DISPATCH_FLOATING_TYPES_AND2(
+        at::ScalarType::Half, at::ScalarType::BFloat16,
+        DLLM_EXTRACT_TENSOR(tensor).scalar_type(), "Find size in byte",
+        [&] { byteScale = sizeof(scalar_t); });
+    const int64_t byte = tensor->numel() * byteScale;
+    DLLM_ASSERT_TRUE(byte <= std::numeric_limits<int>::max(),
+                     "Do not support very large message");
+    DLLM_ASSERT_TRUE(byte % context->commSize == 0,
+                     "transfer volume {} is not dividable by commSize {}", byte,
+                     context->commSize);
+    if (!DLLM_EXTRACT_TENSOR(tensor).is_contiguous()) {
+      DLLM_EXTRACT_TENSOR(tensor) = DLLM_EXTRACT_TENSOR(tensor).contiguous();
+    }
+    DLLM_WARN_TRUE(DLLM_EXTRACT_TENSOR(tensor).is_cpu(),
+                   "MPI non CPU version is very slow");
+    CHECK_MPI(MPI_Allgather(MPI_IN_PLACE, 0, MPI_DATATYPE_NULL,
+                            DLLM_EXTRACT_TENSOR(tensor).data_ptr(),
+                            byte / context->commSize, MPI_BYTE,
+                            context->mpiComm));
     tensor.reset();
   }};
-  const TaskFuture future = task.get_future();
-  tensor->future->rFuture = future;
-  tensor->future->wFuture = future;
+  tensor->resetFuture(task.get_future());
   return task;
 }
 }  // namespace dllm::communication

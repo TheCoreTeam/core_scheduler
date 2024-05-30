@@ -2,6 +2,7 @@
 #include <fmt/format.h>
 #include <spdlog/spdlog.h>
 
+#include <cstdlib>
 #include <string>
 
 namespace dllm {
@@ -11,7 +12,16 @@ namespace dllm {
       std::string errorMessage =                                              \
           fmt::format("Assert '{}' failed: '{}'", #statement, ##__VA_ARGS__); \
       SPDLOG_LOGGER_CRITICAL(&::dllm::logger(), errorMessage);                \
-      throw std::runtime_error(errorMessage);                                 \
+      std::abort();                                                           \
+    }                                                                         \
+  } while (0)
+
+#define DLLM_WARN_TRUE(statement, ...)                                        \
+  do {                                                                        \
+    if (!(statement)) {                                                       \
+      std::string errorMessage =                                              \
+          fmt::format("Assert '{}' failed: '{}'", #statement, ##__VA_ARGS__); \
+      SPDLOG_LOGGER_WARN(&::dllm::logger(), errorMessage);                    \
     }                                                                         \
   } while (0)
 

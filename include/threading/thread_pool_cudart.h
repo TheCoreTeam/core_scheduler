@@ -1,5 +1,6 @@
 #pragma once
 #include <atomic>
+#include <barrier>
 #include <condition_variable>
 #include <future>
 #include <mutex>
@@ -12,7 +13,7 @@
 namespace dllm {
 struct ThreadPoolCudart {
   ThreadPoolCudart(int localRank, int threadNum,
-                    const std::vector<int> &bindingMap = {});
+                   const std::vector<int> &bindingMap = {});
 
   ~ThreadPoolCudart();
 
@@ -20,7 +21,8 @@ struct ThreadPoolCudart {
 
   void submit(const TaskCudart &task) = delete;
 
-private:
+ private:
+  std::barrier<> barrier_;
   std::vector<std::thread> threadVector{};
   std::queue<TaskCudart> taskQueue{};
   std::mutex queueMutex{};

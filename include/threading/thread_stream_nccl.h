@@ -1,6 +1,7 @@
 #pragma once
 
 #include <atomic>
+#include <barrier>
 #include <condition_variable>
 #include <future>
 #include <mutex>
@@ -13,7 +14,7 @@
 
 namespace dllm {
 struct ThreadStreamNccl {
-  ThreadStreamNccl(ncclUniqueId id, int ncclWorldSize, int ncclRank,
+  ThreadStreamNccl(const ncclUniqueId &id, int ncclWorldSize, int ncclRank,
                    int deviceRank, std::optional<const int> bindingMap = {});
 
   ~ThreadStreamNccl();
@@ -22,7 +23,14 @@ struct ThreadStreamNccl {
 
   void submit(const TaskNccl &task) = delete;
 
+  int64_t commSize() const;
+
+  int64_t rank() const;
+
  private:
+  const int64_t commSize_;
+  const int64_t rank_;
+  std::barrier<> barrier_;
   std::queue<TaskNccl> taskQueue{};
   std::mutex queueMutex{};
   std::condition_variable cv{};
