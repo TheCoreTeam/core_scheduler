@@ -12,7 +12,7 @@
 #include "threading/thread_stream_nccl.h"
 
 namespace dllm::test {
-ncclUniqueId &getUniqueNcclId();
+ThreadStreamNccl *getNcclStream();
 }  // namespace dllm::test
 
 template <typename T>
@@ -39,25 +39,10 @@ struct TypeToTorch<double> {
 class ReduceScatterNCCLTestFixture : public ::testing::Test {
  protected:
   dllm::ContextCompute context{};
-  dllm::ContextMpi contextMpi;
-  dllm::ThreadStreamNccl *stream;
   dllm::ThreadStreamCudart *copy;
   dllm::ThreadPoolCompute *tp;
 
   ReduceScatterNCCLTestFixture() {
-    int processesPerNode;
-    CHECK_MPI(MPI_Comm_split_type(MPI_COMM_WORLD, MPI_COMM_TYPE_SHARED, 0,
-                                  MPI_INFO_NULL, &contextMpi.mpiComm));
-    CHECK_MPI(MPI_Comm_size(contextMpi.mpiComm, &processesPerNode));
-    CHECK_MPI(MPI_Comm_rank(contextMpi.mpiComm, &contextMpi.mpiRank));
-    ncclUniqueId id;
-    if (contextMpi.mpiRank == 0) {
-      id = dllm::test::getUniqueNcclId();
-    }
-    CHECK_MPI(
-        MPI_Bcast(&id, sizeof(ncclUniqueId), MPI_BYTE, 0, contextMpi.mpiComm));
-    stream =
-        new dllm::ThreadStreamNccl{id, processesPerNode, contextMpi.mpiRank, 0};
     copy = new dllm::ThreadStreamCudart{0};
     tp = new dllm::ThreadPoolCompute{0, 3};
     CHECK_CUDART(cudaSetDevice(0));
@@ -66,8 +51,6 @@ class ReduceScatterNCCLTestFixture : public ::testing::Test {
   ~ReduceScatterNCCLTestFixture() {
     delete tp;
     delete copy;
-    delete stream;
-    CHECK_MPI(MPI_Comm_free(&contextMpi.mpiComm));
   }
 
   template <typename T>
@@ -76,6 +59,7 @@ class ReduceScatterNCCLTestFixture : public ::testing::Test {
 
 template <typename T>
 void ReduceScatterNCCLTestFixture::TestlAllToAllT(const int blockSize) {
+  const auto stream = dllm::test::getNcclStream();
   const at::Device device(at::kCUDA, 0);
   const at::ScalarType dtype = TypeToTorch<T>::type;
   const auto option = at::TensorOptions().dtype(dtype).device(device);

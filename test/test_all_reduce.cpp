@@ -12,7 +12,7 @@
 #include "threading/thread_stream_nccl.h"
 
 namespace dllm::test {
-ncclUniqueId &getUniqueNcclId();
+ThreadStreamNccl *getNcclStream();
 }  // namespace dllm::test
 
 template <typename T>
@@ -100,25 +100,10 @@ TEST_F(AllReduceMPITestFixture, TestForwardF64) { TestAllReduceT<double>(128); }
 class AllReduceNcclTestFixture : public ::testing::Test {
  protected:
   dllm::ContextCompute context{};
-  dllm::ContextMpi contextMpi;
-  dllm::ThreadStreamNccl *stream;
   dllm::ThreadStreamCudart *copy;
   dllm::ThreadPoolCompute *tp;
 
   AllReduceNcclTestFixture() {
-    int processesPerNode;
-    CHECK_MPI(MPI_Comm_split_type(MPI_COMM_WORLD, MPI_COMM_TYPE_SHARED, 0,
-                                  MPI_INFO_NULL, &contextMpi.mpiComm));
-    CHECK_MPI(MPI_Comm_size(contextMpi.mpiComm, &processesPerNode));
-    CHECK_MPI(MPI_Comm_rank(contextMpi.mpiComm, &contextMpi.mpiRank));
-    ncclUniqueId id;
-    if (contextMpi.mpiRank == 0) {
-      id = dllm::test::getUniqueNcclId();
-    }
-    CHECK_MPI(
-        MPI_Bcast(&id, sizeof(ncclUniqueId), MPI_BYTE, 0, contextMpi.mpiComm));
-    stream =
-        new dllm::ThreadStreamNccl{id, processesPerNode, contextMpi.mpiRank, 0};
     copy = new dllm::ThreadStreamCudart{0};
     tp = new dllm::ThreadPoolCompute{0, 3};
     CHECK_CUDART(cudaSetDevice(0));
@@ -127,8 +112,6 @@ class AllReduceNcclTestFixture : public ::testing::Test {
   ~AllReduceNcclTestFixture() {
     delete tp;
     delete copy;
-    delete stream;
-    CHECK_MPI(MPI_Comm_free(&contextMpi.mpiComm));
   }
 
   template <typename T>
@@ -137,6 +120,7 @@ class AllReduceNcclTestFixture : public ::testing::Test {
 
 template <typename T>
 void AllReduceNcclTestFixture::TestAllReduceT(const int m) {
+  const auto stream = dllm::test::getNcclStream();
   const at::Device device(at::kCUDA, 0);
   const at::ScalarType dtype = TypeToTorch<T>::type;
   const auto option = at::TensorOptions().dtype(dtype).device(device);
@@ -160,15 +144,12 @@ void AllReduceNcclTestFixture::TestAllReduceT(const int m) {
     x->wait();
   }
 
-  auto accumulator = torch::empty_like(x_torch);
-  if (contextMpi.mpiRank == 0) {
-    accumulator.zero_();
-    for (int i = 0; i < stream->commSize(); ++i) {
-      at::manual_seed(i + 1);
-      accumulator += torch::rand({m}, option);
-    }
-    GTEST_ASSERT_TRUE(at::allclose(x, x_torch));
+  auto accumulator = torch::zeros_like(x_torch);
+  for (int i = 0; i < stream->commSize(); ++i) {
+    at::manual_seed(i + 1);
+    accumulator += torch::rand({m}, option);
   }
+  GTEST_ASSERT_TRUE(at::allclose(x, x_torch));
 }
 
 TEST_F(AllReduceNcclTestFixture, TestForwardF32) { TestAllReduceT<float>(128); }
