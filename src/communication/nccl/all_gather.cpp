@@ -59,7 +59,7 @@ TaskNccl AllGather<NCCL>::run(
               DLLM_EXTRACT_TENSOR(tensorSend).device().type() == at::kCUDA,
               "NCCL backend only support CUDA GPUs");
           CHECK_NCCL(ncclAllGather(
-              DLLM_EXTRACT_TENSOR(tensorSend).data_ptr(),
+              tensorSendContiguout.data_ptr(),
               DLLM_EXTRACT_TENSOR(tensorReceive).data_ptr(), count,
               toNcclDataType(DLLM_EXTRACT_TENSOR(tensorSend).scalar_type()),
               context->ncclComm, context->cudaStream));

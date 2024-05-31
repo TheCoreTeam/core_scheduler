@@ -11,6 +11,10 @@
 #include "threading/thread_stream_mpi.h"
 #include "threading/thread_stream_nccl.h"
 
+namespace dllm::test {
+ThreadStreamNccl *getNcclStream();
+}  // namespace dllm::test
+
 template <typename T>
 struct TypeToTorch;
 
@@ -97,35 +101,18 @@ TEST_F(AllGatherMPITestFixture, TestForwardF64) { TestAllGatherT<double>(128); }
 class AllGatherNCCLTestFixture : public ::testing::Test {
  protected:
   dllm::ContextCompute context{};
-  dllm::ContextMpi contextMpi;
-  dllm::ThreadStreamNccl *stream;
   dllm::ThreadStreamCudart *copy;
   dllm::ThreadPoolCompute *tp;
 
   AllGatherNCCLTestFixture() {
-    int processesPerNode;
-    CHECK_MPI(MPI_Comm_split_type(MPI_COMM_WORLD, MPI_COMM_TYPE_SHARED, 0,
-                                  MPI_INFO_NULL, &contextMpi.mpiComm));
-    CHECK_MPI(MPI_Comm_size(contextMpi.mpiComm, &processesPerNode));
-    CHECK_MPI(MPI_Comm_rank(contextMpi.mpiComm, &contextMpi.mpiRank));
-    ncclUniqueId id;
-    if (contextMpi.mpiRank == 0) {
-      CHECK_NCCL(ncclGetUniqueId(&id));
-    }
-    CHECK_MPI(
-        MPI_Bcast(&id, sizeof(ncclUniqueId), MPI_BYTE, 0, contextMpi.mpiComm));
-    stream = new dllm::ThreadStreamNccl{id, processesPerNode,
-                                        contextMpi.mpiRank, contextMpi.mpiRank};
-    copy = new dllm::ThreadStreamCudart{contextMpi.mpiRank};
-    tp = new dllm::ThreadPoolCompute{contextMpi.mpiRank, 3};
-    CHECK_CUDART(cudaSetDevice(contextMpi.mpiRank));
+    copy = new dllm::ThreadStreamCudart{0};
+    tp = new dllm::ThreadPoolCompute{0, 3};
+    CHECK_CUDART(cudaSetDevice(0));
   }
 
   ~AllGatherNCCLTestFixture() {
     delete tp;
     delete copy;
-    delete stream;
-    CHECK_MPI(MPI_Comm_free(&contextMpi.mpiComm));
   }
 
   template <typename T>
@@ -134,7 +121,8 @@ class AllGatherNCCLTestFixture : public ::testing::Test {
 
 template <typename T>
 void AllGatherNCCLTestFixture::TestlAllToAllT(const int blockSize) {
-  const at::Device device(at::kCUDA, stream->rank());
+  const auto stream = dllm::test::getNcclStream();
+  const at::Device device(at::kCUDA, 0);
   const at::ScalarType dtype = TypeToTorch<T>::type;
   const auto option = at::TensorOptions().dtype(dtype).device(device);
   const int m = blockSize * stream->commSize();

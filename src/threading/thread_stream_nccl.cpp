@@ -28,11 +28,12 @@ void threadTask(const ncclUniqueId *id, const int ncclWorldSize,
                 std::condition_variable *cv, std::mutex *cvMutex,
                 const std::atomic<bool> *shutDown, std::barrier<> *barrier) {
   ContextNccl context;
+  ncclUniqueId _id = *id;
   barrier->arrive_and_wait();
   CHECK_CUDART(cudaSetDevice(deviceRank));
   CHECK_CUDART(
       cudaStreamCreateWithFlags(&context.cudaStream, cudaStreamNonBlocking));
-  CHECK_NCCL(ncclCommInitRank(&context.ncclComm, ncclWorldSize, *id, ncclRank));
+  CHECK_NCCL(ncclCommInitRank(&context.ncclComm, ncclWorldSize, _id, ncclRank));
   context.ncclRank = ncclRank;
   context.commSize = ncclWorldSize;
   const auto stream = c10::cuda::getStreamFromExternal(
