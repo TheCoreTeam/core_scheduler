@@ -25,17 +25,35 @@ namespace dllm {
     }                                                                         \
   } while (0)
 
-#define CHECK_CUDART(statement) \
-  DLLM_ASSERT_TRUE((statement) == cudaSuccess, "No further message")
+#define CHECK_CUDART(statement)                                        \
+  do {                                                                 \
+    auto code = (statement);                                           \
+    DLLM_ASSERT_TRUE((code) == cudaSuccess, cudaGetErrorString(code)); \
+  } while (0)
 
-#define CHECK_CUBLAS(statement) \
-  DLLM_ASSERT_TRUE((statement) == CUBLAS_STATUS_SUCCESS, "No further message")
+#define CHECK_CUBLAS(statement)                                               \
+  do {                                                                        \
+    auto code = (statement);                                                  \
+    DLLM_ASSERT_TRUE((code) == CUBLAS_STATUS_SUCCESS,                         \
+                     fmt::format("statement {} returned code {}", #statement, \
+                                 static_cast<int>(code)));                    \
+  } while (0)
 
-#define CHECK_MPI(statement) \
-  DLLM_ASSERT_TRUE((statement) == MPI_SUCCESS, "No further message")
+#define CHECK_MPI(statement)                                                  \
+  do {                                                                        \
+    auto code = (statement);                                                  \
+    DLLM_ASSERT_TRUE((code) == MPI_SUCCESS,                                   \
+                     fmt::format("statement {} returned code {}", #statement, \
+                                 static_cast<int>(code)));                    \
+  } while (0)
 
-#define CHECK_NCCL(statement) \
-  DLLM_ASSERT_TRUE((statement) == ncclSuccess, "No further message")
+#define CHECK_NCCL(statement)                                                 \
+  do {                                                                        \
+    auto code = (statement);                                                  \
+    DLLM_ASSERT_TRUE((code) == ncclSuccess,                                   \
+                     fmt::format("statement {} returned code {}", #statement, \
+                                 static_cast<int>(code)));                    \
+  } while (0)
 
 spdlog::logger &logger();
 }  // namespace dllm

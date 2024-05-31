@@ -11,6 +11,10 @@
 #include "threading/thread_stream_mpi.h"
 #include "threading/thread_stream_nccl.h"
 
+namespace dllm::test {
+ncclUniqueId &getUniqueNcclId();
+}  // namespace dllm::test
+
 template <typename T>
 struct TypeToTorch;
 
@@ -48,15 +52,15 @@ class ReduceScatterNCCLTestFixture : public ::testing::Test {
     CHECK_MPI(MPI_Comm_rank(contextMpi.mpiComm, &contextMpi.mpiRank));
     ncclUniqueId id;
     if (contextMpi.mpiRank == 0) {
-      CHECK_NCCL(ncclGetUniqueId(&id));
+      id = dllm::test::getUniqueNcclId();
     }
     CHECK_MPI(
         MPI_Bcast(&id, sizeof(ncclUniqueId), MPI_BYTE, 0, contextMpi.mpiComm));
-    stream = new dllm::ThreadStreamNccl{id, processesPerNode,
-                                        contextMpi.mpiRank, contextMpi.mpiRank};
-    copy = new dllm::ThreadStreamCudart{contextMpi.mpiRank};
-    tp = new dllm::ThreadPoolCompute{contextMpi.mpiRank, 3};
-    CHECK_CUDART(cudaSetDevice(contextMpi.mpiRank));
+    stream =
+        new dllm::ThreadStreamNccl{id, processesPerNode, contextMpi.mpiRank, 0};
+    copy = new dllm::ThreadStreamCudart{0};
+    tp = new dllm::ThreadPoolCompute{0, 3};
+    CHECK_CUDART(cudaSetDevice(0));
   }
 
   ~ReduceScatterNCCLTestFixture() {
@@ -72,7 +76,7 @@ class ReduceScatterNCCLTestFixture : public ::testing::Test {
 
 template <typename T>
 void ReduceScatterNCCLTestFixture::TestlAllToAllT(const int blockSize) {
-  const at::Device device(at::kCUDA, stream->rank());
+  const at::Device device(at::kCUDA, 0);
   const at::ScalarType dtype = TypeToTorch<T>::type;
   const auto option = at::TensorOptions().dtype(dtype).device(device);
   const int m = blockSize * stream->commSize();
@@ -97,7 +101,7 @@ void ReduceScatterNCCLTestFixture::TestlAllToAllT(const int blockSize) {
     r->wait();
   }
 
-  auto accumulator = torch::zeros_like(x_torch);
+  auto accumulator = torch::zeros({m}, option);
   for (int i = 0; i < stream->commSize(); ++i) {
     at::manual_seed(i + 1);
     auto full_random = torch::rand({m}, option);
