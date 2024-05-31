@@ -15,7 +15,7 @@ ncclUniqueId &getNcclUniqueId() {
   return id;
 }
 
-ThreadStreamNccl *getNcclStream() {
+auto &getSingleton() {
   struct StreamWrapper {
     MPI_Comm comm;
 
@@ -40,15 +40,20 @@ ThreadStreamNccl *getNcclStream() {
       CHECK_MPI(MPI_Comm_free(&comm));
     }
   };
-  static StreamWrapper stream_wrapper{};
-  return stream_wrapper.stream;
+  static auto stream_wrapper = new StreamWrapper;
+  return stream_wrapper;
 }
+
+ThreadStreamNccl *getNcclStream() { return getSingleton()->stream; }
 }  // namespace dllm::test
 
 int main(int argc, char **argv) {
   CHECK_MPI(MPI_Init(&argc, &argv));
+  dllm::test::getSingleton();
   ::testing::InitGoogleTest(&argc, argv);
   const auto error = RUN_ALL_TESTS();
+  delete dllm::test::getSingleton();
+  dllm::test::getSingleton() = nullptr;
   CHECK_MPI(MPI_Finalize());
   return error;
 }
