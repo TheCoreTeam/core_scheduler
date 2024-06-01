@@ -1,12 +1,17 @@
 #pragma once
 #include <cuda_runtime.h>
-#include <nccl.h>
+#include <mpi.h>
+
+#include <torch/csrc/distributed/c10d/Backend.hpp>
+#include <torch/csrc/distributed/c10d/Store.hpp>
 
 namespace dllm {
 struct ContextNccl {
-  cudaStream_t cudaStream{nullptr};
-  int ncclRank;
+  MPI_Comm mpiComm;
+  int mpiRank;
   int commSize;
-  ncclComm_t ncclComm{nullptr};
+  at::intrusive_ptr<c10d::Store> store;
+  std::unique_ptr<c10d::Backend> backend;
+  cudaStream_t cudaStream;
 };
 }  // namespace dllm

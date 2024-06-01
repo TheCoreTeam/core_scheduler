@@ -10,78 +10,15 @@
 
 namespace dllm::communication {
 namespace {
-constexpr ncclRedOp_t toNcclRedOp(const Operation operation) {
+constexpr auto toC10dRedOp(const Operation operation) {
   switch (operation) {
     case SUM:
-      return ncclSum;
+      return c10d::ReduceOp::SUM;
     default:
       DLLM_ASSERT_TRUE(false, "unsupported operation for NCCL all reduce");
   }
 }
-
-ncclDataType_t toNcclDataType(const at::ScalarType dtype) {
-  switch (dtype) {
-    case at::kDouble:
-      return ncclFloat64;
-    case at::kFloat:
-      return ncclFloat32;
-    case at::kHalf:
-      return ncclFloat16;
-    case at::kBFloat16:
-      return ncclBfloat16;
-    default:
-      DLLM_ASSERT_TRUE(false, "unsupported data type for NCCL all reduce");
-  }
-}
 }  // namespace
-
-TaskNccl AllReduce<NCCL>::run(
-    const std::shared_ptr<Tensor> &tensorReceive,
-    const std::shared_ptr<const ReadOnlyTensor> &tensorSend,
-    const Operation operation) {
-  DLLM_ASSERT_TRUE(tensorReceive->sizes() == tensorSend->sizes(),
-                   "sendbuff is not the same as the recvbuff");
-  auto task = TaskNccl{
-      [tensorSend = tensorSend, tensorReceive = tensorReceive,
-       operation = operation, futureReceive = tensorReceive->future(),
-       futureSend = tensorSend->future()](const ContextNccl *context) mutable {
-        DLLM_NVTX_RANGE_FN("dllm::communication::AllReduce<NCCL>::run");
-        {
-          const auto count = tensorSend->numel();
-          util::FutureGuard guardSend{futureSend};
-          util::FutureGuard guardReceive{futureReceive};
-          if (!DLLM_EXTRACT_TENSOR(tensorReceive).defined()) {
-            DLLM_EXTRACT_TENSOR(tensorReceive) =
-                torch::empty_like(DLLM_EXTRACT_TENSOR(tensorSend));
-          }
-          const auto tensorSendContiguout =
-              DLLM_EXTRACT_TENSOR(tensorSend).contiguous();
-          if (!DLLM_EXTRACT_TENSOR(tensorReceive).is_contiguous()) {
-            DLLM_EXTRACT_TENSOR(tensorReceive) =
-                DLLM_EXTRACT_TENSOR(tensorReceive).contiguous();
-          }
-          DLLM_ASSERT_TRUE(
-              DLLM_EXTRACT_TENSOR(tensorReceive).device().type() == at::kCUDA,
-              "NCCL backend only support CUDA GPUs");
-          DLLM_ASSERT_TRUE(
-              DLLM_EXTRACT_TENSOR(tensorSend).device().type() == at::kCUDA,
-              "NCCL backend only support CUDA GPUs");
-          CHECK_NCCL(ncclAllReduce(
-              tensorSendContiguout.data_ptr(),
-              DLLM_EXTRACT_TENSOR(tensorReceive).data_ptr(), count,
-              toNcclDataType(DLLM_EXTRACT_TENSOR(tensorSend).scalar_type()),
-              toNcclRedOp(operation), context->ncclComm, context->cudaStream));
-          CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
-        }
-        tensorReceive.reset();
-        tensorSend.reset();
-      }};
-  const TaskFuture future = task.get_future();
-  tensorSend->resetFuture(future);
-  tensorReceive->resetFuture(future);
-  tensorReceive->sizes() = tensorSend->sizes();
-  return task;
-}
 
 TaskNccl AllReduce<NCCL>::runInplace(const std::shared_ptr<Tensor> &tensor,
                                      const Operation operation) {
@@ -89,24 +26,63 @@ TaskNccl AllReduce<NCCL>::runInplace(const std::shared_ptr<Tensor> &tensor,
                         future = tensor->future()](
                            const ContextNccl *context) mutable {
     DLLM_NVTX_RANGE_FN("dllm::communication::AllReduce<NCCL>::runInplace");
-{
-      const auto count = tensor->numel();
+    {
       util::FutureGuard guard{future};
       if (!DLLM_EXTRACT_TENSOR(tensor).is_contiguous()) {
         DLLM_EXTRACT_TENSOR(tensor) = DLLM_EXTRACT_TENSOR(tensor).contiguous();
       }
       DLLM_ASSERT_TRUE(DLLM_EXTRACT_TENSOR(tensor).device().type() == at::kCUDA,
                        "NCCL backend only support CUDA GPUs");
-      CHECK_NCCL(ncclAllReduce(
-          DLLM_EXTRACT_TENSOR(tensor).data_ptr(),
-          DLLM_EXTRACT_TENSOR(tensor).data_ptr(), count,
-          toNcclDataType(DLLM_EXTRACT_TENSOR(tensor).scalar_type()),
-          toNcclRedOp(operation), context->ncclComm, context->cudaStream));
+      std::vector v{DLLM_EXTRACT_TENSOR(tensor)};
       CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
+      const auto work = context->backend->allreduce(
+          v, c10d::AllreduceOptions{.reduceOp = toC10dRedOp(operation)});
+      work->wait();
     }
     tensor.reset();
   }};
   tensor->resetFuture(task.get_future());
+  return task;
+}
+
+TaskNccl AllReduce<NCCL>::runInplace(
+    const std::vector<std::shared_ptr<Tensor>> &tensors, Operation operation) {
+  std::vector<TensorFuture> futures;
+  futures.reserve(tensors.size());
+  for (const auto &t : tensors) {
+    futures.push_back(t->future());
+  }
+  auto task = TaskNccl{[tensor = tensors, operation = operation,
+                        future = std::move(futures)](
+                           const ContextNccl *context) mutable {
+    DLLM_NVTX_RANGE_FN("dllm::communication::AllReduce<NCCL>::runInplace");
+    {
+      for (auto f : future) {
+        util::FutureGuard{f};
+      }
+      std::vector<at::Tensor> v;
+      v.reserve(tensor.size());
+      for (auto t : tensor) {
+        if (!DLLM_EXTRACT_TENSOR(t).is_contiguous()) {
+          DLLM_EXTRACT_TENSOR(t) = DLLM_EXTRACT_TENSOR(t).contiguous();
+        }
+        DLLM_ASSERT_TRUE(DLLM_EXTRACT_TENSOR(t).device().type() == at::kCUDA,
+                         "NCCL backend only support CUDA GPUs");
+        v.push_back(DLLM_EXTRACT_TENSOR(t));
+      }
+      CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
+      const auto work = context->backend->allreduce(
+          v, c10d::AllreduceOptions{.reduceOp = toC10dRedOp(operation)});
+      work->wait();
+    }
+    for (auto t : tensor) {
+      t.reset();
+    }
+  }};
+  const TaskFuture future = task.get_future();
+  for (const auto &t : tensors) {
+    t->resetFuture(future);
+  }
   return task;
 }
 }  // namespace dllm::communication

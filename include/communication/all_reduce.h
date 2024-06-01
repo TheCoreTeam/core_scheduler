@@ -10,12 +10,12 @@ struct AllReduce;
 
 template <>
 struct AllReduce<NCCL> {
-  static TaskNccl run(const std::shared_ptr<Tensor> &tensorReceive,
-                      const std::shared_ptr<const ReadOnlyTensor> &tensorSend,
-                      Operation operation);
-
   static TaskNccl runInplace(const std::shared_ptr<Tensor> &tensor,
                              Operation operation);
+
+  static TaskNccl runInplace(
+      const std::vector<std::shared_ptr<Tensor>> &tensors,
+      Operation operation);
 };
 
 template <>

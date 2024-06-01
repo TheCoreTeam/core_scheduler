@@ -14,8 +14,8 @@
 
 namespace dllm {
 struct ThreadStreamNccl {
-  ThreadStreamNccl(const ncclUniqueId &id, int ncclWorldSize, int ncclRank,
-                   int deviceRank, std::optional<const int> bindingMap = {});
+  ThreadStreamNccl(MPI_Comm mpiComm, int deviceRank,
+                   std::optional<const int> bindingMap = {});
 
   ~ThreadStreamNccl();
 
