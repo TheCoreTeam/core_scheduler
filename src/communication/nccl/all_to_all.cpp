@@ -55,7 +55,7 @@ TaskNccl AllToAll<NCCL>::run(
       }
 
       CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
-      context->backend->alltoall(vReceive, vSend);
+      context->backend->alltoall(vReceive, vSend)->wait();
       CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
     }
     tensorSend.clear();

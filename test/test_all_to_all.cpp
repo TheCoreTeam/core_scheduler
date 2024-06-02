@@ -138,7 +138,7 @@ void AllToAllNCCLTestFixture::TestlAllToAllT(const int blockSize) {
   r.reserve(stream->commSize());
   for (int i = 0; i < stream->commSize(); ++i) {
     auto t = dllm::Tensor::create();
-    auto task = dllm::compute::Utils::rand(t, {blockSize}, option);
+    auto task = dllm::compute::Utils::empty(t, {blockSize}, option);
     tp->submit(std::move(task));
     r.push_back(t);
   }
