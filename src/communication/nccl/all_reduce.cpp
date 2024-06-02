@@ -38,6 +38,7 @@ TaskNccl AllReduce<NCCL>::runInplace(const std::shared_ptr<Tensor> &tensor,
       const auto work = context->backend->allreduce(
           v, c10d::AllreduceOptions{.reduceOp = toC10dRedOp(operation)});
       work->wait();
+      CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
     }
     tensor.reset();
   }};
@@ -74,6 +75,7 @@ TaskNccl AllReduce<NCCL>::runInplace(
       const auto work = context->backend->allreduce(
           v, c10d::AllreduceOptions{.reduceOp = toC10dRedOp(operation)});
       work->wait();
+      CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
     }
     for (auto t : tensor) {
       t.reset();
