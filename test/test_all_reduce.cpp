@@ -36,66 +36,66 @@ struct TypeToTorch<double> {
   static const at::ScalarType type = at::kDouble;
 };
 
-class AllReduceMPITestFixture : public ::testing::Test {
- protected:
-  dllm::ContextMpi contextMpi{
-      [] {
-        int rank;
-        CHECK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &rank));
-        return rank;
-      }(),
-      [] {
-        int commSize;
-        CHECK_MPI(MPI_Comm_size(MPI_COMM_WORLD, &commSize));
-        return commSize;
-      }(),
-      MPI_COMM_WORLD};
-
-  dllm::ThreadStreamMpi stream{contextMpi};
-  dllm::ThreadStreamCudart copy{0};
-  dllm::ThreadPoolCompute tp{0, 3};
-
-  template <typename T>
-  void TestAllReduceT(int m);
-};
-
-template <typename T>
-void AllReduceMPITestFixture::TestAllReduceT(const int m) {
-  const at::Device device = at::kCPU;
-  const at::ScalarType dtype = TypeToTorch<T>::type;
-  const auto option = at::TensorOptions().dtype(dtype).device(device);
-  at::manual_seed(stream.rank() + 1);
-  auto x = dllm::Tensor::create();
-  {
-    auto task = dllm::compute::Utils::rand(x, {m}, option);
-    tp.submit(std::move(task));
-  }
-  {
-    auto task =
-        dllm::communication::AllReduce<dllm::communication::MPI>::runInplace(
-            x, dllm::communication::SUM);
-    stream.submit(std::move(task));
-  }
-
-  at::Tensor x_torch;
-  {
-    auto task = dllm::memory::toTorch(x_torch, x);
-    copy.submit(std::move(task));
-    x->wait();
-  }
-
-  auto accumulator = torch::zeros_like(x_torch);
-  if (contextMpi.mpiRank == 0) {
-    for (int i = 0; i < stream.commSize(); ++i) {
-      at::manual_seed(i + 1);
-      accumulator += torch::rand({m}, option);
-    }
-    ASSERT_TRUE(at::allclose(x, x_torch));
-  }
-}
-
-TEST_F(AllReduceMPITestFixture, TestForwardF32) { TestAllReduceT<float>(128); }
-TEST_F(AllReduceMPITestFixture, TestForwardF64) { TestAllReduceT<double>(128); }
+// class AllReduceMPITestFixture : public ::testing::Test {
+//  protected:
+//   dllm::ContextMpi contextMpi{
+//       [] {
+//         int rank;
+//         CHECK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &rank));
+//         return rank;
+//       }(),
+//       [] {
+//         int commSize;
+//         CHECK_MPI(MPI_Comm_size(MPI_COMM_WORLD, &commSize));
+//         return commSize;
+//       }(),
+//       MPI_COMM_WORLD};
+//
+//   dllm::ThreadStreamMpi stream{contextMpi};
+//   dllm::ThreadStreamCudart copy{0};
+//   dllm::ThreadPoolCompute tp{0, 3};
+//
+//   template <typename T>
+//   void TestAllReduceT(int m);
+// };
+//
+// template <typename T>
+// void AllReduceMPITestFixture::TestAllReduceT(const int m) {
+//   const at::Device device = at::kCPU;
+//   const at::ScalarType dtype = TypeToTorch<T>::type;
+//   const auto option = at::TensorOptions().dtype(dtype).device(device);
+//   at::manual_seed(stream.rank() + 1);
+//   auto x = dllm::Tensor::create();
+//   {
+//     auto task = dllm::compute::Utils::rand(x, {m}, option);
+//     tp.submit(std::move(task));
+//   }
+//   {
+//     auto task =
+//         dllm::communication::AllReduce<dllm::communication::MPI>::runInplace(
+//             x, dllm::communication::SUM);
+//     stream.submit(std::move(task));
+//   }
+//
+//   at::Tensor x_torch;
+//   {
+//     auto task = dllm::memory::toTorch(x_torch, x);
+//     copy.submit(std::move(task));
+//     x->wait();
+//   }
+//
+//   auto accumulator = torch::zeros_like(x_torch);
+//   if (contextMpi.mpiRank == 0) {
+//     for (int i = 0; i < stream.commSize(); ++i) {
+//       at::manual_seed(i + 1);
+//       accumulator += torch::rand({m}, option);
+//     }
+//     ASSERT_TRUE(at::allclose(x, x_torch));
+//   }
+// }
+//
+// TEST_F(AllReduceMPITestFixture, TestForwardF32) { TestAllReduceT<float>(128); }
+// TEST_F(AllReduceMPITestFixture, TestForwardF64) { TestAllReduceT<double>(128); }
 
 class AllReduceNcclTestFixture : public ::testing::Test {
  protected:

@@ -17,12 +17,12 @@ struct AllToAll<MPI> {
   static TaskMpi runInplace(const std::shared_ptr<Tensor> &tensor);
 };
 
-template <>
-struct AllToAll<NCCL> {
-  static TaskNccl run(const std::shared_ptr<Tensor> &tensorReceive,
-                      const std::shared_ptr<const ReadOnlyTensor> &tensorSend,
-                      int64_t commSize);
-
-  static TaskNccl runInplace(const std::shared_ptr<Tensor> &tensor);
-};
+// template <>
+// struct AllToAll<NCCL> {
+//   static TaskNccl run(const std::shared_ptr<Tensor> &tensorReceive,
+//                       const std::shared_ptr<const ReadOnlyTensor> &tensorSend,
+//                       int64_t commSize);
+//
+//   static TaskNccl runInplace(const std::shared_ptr<Tensor> &tensor);
+// };
 }  // namespace dllm::communication

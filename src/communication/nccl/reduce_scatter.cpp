@@ -64,9 +64,7 @@ TaskNccl ReduceScatter<NCCL>::run(
       CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
     }
     tensorReceive.reset();
-    for (auto &t : tensorSend) {
-      t.reset();
-    }
+    tensorSend.clear();
   }};
   const TaskFuture future = task.get_future();
   for (const auto &t : tensorSend) {
@@ -134,14 +132,8 @@ TaskNccl ReduceScatter<NCCL>::run(
           ->wait();
       CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
     }
-    for (auto &vt : tensorSend) {
-      for (auto &t : vt) {
-        t.reset();
-      }
-    }
-    for (auto &t : tensorReceive) {
-      t.reset();
-    }
+    tensorReceive.clear();
+    tensorSend.clear();
   }};
   const TaskFuture future = task.get_future();
   for (const auto &vt : tensorSend) {

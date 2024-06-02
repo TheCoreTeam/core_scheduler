@@ -10,19 +10,20 @@ struct AllGather;
 
 template <>
 struct AllGather<NCCL> {
-  static TaskNccl run(const std::shared_ptr<Tensor> &tensorReceive,
-                      const std::shared_ptr<const ReadOnlyTensor> &tensorSend,
-                      int64_t receiveCount);
+  static TaskNccl run(const std::vector<std::shared_ptr<Tensor>> &tensorReceive,
+                      const std::shared_ptr<const ReadOnlyTensor> &tensorSend);
 
-  static TaskNccl runInplace(const std::shared_ptr<Tensor> &tensor);
+  static TaskNccl run(
+      const std::vector<std::vector<std::shared_ptr<Tensor>>> &tensorReceive,
+      const std::vector<std::shared_ptr<const ReadOnlyTensor>> &tensorSend);
 };
 
-template <>
-struct AllGather<MPI> {
-  static TaskMpi run(const std::shared_ptr<Tensor> &tensorReceive,
-                     const std::shared_ptr<const ReadOnlyTensor> &tensorSend,
-                     int64_t receiveCount);
-
-  static TaskMpi runInplace(const std::shared_ptr<Tensor> &tensor);
-};
+// template <>
+// struct AllGather<MPI> {
+//   static TaskMpi run(const std::shared_ptr<Tensor> &tensorReceive,
+//                      const std::shared_ptr<const ReadOnlyTensor> &tensorSend,
+//                      int64_t receiveCount);
+//
+//   static TaskMpi runInplace(const std::shared_ptr<Tensor> &tensor);
+// };
 }  // namespace dllm::communication
