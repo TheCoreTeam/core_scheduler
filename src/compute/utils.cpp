@@ -51,6 +51,48 @@ TaskCompute randint(const std::shared_ptr<Tensor> &tensor, const int64_t low,
   return task;
 }
 
+TaskCompute empty(const std::shared_ptr<Tensor> &tensor,
+                  const IntArrayRef &size, at::TensorOptions options) {
+  auto task = TaskCompute{
+      [tensor = tensor, options = options,
+       future = tensor->future()](const ContextCompute *context) mutable {
+        DLLM_NVTX_RANGE_FN("dllm::compute::Utils::ones");
+        {
+          util::FutureGuard guard{future};
+          DLLM_EXTRACT_TENSOR(tensor) = torch::empty(tensor->sizes(), options);
+          tensor.reset();
+        }
+        CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
+      }};
+  const TaskFuture future = task.get_future();
+  tensor->resetFuture(future);
+  tensor->sizes() = size;
+  return task;
+}
+
+TaskCompute empty_like(const std::shared_ptr<Tensor> &dst,
+                       const std::shared_ptr<const ReadOnlyTensor> &src) {
+  auto task = TaskCompute{[dst = dst, src = src, dstFuture = dst->future(),
+                           srcFuture = src->future()](
+                              const ContextCompute *context) mutable {
+    DLLM_NVTX_RANGE_FN("dllm::compute::Utils::ones_like");
+    {
+      util::FutureGuard srcGuard{srcFuture};
+      util::FutureGuard dstGuard{dstFuture};
+      DLLM_EXTRACT_TENSOR(dst) = torch::empty_like(DLLM_EXTRACT_TENSOR(src));
+      src.reset();
+      dst.reset();
+    }
+    CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
+  }};
+  const TaskFuture future = task.get_future();
+  dst->resetFuture(future);
+  src->resetFuture(future);
+  // size
+  dst->sizes() = src->sizes();
+  return task;
+}
+
 TaskCompute ones(const std::shared_ptr<Tensor> &tensor, const IntArrayRef &size,
                  at::TensorOptions options) {
   auto task = TaskCompute{

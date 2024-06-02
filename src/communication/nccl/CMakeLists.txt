@@ -2,7 +2,7 @@ set(DLLM_NCCL_COMMUNICATION_SRCS
 #        ${CMAKE_CURRENT_SOURCE_DIR}/all_gather.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/all_reduce.cpp
 #        ${CMAKE_CURRENT_SOURCE_DIR}/all_to_all.cpp
-#        ${CMAKE_CURRENT_SOURCE_DIR}/reduce_scatter.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/reduce_scatter.cpp
 )
 
 set(DLLM_NCCL_COMMUNICATION_SRCS ${DLLM_NCCL_COMMUNICATION_SRCS} PARENT_SCOPE)

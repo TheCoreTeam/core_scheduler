@@ -11,6 +11,12 @@ TaskCompute randint(const std::shared_ptr<Tensor> &tensor, int64_t low,
                     int64_t high, const IntArrayRef &size,
                     at::TensorOptions options = at::kLong);
 
+TaskCompute empty(const std::shared_ptr<Tensor> &tensor,
+                  const IntArrayRef &size, at::TensorOptions options = {});
+
+TaskCompute empty_like(const std::shared_ptr<Tensor> &dst,
+                       const std::shared_ptr<const ReadOnlyTensor> &src);
+
 TaskCompute ones(const std::shared_ptr<Tensor> &tensor, const IntArrayRef &size,
                  at::TensorOptions options = {});
 

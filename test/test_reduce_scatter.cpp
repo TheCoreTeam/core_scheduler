@@ -65,16 +65,23 @@ void ReduceScatterNCCLTestFixture::TestlAllToAllT(const int blockSize) {
   const auto option = at::TensorOptions().dtype(dtype).device(device);
   const int m = blockSize * stream->commSize();
   at::manual_seed(stream->rank() + 1);
-  auto s = dllm::Tensor::create();
+  std::vector<std::shared_ptr<const dllm::ReadOnlyTensor>> vs;
+  vs.reserve(stream->commSize());
+  for (int i = 0; i < stream->commSize(); ++i) {
+    auto t = dllm::Tensor::create();
+    auto task = dllm::compute::Utils::rand(t, {blockSize}, option);
+    tp->submit(std::move(task));
+    vs.push_back(t);
+  }
   auto r = dllm::Tensor::create();
   {
-    auto task = dllm::compute::Utils::rand(s, {m}, option);
+    auto task = dllm::compute::Utils::empty(r, {blockSize}, option);
     tp->submit(std::move(task));
   }
   {
     auto task =
         dllm::communication::ReduceScatter<dllm::communication::NCCL>::run(
-            r, s, s->numel() / stream->commSize(), dllm::communication::SUM);
+            r, vs, dllm::communication::SUM);
     stream->submit(std::move(task));
   }
 
@@ -88,7 +95,7 @@ void ReduceScatterNCCLTestFixture::TestlAllToAllT(const int blockSize) {
   auto accumulator = torch::zeros({m}, option);
   for (int i = 0; i < stream->commSize(); ++i) {
     at::manual_seed(i + 1);
-    auto full_random = torch::rand({m}, option);
+    const auto full_random = torch::rand({m}, option);
     accumulator += full_random;
   }
   ASSERT_TRUE(at::allclose(

@@ -35,9 +35,10 @@ TaskNccl AllReduce<NCCL>::runInplace(const std::shared_ptr<Tensor> &tensor,
                        "NCCL backend only support CUDA GPUs");
       std::vector v{DLLM_EXTRACT_TENSOR(tensor)};
       CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
-      const auto work = context->backend->allreduce(
-          v, c10d::AllreduceOptions{.reduceOp = toC10dRedOp(operation)});
-      work->wait();
+      context->backend
+          ->allreduce(
+              v, c10d::AllreduceOptions{.reduceOp = toC10dRedOp(operation)})
+          ->wait();
       CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
     }
     tensor.reset();
@@ -63,7 +64,7 @@ TaskNccl AllReduce<NCCL>::runInplace(
       }
       std::vector<at::Tensor> v;
       v.reserve(tensors.size());
-      for (const auto& t : tensors) {
+      for (const auto &t : tensors) {
         if (!DLLM_EXTRACT_TENSOR(t).is_contiguous()) {
           DLLM_EXTRACT_TENSOR(t) = DLLM_EXTRACT_TENSOR(t).contiguous();
         }
@@ -72,9 +73,10 @@ TaskNccl AllReduce<NCCL>::runInplace(
         v.push_back(DLLM_EXTRACT_TENSOR(t));
       }
       CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
-      const auto work = context->backend->allreduce(
-          v, c10d::AllreduceOptions{.reduceOp = toC10dRedOp(operation)});
-      work->wait();
+      context->backend
+          ->allreduce(
+              v, c10d::AllreduceOptions{.reduceOp = toC10dRedOp(operation)})
+          ->wait();
       CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
     }
     for (auto t : tensors) {
