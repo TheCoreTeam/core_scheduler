@@ -17,13 +17,4 @@ struct AllGather<NCCL> {
       const std::vector<std::vector<std::shared_ptr<Tensor>>> &tensorReceive,
       const std::vector<std::shared_ptr<const ReadOnlyTensor>> &tensorSend);
 };
-
-// template <>
-// struct AllGather<MPI> {
-//   static TaskMpi run(const std::shared_ptr<Tensor> &tensorReceive,
-//                      const std::shared_ptr<const ReadOnlyTensor> &tensorSend,
-//                      int64_t receiveCount);
-//
-//   static TaskMpi runInplace(const std::shared_ptr<Tensor> &tensor);
-// };
 }  // namespace dllm::communication

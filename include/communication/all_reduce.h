@@ -17,14 +17,4 @@ struct AllReduce<NCCL> {
       const std::vector<std::shared_ptr<Tensor>> &tensors,
       Operation operation);
 };
-
-// template <>
-// struct AllReduce<MPI> {
-//   static TaskMpi run(const std::shared_ptr<Tensor> &tensorReceive,
-//                      const std::shared_ptr<const ReadOnlyTensor> &tensorSend,
-//                      Operation operation);
-//
-//   static TaskMpi runInplace(const std::shared_ptr<Tensor> &tensor,
-//                             Operation operation);
-// };
 }  // namespace dllm::communication

@@ -9,20 +9,9 @@ template <Backend backend>
 struct AllToAll;
 
 template <>
-struct AllToAll<MPI> {
-  static TaskMpi run(const std::shared_ptr<Tensor> &tensorReceive,
-                     const std::shared_ptr<const ReadOnlyTensor> &tensorSend,
-                     int64_t commSize);
-
-  static TaskMpi runInplace(const std::shared_ptr<Tensor> &tensor);
+struct AllToAll<NCCL> {
+  static TaskNccl run(
+      const std::vector<std::shared_ptr<Tensor>> &tensorReceive,
+      const std::vector<std::shared_ptr<const ReadOnlyTensor>> &tensorSend);
 };
-
-// template <>
-// struct AllToAll<NCCL> {
-//   static TaskNccl run(const std::shared_ptr<Tensor> &tensorReceive,
-//                       const std::shared_ptr<const ReadOnlyTensor> &tensorSend,
-//                       int64_t commSize);
-//
-//   static TaskNccl runInplace(const std::shared_ptr<Tensor> &tensor);
-// };
 }  // namespace dllm::communication

@@ -37,65 +37,66 @@ struct TypeToTorch<double> {
   static const at::ScalarType type = at::kDouble;
 };
 
-class AllToAllMPITestFixture : public ::testing::Test {
- protected:
-  dllm::ContextMpi contextMpi{
-      [] {
-        int rank;
-        CHECK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &rank));
-        return rank;
-      }(),
-      [] {
-        int commSize;
-        CHECK_MPI(MPI_Comm_size(MPI_COMM_WORLD, &commSize));
-        return commSize;
-      }(),
-      MPI_COMM_WORLD};
-  dllm::ThreadStreamMpi stream{contextMpi};
-  dllm::ThreadStreamCudart copy{0};
-  dllm::ThreadPoolCompute tp{0, 3};
-
-  template <typename T>
-  void TestAllToAllT(int blockSize);
-};
-
-template <typename T>
-void AllToAllMPITestFixture::TestAllToAllT(const int blockSize) {
-  const at::Device device = at::kCPU;
-  const at::ScalarType dtype = TypeToTorch<T>::type;
-  const auto option = at::TensorOptions().dtype(dtype).device(device);
-  const int m = blockSize * stream.commSize();
-  at::manual_seed(stream.rank() + 1);
-  auto x = dllm::Tensor::create();
-  {
-    auto task = dllm::compute::Utils::rand(x, {m}, option);
-    tp.submit(std::move(task));
-  }
-  {
-    auto task =
-        dllm::communication::AllToAll<dllm::communication::MPI>::runInplace(x);
-    stream.submit(std::move(task));
-  }
-
-  at::Tensor x_torch;
-  {
-    auto task = dllm::memory::toTorch(x_torch, x);
-    copy.submit(std::move(task));
-    x->wait();
-  }
-
-  auto accumulator = torch::zeros_like(x_torch);
-  for (int i = 0; i < stream.commSize(); ++i) {
-    at::manual_seed(i + 1);
-    auto full_random = torch::rand({m}, option);
-    accumulator.narrow(0, i * blockSize, blockSize)
-        .copy_(full_random.narrow(0, stream.rank() * blockSize, blockSize));
-  }
-  ASSERT_TRUE(at::allclose(accumulator, x_torch));
-}
-
-TEST_F(AllToAllMPITestFixture, TestForwardF32) { TestAllToAllT<float>(128); }
-TEST_F(AllToAllMPITestFixture, TestForwardF64) { TestAllToAllT<double>(128); }
+// class AllToAllMPITestFixture : public ::testing::Test {
+//  protected:
+//   dllm::ContextMpi contextMpi{
+//       [] {
+//         int rank;
+//         CHECK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &rank));
+//         return rank;
+//       }(),
+//       [] {
+//         int commSize;
+//         CHECK_MPI(MPI_Comm_size(MPI_COMM_WORLD, &commSize));
+//         return commSize;
+//       }(),
+//       MPI_COMM_WORLD};
+//   dllm::ThreadStreamMpi stream{contextMpi};
+//   dllm::ThreadStreamCudart copy{0};
+//   dllm::ThreadPoolCompute tp{0, 3};
+//
+//   template <typename T>
+//   void TestAllToAllT(int blockSize);
+// };
+//
+// template <typename T>
+// void AllToAllMPITestFixture::TestAllToAllT(const int blockSize) {
+//   const at::Device device = at::kCPU;
+//   const at::ScalarType dtype = TypeToTorch<T>::type;
+//   const auto option = at::TensorOptions().dtype(dtype).device(device);
+//   const int m = blockSize * stream.commSize();
+//   at::manual_seed(stream.rank() + 1);
+//   auto x = dllm::Tensor::create();
+//   {
+//     auto task = dllm::compute::Utils::rand(x, {m}, option);
+//     tp.submit(std::move(task));
+//   }
+//   {
+//     auto task =
+//         dllm::communication::AllToAll<dllm::communication::MPI>::runInplace(x);
+//     stream.submit(std::move(task));
+//   }
+//
+//   at::Tensor x_torch;
+//   {
+//     auto task = dllm::memory::toTorch(x_torch, x);
+//     copy.submit(std::move(task));
+//     x->wait();
+//   }
+//
+//   auto accumulator = torch::zeros_like(x_torch);
+//   for (int i = 0; i < stream.commSize(); ++i) {
+//     at::manual_seed(i + 1);
+//     auto full_random = torch::rand({m}, option);
+//     accumulator.narrow(0, i * blockSize, blockSize)
+//         .copy_(full_random.narrow(0, stream.rank() * blockSize, blockSize));
+//   }
+//   ASSERT_TRUE(at::allclose(accumulator, x_torch));
+// }
+//
+// TEST_F(AllToAllMPITestFixture, TestForwardF32) { TestAllToAllT<float>(128); }
+// TEST_F(AllToAllMPITestFixture, TestForwardF64) { TestAllToAllT<double>(128);
+// }
 
 class AllToAllNCCLTestFixture : public ::testing::Test {
  protected:
@@ -124,34 +125,40 @@ void AllToAllNCCLTestFixture::TestlAllToAllT(const int blockSize) {
   const at::Device device(at::kCUDA, 0);
   const at::ScalarType dtype = TypeToTorch<T>::type;
   const auto option = at::TensorOptions().dtype(dtype).device(device);
-  const int m = blockSize * stream->commSize();
   at::manual_seed(stream->rank() + 1);
-  auto x = dllm::Tensor::create();
-  {
-    auto task = dllm::compute::Utils::rand(x, {m}, option);
+  std::vector<std::shared_ptr<const dllm::ReadOnlyTensor>> s;
+  s.reserve(stream->commSize());
+  for (int i = 0; i < stream->commSize(); ++i) {
+    auto t = dllm::Tensor::create();
+    auto task = dllm::compute::Utils::rand(t, {blockSize}, option);
     tp->submit(std::move(task));
+    s.push_back(t);
+  }
+  std::vector<std::shared_ptr<dllm::Tensor>> r;
+  for (int i = 0; i < stream->commSize(); ++i) {
+    auto t = dllm::Tensor::create();
+    auto task = dllm::compute::Utils::rand(t, {blockSize}, option);
+    tp->submit(std::move(task));
+    r.push_back(t);
   }
   {
     auto task =
-        dllm::communication::AllToAll<dllm::communication::NCCL>::runInplace(x);
+        dllm::communication::AllToAll<dllm::communication::NCCL>::run(r, s);
     stream->submit(std::move(task));
   }
 
-  at::Tensor x_torch;
-  {
-    auto task = dllm::memory::toTorch(x_torch, x);
+  std::vector<at::Tensor> r_torch;
+  for (int i = 0; i < stream->commSize(); ++i) {
+    auto task = dllm::memory::toTorch(r_torch[i], r[i]);
     copy->submit(std::move(task));
-    x->wait();
+    r[i]->wait();
   }
 
-  auto accumulator = torch::zeros_like(x_torch);
   for (int i = 0; i < stream->commSize(); ++i) {
     at::manual_seed(i + 1);
-    auto full_random = torch::rand({m}, option);
-    accumulator.narrow(0, i * blockSize, blockSize)
-        .copy_(full_random.narrow(0, stream->rank() * blockSize, blockSize));
+    auto full_random = torch::rand({blockSize}, option);
+    ASSERT_TRUE(at::allclose(r_torch[i], full_random));
   }
-  ASSERT_TRUE(at::allclose(accumulator, x_torch));
 }
 
 TEST_F(AllToAllNCCLTestFixture, TestForwardF32) { TestlAllToAllT<float>(128); }
