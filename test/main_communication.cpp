@@ -1,6 +1,11 @@
+#include <arpa/inet.h>
 #include <gtest/gtest.h>
 #include <mpi.h>
 #include <nccl.h>
+#include <netdb.h>
+
+#include <torch/csrc/distributed/c10d/ProcessGroupNCCL.hpp>
+#include <torch/csrc/distributed/c10d/TCPStore.hpp>
 
 #include "logger.h"
 #include "threading/thread_stream_nccl.h"
@@ -17,28 +22,12 @@ ncclUniqueId &getNcclUniqueId() {
 
 auto &getSingleton() {
   struct StreamWrapper {
-    MPI_Comm comm;
+    const MPI_Comm comm = MPI_COMM_WORLD;
 
     ThreadStreamNccl *stream;
-    StreamWrapper() {
-      int processesPerNode;
-      int rank;
-      CHECK_MPI(MPI_Comm_split_type(MPI_COMM_WORLD, MPI_COMM_TYPE_SHARED, 0,
-                                    MPI_INFO_NULL, &comm));
-      CHECK_MPI(MPI_Comm_size(comm, &processesPerNode));
-      CHECK_MPI(MPI_Comm_rank(comm, &rank));
-      ncclUniqueId id;
-      if (rank == 0) {
-        id = getNcclUniqueId();
-      }
-      CHECK_MPI(MPI_Bcast(&id, sizeof(ncclUniqueId), MPI_BYTE, 0, comm));
-      stream = new dllm::ThreadStreamNccl{id, processesPerNode, rank, 0};
-    }
+    StreamWrapper() { stream = new ThreadStreamNccl{comm, 0}; }
 
-    ~StreamWrapper() {
-      delete stream;
-      CHECK_MPI(MPI_Comm_free(&comm));
-    }
+    ~StreamWrapper() { delete stream; }
   };
   static auto stream_wrapper = new StreamWrapper;
   return stream_wrapper;
