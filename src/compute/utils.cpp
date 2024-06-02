@@ -353,7 +353,7 @@ TaskCompute broadcast_to(std::shared_ptr<const ReadOnlyTensor> &output,
   return task;
 }
 
-TaskCompute cat(std::shared_ptr<Tensor> &output,
+TaskCompute cat(const std::shared_ptr<Tensor> &output,
                 const std::vector<std::shared_ptr<const ReadOnlyTensor>> &input,
                 const int64_t dim) {
   std::vector<TaskFuture> inputFuture;
@@ -390,9 +390,11 @@ TaskCompute cat(std::shared_ptr<Tensor> &output,
   // size
   output->sizes() = [&] {
     auto size = input[0]->sizes();
-    size[dim] = 0;
+    const auto positiveDim =
+        dim < 0 ? static_cast<int64_t>(size.size()) + dim : dim;
+    size[positiveDim] = 0;
     for (const auto &t : input) {
-      size[dim] += t->size(dim);
+      size[positiveDim] += t->size(positiveDim);
     }
     return size;
   }();

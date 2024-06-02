@@ -56,7 +56,7 @@ TaskCompute broadcast_to(std::shared_ptr<const ReadOnlyTensor> &output,
                          const std::shared_ptr<const ReadOnlyTensor> &input,
                          const IntArrayRef &size);
 
-TaskCompute cat(std::shared_ptr<Tensor> &output,
+TaskCompute cat(const std::shared_ptr<Tensor> &output,
                 const std::vector<std::shared_ptr<const ReadOnlyTensor>> &input,
                 int64_t dim);
 }  // namespace dllm::compute::Utils
