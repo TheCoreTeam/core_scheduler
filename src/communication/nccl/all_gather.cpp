@@ -44,7 +44,7 @@ TaskNccl AllGather<NCCL>::run(
 
       std::vector vSend{DLLM_EXTRACT_TENSOR(tensorSend)};
       CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
-      context->backend->allgather(vReceive, vSend);
+      context->backend->allgather(vReceive, vSend)->wait();
       CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
     }
     for (auto &t : tensorReceive) {
@@ -109,7 +109,7 @@ TaskNccl AllGather<NCCL>::run(
         vReceive.push_back(std::move(v));
       }
       CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
-      context->backend->allgather(vReceive, vSend);
+      context->backend->allgather(vReceive, vSend)->wait();
       CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
     }
     tensorSend.clear();
