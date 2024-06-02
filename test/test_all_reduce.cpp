@@ -94,8 +94,9 @@ struct TypeToTorch<double> {
 //   }
 // }
 //
-// TEST_F(AllReduceMPITestFixture, TestForwardF32) { TestAllReduceT<float>(128); }
-// TEST_F(AllReduceMPITestFixture, TestForwardF64) { TestAllReduceT<double>(128); }
+// TEST_F(AllReduceMPITestFixture, TestForwardF32) { TestAllReduceT<float>(128);
+// } TEST_F(AllReduceMPITestFixture, TestForwardF64) {
+// TestAllReduceT<double>(128); }
 
 class AllReduceNcclTestFixture : public ::testing::Test {
  protected:

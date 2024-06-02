@@ -18,8 +18,7 @@ TaskCompute GeLU::forward(const std::shared_ptr<State> &state,
                           const std::shared_ptr<const ReadOnlyTensor> &input) {
   auto task = TaskCompute{
       [output = output, input = input, outputfuture = output->future(),
-       inputFuture =
-           input->future()](const ContextCompute *context) mutable {
+       inputFuture = input->future()](const ContextCompute *context) mutable {
         DLLM_NVTX_RANGE_FN("dllm::compute::GeLU::forward");
         {
           util::FutureGuard outputGuard{outputfuture};
@@ -42,25 +41,24 @@ TaskCompute GeLU::forward(const std::shared_ptr<State> &state,
 TaskCompute GeLU::backward(
     const std::shared_ptr<State> &state, const std::shared_ptr<Tensor> &dinput,
     const std::shared_ptr<const ReadOnlyTensor> &doutput) {
-  auto task =
-      TaskCompute{[doutput = doutput, input = state->backward.input,
-                   dinput = dinput, dinputFuture = dinput->future(),
-                   doutputFuture = doutput->future(),
-                   inputFuture = state->backward.input->future()](
-                      const ContextCompute *context) mutable {
-        DLLM_NVTX_RANGE_FN("dllm::compute::GeLU::backward");
-        {
-          util::FutureGuard dinputGuard{dinputFuture};
-          util::FutureGuard doutGuard{doutputFuture};
-          util::FutureGuard inputGuard{inputFuture};
-          DLLM_EXTRACT_TENSOR(dinput) = torch::gelu_backward(
-              DLLM_EXTRACT_TENSOR(doutput), DLLM_EXTRACT_TENSOR(input));
-          dinput.reset();
-          input.reset();
-          doutput.reset();
-        }
-        CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
-      }};
+  auto task = TaskCompute{[doutput = doutput, input = state->backward.input,
+                           dinput = dinput, dinputFuture = dinput->future(),
+                           doutputFuture = doutput->future(),
+                           inputFuture = state->backward.input->future()](
+                              const ContextCompute *context) mutable {
+    DLLM_NVTX_RANGE_FN("dllm::compute::GeLU::backward");
+    {
+      util::FutureGuard dinputGuard{dinputFuture};
+      util::FutureGuard doutGuard{doutputFuture};
+      util::FutureGuard inputGuard{inputFuture};
+      DLLM_EXTRACT_TENSOR(dinput) = torch::gelu_backward(
+          DLLM_EXTRACT_TENSOR(doutput), DLLM_EXTRACT_TENSOR(input));
+      dinput.reset();
+      input.reset();
+      doutput.reset();
+    }
+    CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
+  }};
   const TaskFuture future = task.get_future();
   dinput->resetFuture(future);
   doutput->resetFuture(future);

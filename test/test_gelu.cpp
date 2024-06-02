@@ -117,4 +117,5 @@ TEST_F(TestDLLMGelu, TestF16_1024) { TestRoutine<nv_half>(1024, 1e-2, 1e-2); }
 
 // TEST_F(TestDLLMGelu, TestF64_512) { TestRoutine<double>(512, 1e-10, 1e-10); }
 
-// TEST_F(TestDLLMGelu, TestF64_1024) { TestRoutine<double>(1024, 1e-10, 1e-10); }
+// TEST_F(TestDLLMGelu, TestF64_1024) { TestRoutine<double>(1024, 1e-10, 1e-10);
+// }

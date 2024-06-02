@@ -89,25 +89,25 @@ TaskCompute Linear::forward(
 TaskCompute Linear::backwardInput(
     const std::shared_ptr<State> &state, const std::shared_ptr<Tensor> &dinput,
     const std::shared_ptr<const ReadOnlyTensor> &grad_output) {
-  auto task = TaskCompute{
-      [dinput = dinput, grad_output = grad_output,
-       weight = state->forward.weight, dinputFuture = dinput->future(),
-       grad_outputFuture = grad_output->future(),
-       weightFuture = state->forward.weight->future()](
-          const ContextCompute *context) mutable {
-        DLLM_NVTX_RANGE_FN("dllm::compute::Linear::backwardInput");
-        {
-          util::FutureGuard dinputGuard{dinputFuture};
-          util::FutureGuard grad_outputGuard{grad_outputFuture};
-          util::FutureGuard weightGuard{weightFuture};
-          DLLM_EXTRACT_TENSOR(dinput) = torch::matmul(
-              DLLM_EXTRACT_TENSOR(grad_output), DLLM_EXTRACT_TENSOR(weight));
-        }
-        CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
-        dinput.reset();
-        grad_output.reset();
-        weight.reset();
-      }};
+  auto task = TaskCompute{[dinput = dinput, grad_output = grad_output,
+                           weight = state->forward.weight,
+                           dinputFuture = dinput->future(),
+                           grad_outputFuture = grad_output->future(),
+                           weightFuture = state->forward.weight->future()](
+                              const ContextCompute *context) mutable {
+    DLLM_NVTX_RANGE_FN("dllm::compute::Linear::backwardInput");
+    {
+      util::FutureGuard dinputGuard{dinputFuture};
+      util::FutureGuard grad_outputGuard{grad_outputFuture};
+      util::FutureGuard weightGuard{weightFuture};
+      DLLM_EXTRACT_TENSOR(dinput) = torch::matmul(
+          DLLM_EXTRACT_TENSOR(grad_output), DLLM_EXTRACT_TENSOR(weight));
+    }
+    CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
+    dinput.reset();
+    grad_output.reset();
+    weight.reset();
+  }};
   const TaskFuture future = task.get_future();
   dinput->resetFuture(future);
   grad_output->resetFuture(future);
