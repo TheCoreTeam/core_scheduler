@@ -56,7 +56,7 @@ TaskCompute empty(const std::shared_ptr<Tensor> &tensor,
   auto task = TaskCompute{
       [tensor = tensor, options = options,
        future = tensor->future()](const ContextCompute *context) mutable {
-        DLLM_NVTX_RANGE_FN("dllm::compute::Utils::ones");
+        DLLM_NVTX_RANGE_FN("dllm::compute::Utils::empty");
         {
           util::FutureGuard guard{future};
           DLLM_EXTRACT_TENSOR(tensor) = torch::empty(tensor->sizes(), options);
@@ -75,7 +75,7 @@ TaskCompute empty_like(const std::shared_ptr<Tensor> &dst,
   auto task = TaskCompute{[dst = dst, src = src, dstFuture = dst->future(),
                            srcFuture = src->future()](
                               const ContextCompute *context) mutable {
-    DLLM_NVTX_RANGE_FN("dllm::compute::Utils::ones_like");
+    DLLM_NVTX_RANGE_FN("dllm::compute::Utils::empty_like");
     {
       util::FutureGuard srcGuard{srcFuture};
       util::FutureGuard dstGuard{dstFuture};
