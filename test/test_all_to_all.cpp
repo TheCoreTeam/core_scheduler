@@ -158,7 +158,10 @@ void AllToAllNCCLTestFixture::TestlAllToAllT(const int blockSize) {
 
   for (int i = 0; i < stream->commSize(); ++i) {
     at::manual_seed(i + 1);
-    auto full_random = torch::rand({blockSize}, option);
+    at::Tensor full_random;
+    for (int j = 0; j <= i; ++j) {
+      full_random = torch::rand({blockSize}, option);
+    }
     ASSERT_TRUE(at::allclose(r_torch[i], full_random));
   }
 }
