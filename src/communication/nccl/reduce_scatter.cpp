@@ -41,8 +41,7 @@ TaskNccl ReduceScatter<NCCL>::run(
         util::FutureGuard{f};
       }
       std::vector<std::vector<at::Tensor>> vSend{};
-      vSend.reserve(1);
-      do {
+      {
         std::vector<at::Tensor> v;
         v.reserve(tensorSend.size());
         for (const auto &t : tensorSend) {
@@ -51,7 +50,7 @@ TaskNccl ReduceScatter<NCCL>::run(
           v.push_back(DLLM_EXTRACT_TENSOR(t));
         }
         vSend.push_back(std::move(v));
-      } while (false);
+      }
       DLLM_ASSERT_TRUE(
           DLLM_EXTRACT_TENSOR(tensorReceive).device().type() == at::kCUDA,
           "NCCL backend only support CUDA GPUs");
@@ -110,10 +109,10 @@ TaskNccl ReduceScatter<NCCL>::run(
       }
       std::vector<std::vector<at::Tensor>> vSend{};
       vSend.reserve(tensorSend.size());
-      for (std::size_t i = 0; i < tensorSend.size(); ++i) {
+      for (auto &i : tensorSend) {
         std::vector<at::Tensor> v;
-        v.reserve(tensorSend[i].size());
-        for (const auto &t : tensorSend[i]) {
+        v.reserve(i.size());
+        for (const auto &t : i) {
           DLLM_ASSERT_TRUE(DLLM_EXTRACT_TENSOR(t).device().type() == at::kCUDA,
                            "NCCL backend only support CUDA GPUs");
           v.push_back(DLLM_EXTRACT_TENSOR(t));
