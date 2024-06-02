@@ -95,8 +95,10 @@ void ReduceScatterNCCLTestFixture::TestlAllToAllT(const int blockSize) {
   auto accumulator = torch::zeros({m}, option);
   for (int i = 0; i < stream->commSize(); ++i) {
     at::manual_seed(i + 1);
-    const auto full_random = torch::rand({m}, option);
-    accumulator += full_random;
+    for (int j = 0; j < stream->commSize(); ++j) {
+      const auto full_random = torch::rand({blockSize}, option);
+      accumulator.narrow(0, j * blockSize, blockSize) += full_random;
+    }
   }
   ASSERT_TRUE(at::allclose(
       accumulator.narrow(0, stream->rank() * blockSize, blockSize), x_torch));
