@@ -1,0 +1,48 @@
+name: Code Formatting Check
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  format-check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'  # Ensure Python is installed for cmake-format
+
+      - name: Install Clang-Format and CMake-Format
+        run: |
+          sudo apt-get update
+          sudo apt-get install clang-format
+        #  TODO(Jie): cmake?
+        #  pip install cmake-format
+
+      - name: Run formatting script
+        run: ./script/format-code.sh
+        working-directory: ${{ github.workspace }}
+
+      - name: Check git status
+        id: git-check
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "::set-output name=status::changed"
+          else
+            echo "::set-output name=status::clean"
+          fi
+
+      - name: Fail if code was not formatted
+        if: steps.git-check.outputs.status == 'changed'
+        run: |
+          echo "Formatting issues detected. Please run the formatting script locally and commit the changes."
+          exit 1
