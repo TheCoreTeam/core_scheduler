@@ -1,6 +1,15 @@
 cmake_minimum_required(VERSION 3.25)
 project(dllm LANGUAGES C CXX CUDA)
 
+option(DLLM_ENABLE_TESTS "" ON)
+option(DLLM_ENABLE_EXAMPLES "" ON)
+option(DLLM_ENABLE_BUILTIN_TOOLCHAIN "" ON)
+if (DLLM_ENABLE_BUILTIN_TOOLCHAIN)
+    include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/toolchain.cmake)
+endif ()
+
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 if (NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release)
 endif ()
@@ -23,9 +32,6 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(CMAKE_CUDA_ARCHITECTURES "80;86;90a")
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_CURRENT_SOURCE_DIR}/cmake/)
-
-option(DLLM_ENABLE_TESTS "" ON)
-option(DLLM_ENABLE_EXAMPLES "" ON)
 
 find_package(CUDAToolkit REQUIRED)
 find_package(OpenMP REQUIRED)
@@ -50,4 +56,9 @@ endif ()
 
 if (DLLM_ENABLE_EXAMPLES)
     add_subdirectory(example)
+endif ()
+
+if (EXISTS "${CMAKE_BINARY_DIR}/compile_commands.json")
+    file(COPY "${CMAKE_BINARY_DIR}/compile_commands.json"
+            DESTINATION "${CMAKE_CURRENT_SOURCE_DIR}")
 endif ()
