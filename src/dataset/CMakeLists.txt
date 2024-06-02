@@ -11,6 +11,6 @@ target_link_libraries(dllm_dataset PUBLIC spdlog::spdlog_header_only)
 target_include_directories(dllm_dataset PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../../third_party/pcg_cpp/include)
 
 target_compile_options(dllm_dataset PRIVATE
-        $<$<AND:$<CONFIG:Release>,$<NOT:$<COMPILE_LANGUAGE:CUDA>>>:-Ofast;-Wall>
-        $<$<AND:$<CONFIG:Debug>,$<NOT:$<COMPILE_LANGUAGE:CUDA>>>:-O0;-Wall>
+        $<$<AND:$<CONFIG:Release>,$<NOT:$<COMPILE_LANGUAGE:CUDA>>>:-Ofast;-Wextra>
+        $<$<AND:$<CONFIG:Debug>,$<NOT:$<COMPILE_LANGUAGE:CUDA>>>:-O0;-Wextra>
 )
