@@ -135,6 +135,7 @@ void AllToAllNCCLTestFixture::TestlAllToAllT(const int blockSize) {
     s.push_back(t);
   }
   std::vector<std::shared_ptr<dllm::Tensor>> r;
+  r.reserve(stream->commSize());
   for (int i = 0; i < stream->commSize(); ++i) {
     auto t = dllm::Tensor::create();
     auto task = dllm::compute::Utils::rand(t, {blockSize}, option);
@@ -148,6 +149,7 @@ void AllToAllNCCLTestFixture::TestlAllToAllT(const int blockSize) {
   }
 
   std::vector<at::Tensor> r_torch;
+  r_torch.resize(r.size());
   for (int i = 0; i < stream->commSize(); ++i) {
     auto task = dllm::memory::toTorch(r_torch[i], r[i]);
     copy->submit(std::move(task));
