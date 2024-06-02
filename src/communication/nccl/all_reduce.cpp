@@ -53,7 +53,7 @@ TaskNccl AllReduce<NCCL>::runInplace(
   for (const auto &t : tensors) {
     futures.push_back(t->future());
   }
-  auto task = TaskNccl{[tensor = tensors, operation = operation,
+  auto task = TaskNccl{[tensors = tensors, operation = operation,
                         future = std::move(futures)](
                            const ContextNccl *context) mutable {
     DLLM_NVTX_RANGE_FN("dllm::communication::AllReduce<NCCL>::runInplace");
@@ -62,8 +62,8 @@ TaskNccl AllReduce<NCCL>::runInplace(
         util::FutureGuard{f};
       }
       std::vector<at::Tensor> v;
-      v.reserve(tensor.size());
-      for (auto t : tensor) {
+      v.reserve(tensors.size());
+      for (const auto& t : tensors) {
         if (!DLLM_EXTRACT_TENSOR(t).is_contiguous()) {
           DLLM_EXTRACT_TENSOR(t) = DLLM_EXTRACT_TENSOR(t).contiguous();
         }
@@ -77,7 +77,7 @@ TaskNccl AllReduce<NCCL>::runInplace(
       work->wait();
       CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
     }
-    for (auto t : tensor) {
+    for (auto t : tensors) {
       t.reset();
     }
   }};
