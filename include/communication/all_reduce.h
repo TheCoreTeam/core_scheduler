@@ -10,9 +10,6 @@ struct AllReduce;
 
 template <>
 struct AllReduce<NCCL> {
-  static TaskNccl runInplace(const std::shared_ptr<Tensor> &tensor,
-                             Operation operation);
-
   static TaskNccl runInplace(
       const std::vector<std::shared_ptr<Tensor>> &tensors,
       Operation operation);

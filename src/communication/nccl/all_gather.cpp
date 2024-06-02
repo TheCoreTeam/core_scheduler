@@ -10,57 +10,6 @@
 
 namespace dllm::communication {
 TaskNccl AllGather<NCCL>::run(
-    const std::vector<std::shared_ptr<Tensor>> &tensorReceive,
-    const std::shared_ptr<const ReadOnlyTensor> &tensorSend) {
-  std::vector<TensorFuture> futureReceive;
-  futureReceive.reserve(tensorReceive.size());
-  for (const auto &t : tensorReceive) {
-    futureReceive.push_back(t->future());
-  }
-  auto task = TaskNccl{[tensorSend = tensorSend, tensorReceive = tensorReceive,
-                        futureReceive = futureReceive,
-                        futureSend = tensorSend->future()](
-                           const ContextNccl *context) mutable {
-    DLLM_NVTX_RANGE_FN("dllm::communication::AllGather<NCCL>::run");
-    {
-      for (auto &f : futureReceive) {
-        util::FutureGuard guardReceive{f};
-      }
-      util::FutureGuard guardSend{futureSend};
-      std::vector<std::vector<at::Tensor>> vReceive;
-      {
-        std::vector<at::Tensor> v;
-        v.reserve(tensorReceive.size());
-        for (const auto &t : tensorReceive) {
-          DLLM_ASSERT_TRUE(DLLM_EXTRACT_TENSOR(t).device().type() == at::kCUDA,
-                           "NCCL backend only support CUDA GPUs");
-          v.push_back(DLLM_EXTRACT_TENSOR(t));
-        }
-        vReceive.push_back(std::move(v));
-      }
-      DLLM_ASSERT_TRUE(
-          DLLM_EXTRACT_TENSOR(tensorSend).device().type() == at::kCUDA,
-          "NCCL backend only support CUDA GPUs");
-
-      std::vector vSend{DLLM_EXTRACT_TENSOR(tensorSend)};
-      CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
-      context->backend->allgather(vReceive, vSend)->wait();
-      CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
-    }
-    for (auto &t : tensorReceive) {
-      t.reset();
-    }
-    tensorSend.reset();
-  }};
-  const TaskFuture future = task.get_future();
-  tensorSend->resetFuture(future);
-  for (const auto &t : tensorReceive) {
-    t->resetFuture(future);
-  }
-  return task;
-}
-
-TaskNccl AllGather<NCCL>::run(
     const std::vector<std::vector<std::shared_ptr<Tensor>>> &tensorReceive,
     const std::vector<std::shared_ptr<const ReadOnlyTensor>> &tensorSend) {
   std::vector<TaskFuture> futureSend;
@@ -108,7 +57,6 @@ TaskNccl AllGather<NCCL>::run(
         }
         vReceive.push_back(std::move(v));
       }
-      CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
       context->backend->allgather(vReceive, vSend)->wait();
       CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
     }

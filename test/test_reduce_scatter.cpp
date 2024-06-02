@@ -81,7 +81,7 @@ void ReduceScatterNCCLTestFixture::TestlAllToAllT(const int blockSize) {
   {
     auto task =
         dllm::communication::ReduceScatter<dllm::communication::NCCL>::run(
-            r, vs, dllm::communication::SUM);
+            {r}, {vs}, dllm::communication::SUM);
     stream->submit(std::move(task));
   }
 

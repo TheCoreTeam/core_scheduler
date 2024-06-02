@@ -143,7 +143,7 @@ void AllGatherNCCLTestFixture::TestlAllToAllT(const int blockSize) {
   }
   {
     auto task =
-        dllm::communication::AllGather<dllm::communication::NCCL>::run(r, x);
+        dllm::communication::AllGather<dllm::communication::NCCL>::run({r}, {x});
     stream->submit(std::move(task));
   }
   std::vector<at::Tensor> r_torch;

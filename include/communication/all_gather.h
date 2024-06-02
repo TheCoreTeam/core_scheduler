@@ -10,9 +10,6 @@ struct AllGather;
 
 template <>
 struct AllGather<NCCL> {
-  static TaskNccl run(const std::vector<std::shared_ptr<Tensor>> &tensorReceive,
-                      const std::shared_ptr<const ReadOnlyTensor> &tensorSend);
-
   static TaskNccl run(
       const std::vector<std::vector<std::shared_ptr<Tensor>>> &tensorReceive,
       const std::vector<std::shared_ptr<const ReadOnlyTensor>> &tensorSend);

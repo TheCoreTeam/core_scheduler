@@ -20,31 +20,6 @@ constexpr auto toC10dRedOp(const Operation operation) {
 }
 }  // namespace
 
-TaskNccl AllReduce<NCCL>::runInplace(const std::shared_ptr<Tensor> &tensor,
-                                     const Operation operation) {
-  auto task =
-      TaskNccl{[tensor = tensor, operation = operation,
-                future = tensor->future()](const ContextNccl *context) mutable {
-        DLLM_NVTX_RANGE_FN("dllm::communication::AllReduce<NCCL>::runInplace");
-        {
-          util::FutureGuard guard{future};
-          DLLM_ASSERT_TRUE(
-              DLLM_EXTRACT_TENSOR(tensor).device().type() == at::kCUDA,
-              "NCCL backend only support CUDA GPUs");
-          std::vector v{DLLM_EXTRACT_TENSOR(tensor)};
-          CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
-          context->backend
-              ->allreduce(
-                  v, c10d::AllreduceOptions{.reduceOp = toC10dRedOp(operation)})
-              ->wait();
-          CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
-        }
-        tensor.reset();
-      }};
-  tensor->resetFuture(task.get_future());
-  return task;
-}
-
 TaskNccl AllReduce<NCCL>::runInplace(
     const std::vector<std::shared_ptr<Tensor>> &tensors, Operation operation) {
   std::vector<TensorFuture> futures;
@@ -67,7 +42,6 @@ TaskNccl AllReduce<NCCL>::runInplace(
                          "NCCL backend only support CUDA GPUs");
         v.push_back(DLLM_EXTRACT_TENSOR(t));
       }
-      CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
       context->backend
           ->allreduce(
               v, c10d::AllreduceOptions{.reduceOp = toC10dRedOp(operation)})

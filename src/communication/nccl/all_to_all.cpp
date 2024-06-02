@@ -1,6 +1,5 @@
 #include "communication/all_to_all.h"
 
-#include <ATen/Dispatch.h>
 #include <mpi.h>
 #include <nccl.h>
 #include <torch/csrc/autograd/generated/variable_factories.h>
@@ -54,7 +53,6 @@ TaskNccl AllToAll<NCCL>::run(
         vSend.push_back(DLLM_EXTRACT_TENSOR(t));
       }
 
-      CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
       context->backend->alltoall(vReceive, vSend)->wait();
       CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
     }

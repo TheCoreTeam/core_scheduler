@@ -19,61 +19,6 @@ constexpr auto toC10dRedOp(const Operation operation) {
   }
 }
 }  // namespace
-
-TaskNccl ReduceScatter<NCCL>::run(
-    const std::shared_ptr<Tensor> &tensorReceive,
-    const std::vector<std::shared_ptr<const ReadOnlyTensor>> &tensorSend,
-    Operation operation) {
-  std::vector<TaskFuture> futureSend;
-  futureSend.reserve(tensorSend.size());
-  for (const auto &t : tensorSend) {
-    futureSend.push_back(t->future());
-  }
-  auto task = TaskNccl{[operation = operation, tensorSend = tensorSend,
-                        tensorReceive = tensorReceive,
-                        futureReceive = tensorReceive->future(),
-                        futureSend = std::move(futureSend)](
-                           const ContextNccl *context) mutable {
-    DLLM_NVTX_RANGE_FN("dllm::communication::ReduceScatter<NCCL>::run");
-    {
-      util::FutureGuard guardReceive{futureReceive};
-      for (auto &f : futureSend) {
-        util::FutureGuard{f};
-      }
-      std::vector<std::vector<at::Tensor>> vSend{};
-      {
-        std::vector<at::Tensor> v;
-        v.reserve(tensorSend.size());
-        for (const auto &t : tensorSend) {
-          DLLM_ASSERT_TRUE(DLLM_EXTRACT_TENSOR(t).device().type() == at::kCUDA,
-                           "NCCL backend only support CUDA GPUs");
-          v.push_back(DLLM_EXTRACT_TENSOR(t));
-        }
-        vSend.push_back(std::move(v));
-      }
-      DLLM_ASSERT_TRUE(
-          DLLM_EXTRACT_TENSOR(tensorReceive).device().type() == at::kCUDA,
-          "NCCL backend only support CUDA GPUs");
-      std::vector vReceive{DLLM_EXTRACT_TENSOR(tensorReceive)};
-      CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
-      context->backend
-          ->reduce_scatter(
-              vReceive, vSend,
-              c10d::ReduceScatterOptions{.reduceOp = toC10dRedOp(operation)})
-          ->wait();
-      CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
-    }
-    tensorReceive.reset();
-    tensorSend.clear();
-  }};
-  const TaskFuture future = task.get_future();
-  for (const auto &t : tensorSend) {
-    t->resetFuture(future);
-  }
-  tensorReceive->resetFuture(future);
-  return task;
-}
-
 TaskNccl ReduceScatter<NCCL>::run(
     const std::vector<std::shared_ptr<Tensor>> &tensorReceive,
     const std::vector<std::vector<std::shared_ptr<const ReadOnlyTensor>>>
@@ -124,7 +69,6 @@ TaskNccl ReduceScatter<NCCL>::run(
                          "NCCL backend only support CUDA GPUs");
         vReceive.push_back(DLLM_EXTRACT_TENSOR(t));
       }
-      CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
       context->backend
           ->reduce_scatter(
               vReceive, vSend,

@@ -133,7 +133,7 @@ void AllReduceNcclTestFixture::TestAllReduceT(const int m) {
   {
     auto task =
         dllm::communication::AllReduce<dllm::communication::NCCL>::runInplace(
-            x, dllm::communication::SUM);
+            {x}, dllm::communication::SUM);
     stream->submit(std::move(task));
   }
 
