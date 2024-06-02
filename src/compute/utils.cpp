@@ -352,4 +352,50 @@ TaskCompute broadcast_to(std::shared_ptr<const ReadOnlyTensor> &output,
   output = std::move(outputNew);
   return task;
 }
+
+TaskCompute cat(std::shared_ptr<Tensor> &output,
+                const std::vector<std::shared_ptr<const ReadOnlyTensor>> &input,
+                const int64_t dim) {
+  std::vector<TaskFuture> inputFuture;
+  inputFuture.reserve(input.size());
+  for (const auto &t : input) {
+    inputFuture.push_back(t->future());
+  }
+  auto task = TaskCompute{[dim = dim, output = output, input = input,
+                           outputFuture = output->future(),
+                           inputFuture = std::move(inputFuture)](
+                              const ContextCompute *context) mutable {
+    DLLM_NVTX_RANGE_FN("dllm::compute::Utils::cat");
+    {
+      for (auto &f : inputFuture) {
+        util::FutureGuard{f};
+      }
+      util::FutureGuard dstGuard{outputFuture};
+      std::vector<at::Tensor> vInput;
+      vInput.reserve(input.size());
+      for (const auto &t : input) {
+        vInput.push_back(DLLM_EXTRACT_TENSOR(t));
+      }
+      DLLM_EXTRACT_TENSOR(output) = at::cat(vInput, dim);
+      output.reset();
+      input.clear();
+    }
+    CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
+  }};
+  const TaskFuture future = task.get_future();
+  output->resetFuture(future);
+  for (const auto &t : input) {
+    t->resetFuture(future);
+  }
+  // size
+  output->sizes() = [&] {
+    auto size = input[0]->sizes();
+    size[dim] = 0;
+    for (const auto &t : input) {
+      size[dim] += t->size(dim);
+    }
+    return size;
+  }();
+  return task;
+}
 }  // namespace dllm::compute::Utils
