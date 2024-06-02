@@ -24,7 +24,8 @@ jobs:
       - name: Install Clang-Format and CMake-Format
         run: |
           sudo apt-get update
-          sudo apt-get install clang-format
+          sudo apt-get install -y clang-format
+          sudo snap install -y shfmt
         #  TODO(Jie): cmake?
         #  pip install cmake-format
 
