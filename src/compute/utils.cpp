@@ -8,6 +8,59 @@
 #include "tensor_friend.h"
 
 namespace dllm::compute::Utils {
+TaskCompute sum(const std::shared_ptr<Tensor> &output,
+                const std::shared_ptr<const ReadOnlyTensor> &input,
+                const IntArray &dim, const bool keep_dim,
+                c10::optional<at::ScalarType> dtype) {
+  DLLM_ASSERT_TRUE(!dim.empty(), "dim should not be empty");
+  auto task = TaskCompute{
+      [output = output, input = input, dim = dim, keep_dim = keep_dim,
+       dtype = dtype, outputFuture = output->future(),
+       inputFuture = input->future()](const ContextCompute *context) mutable {
+        DLLM_NVTX_RANGE_FN("dllm::compute::Utils::range");
+        {
+          util::FutureGuard outputGuard{outputFuture};
+          util::FutureGuard inputGuard{inputFuture};
+          DLLM_EXTRACT_TENSOR(output) =
+              at::sum(DLLM_EXTRACT_TENSOR(input), dim, keep_dim, dtype);
+          output.reset();
+          input.reset();
+        }
+        CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
+      }};
+  const TaskFuture future = task.get_future();
+  input->resetFuture(future);
+  output->resetFuture(future);
+  // size
+  output->sizes() = [&, dim = dim]() mutable {
+    auto size = input->sizes();
+    const auto len = size.size();
+    for (auto &d : dim) {
+      if (d < 0) {
+        d += len;
+      }
+      size[d] = 1;
+    }
+    if (!keep_dim) {
+      std::ranges::sort(dim);
+      IntArray sizeNew;
+      std::size_t low = 0;
+      for (const std::size_t high : dim) {
+        for (std::size_t j = low; j < high; ++j) {
+          sizeNew.push_back(size[j]);
+        }
+        low = high + 1;
+      }
+      for (std::size_t i = low; i < size.size(); ++i) {
+        sizeNew.push_back(static_cast<int64_t>(i));
+      }
+      return sizeNew;
+    }
+    return size;
+  }();
+  return task;
+}
+
 TaskCompute range(const std::shared_ptr<Tensor> &tensor,
                   const at::Scalar &start, const at::Scalar &end,
                   const at::TensorOptions options) {
@@ -26,6 +79,49 @@ TaskCompute range(const std::shared_ptr<Tensor> &tensor,
   tensor->resetFuture(future);
   // size
   tensor->sizes() = IntArray{end.toLong() - start.toLong()};
+  return task;
+}
+
+TaskCompute arange(const std::shared_ptr<Tensor> &tensor,
+                   const at::Scalar &start, const at::Scalar &end,
+                   const at::TensorOptions options) {
+  auto task = TaskCompute{
+      [tensor = tensor, start = start, end = end, options = options,
+       future = tensor->future()](const ContextCompute *context) mutable {
+        DLLM_NVTX_RANGE_FN("dllm::compute::Utils::range");
+        {
+          util::FutureGuard guard{future};
+          DLLM_EXTRACT_TENSOR(tensor) = torch::arange(start, end, options);
+          tensor.reset();
+        }
+        CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
+      }};
+  const TaskFuture future = task.get_future();
+  tensor->resetFuture(future);
+  // size
+  tensor->sizes() = IntArray{(end.toLong() - start.toLong())};
+  return task;
+}
+
+TaskCompute arange(const std::shared_ptr<Tensor> &tensor,
+                   const at::Scalar &start, const at::Scalar &end,
+                   const at::Scalar &step, const at::TensorOptions options) {
+  auto task = TaskCompute{[tensor = tensor, start = start, end = end,
+                           step = step, options = options,
+                           future = tensor->future()](
+                              const ContextCompute *context) mutable {
+    DLLM_NVTX_RANGE_FN("dllm::compute::Utils::range");
+    {
+      util::FutureGuard guard{future};
+      DLLM_EXTRACT_TENSOR(tensor) = torch::arange(start, end, step, options);
+      tensor.reset();
+    }
+    CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
+  }};
+  const TaskFuture future = task.get_future();
+  tensor->resetFuture(future);
+  // size
+  tensor->sizes() = IntArray{(end.toLong() - start.toLong()) / step.toLong()};
   return task;
 }
 
