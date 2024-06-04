@@ -46,9 +46,9 @@ struct ScaledDotProductFlashAttention {
 
   static TaskCompute backward(
       const std::shared_ptr<State> &state,
-      std::shared_ptr<const ReadOnlyTensor> &grad_query,
-      std::shared_ptr<const ReadOnlyTensor> &grad_key,
-      std::shared_ptr<const ReadOnlyTensor> &grad_value,
+      const std::shared_ptr<Tensor> &grad_query,
+      const std::shared_ptr<Tensor> &grad_key,
+      const std::shared_ptr<Tensor> &grad_value,
       const std::shared_ptr<const ReadOnlyTensor> &grad_out);
 };
 }  // namespace dllm::compute

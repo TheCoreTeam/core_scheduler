@@ -46,13 +46,11 @@ TaskCompute split(std::vector<std::shared_ptr<const ReadOnlyTensor>> &output,
                   const std::shared_ptr<const ReadOnlyTensor> &src,
                   const int64_t &split_size, const int64_t &dim);
 
-// view output tensors should be read-only!
-TaskCompute view(std::shared_ptr<const ReadOnlyTensor> &output,
+TaskCompute view(const std::shared_ptr<Tensor> &output,
                  const std::shared_ptr<const ReadOnlyTensor> &input,
                  const IntArrayRef &size);
 
-// broadcast_to output tensors should be read-only!
-TaskCompute broadcast_to(std::shared_ptr<const ReadOnlyTensor> &output,
+TaskCompute broadcast_to(const std::shared_ptr<Tensor> &output,
                          const std::shared_ptr<const ReadOnlyTensor> &input,
                          const IntArrayRef &size);
 

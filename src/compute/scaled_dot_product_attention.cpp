@@ -106,16 +106,13 @@ TaskCompute ScaledDotProductFlashAttention::forward(
 
 TaskCompute ScaledDotProductFlashAttention::backward(
     const std::shared_ptr<State> &state,
-    std::shared_ptr<const ReadOnlyTensor> &grad_query,
-    std::shared_ptr<const ReadOnlyTensor> &grad_key,
-    std::shared_ptr<const ReadOnlyTensor> &grad_value,
+    const std::shared_ptr<Tensor> &grad_query,
+    const std::shared_ptr<Tensor> &grad_key,
+    const std::shared_ptr<Tensor> &grad_value,
     const std::shared_ptr<const ReadOnlyTensor> &grad_out) {
-  const auto grad_query_ = Tensor::create();
-  const auto grad_key_ = Tensor::create();
-  const auto grad_value_ = Tensor::create();
   auto task = TaskCompute{
-      [args = state->args, grad_query = grad_query_, grad_key = grad_key_,
-       grad_value = grad_value_, grad_out = grad_out,
+      [args = state->args, grad_query = grad_query, grad_key = grad_key,
+       grad_value = grad_value, grad_out = grad_out,
        query = state->backward.query, key = state->backward.key,
        value = state->backward.value, out = state->backward.out,
        logsumexp = state->backward.logsumexp,
@@ -123,9 +120,9 @@ TaskCompute ScaledDotProductFlashAttention::backward(
        cum_seq_k = state->backward.cum_seq_k, max = *state->backward.max,
        philox_seed = state->backward.philox_seed,
        philox_offset = state->backward.philox_offset,
-       grad_queryFuture = grad_query_->future(),
-       grad_keyFuture = grad_key_->future(),
-       grad_valueFuture = grad_value_->future(),
+       grad_queryFuture = grad_query->future(),
+       grad_keyFuture = grad_key->future(),
+       grad_valueFuture = grad_value->future(),
        grad_outFuture = grad_out->future(),
        outputFuture = state->backward.out->future(),
        logsumexpFuture = state->backward.logsumexp->future(),
@@ -186,9 +183,9 @@ TaskCompute ScaledDotProductFlashAttention::backward(
       }};
 
   const TaskFuture future = task.get_future();
-  grad_query_->resetFuture(future);
-  grad_key_->resetFuture(future);
-  grad_value_->resetFuture(future);
+  grad_query->resetFuture(future);
+  grad_key->resetFuture(future);
+  grad_value->resetFuture(future);
   grad_out->resetFuture(future);
   state->backward.query->resetFuture(future);
   state->backward.key->resetFuture(future);
@@ -199,13 +196,10 @@ TaskCompute ScaledDotProductFlashAttention::backward(
   state->backward.cum_seq_k->resetFuture(future);
   state->backward.philox_seed->resetFuture(future);
   state->backward.philox_offset->resetFuture(future);
-  grad_query = grad_query_;
-  grad_key = grad_key_;
-  grad_value = grad_value_;
   // size
-  grad_query_->sizes() = state->backward.query->sizes();
-  grad_key_->sizes() = state->backward.key->sizes();
-  grad_value_->sizes() = state->backward.value->sizes();
+  grad_query->sizes() = state->backward.query->sizes();
+  grad_key->sizes() = state->backward.key->sizes();
+  grad_value->sizes() = state->backward.value->sizes();
   // decrease counter
   state->backward.query.reset();
   state->backward.key.reset();
