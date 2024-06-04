@@ -73,21 +73,21 @@ void TestT(dllm::ThreadPoolCompute& tp) {
         state, {}, true, {}, scale);
     tp.submit(std::move(task));
   }
-  auto qview = dllm::ReadOnlyTensor::create();
+  auto qview = dllm::Tensor::create();
   {
     auto task =
         dllm::compute::Utils::view(qview, q, {B, T, n_head, n_embd / n_head});
     tp.submit(std::move(task));
     qview->wait();
   }
-  auto kview = dllm::ReadOnlyTensor::create();
+  auto kview = dllm::Tensor::create();
   {
     auto task =
         dllm::compute::Utils::view(kview, k, {B, T, n_head, n_embd / n_head});
     tp.submit(std::move(task));
     kview->wait();
   }
-  auto vview = dllm::ReadOnlyTensor::create();
+  auto vview = dllm::Tensor::create();
   {
     auto task =
         dllm::compute::Utils::view(vview, v, {B, T, n_head, n_embd / n_head});
@@ -102,7 +102,9 @@ void TestT(dllm::ThreadPoolCompute& tp) {
     output->wait();
   }
   auto dout = dllm::Tensor::create();
-  std::shared_ptr<const dllm::ReadOnlyTensor> dq, dk, dv;
+  auto dq = dllm::Tensor::create();
+  auto dk = dllm::Tensor::create();
+  auto dv = dllm::Tensor::create();
   {
     auto task = dllm::compute::Utils::rand_like(dout, output);
     tp.submit(std::move(task));

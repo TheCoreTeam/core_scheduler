@@ -10,6 +10,7 @@
 #include <thread>
 
 #include "threading/context_mpi.h"
+#include "threading/submit_task_macro.h"
 #include "threading/task_mpi.h"
 
 namespace dllm {

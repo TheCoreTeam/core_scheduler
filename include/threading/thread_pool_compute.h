@@ -8,6 +8,7 @@
 #include <thread>
 
 #include "threading/context_compute.h"
+#include "threading/submit_task_macro.h"
 #include "threading/task_compute.h"
 
 namespace dllm {

@@ -8,6 +8,8 @@ add_executable(dllm_tests
         test_flash_attention.cpp
         #        test_add.cpp
         test_embedding.cpp
+        test_cross_entropy.cpp
+        test_utils.cpp
 )
 
 target_link_libraries(dllm_tests PRIVATE

@@ -303,17 +303,18 @@ TaskCompute split(std::vector<std::shared_ptr<const ReadOnlyTensor>> &output,
   return task;
 }
 
-TaskCompute view(std::shared_ptr<const ReadOnlyTensor> &output,
+TaskCompute view(const std::shared_ptr<Tensor> &output,
                  const std::shared_ptr<const ReadOnlyTensor> &input,
                  const IntArrayRef &size) {
-  auto outputNew =
-      TensorFriend::create(TensorFriend::extract_future_ptr(input));
+  TensorFriend::extract_future_ptr(output) =
+      TensorFriend::extract_future_ptr(input);
   auto task = TaskCompute{
-      [output = outputNew, input = input,
-       inputFuture = input->future()](const ContextCompute *context) mutable {
+      [output = output, input = input, inputFuture = input->future(),
+       outputFuture = output->future()](const ContextCompute *context) mutable {
         DLLM_NVTX_RANGE_FN("dllm::compute::Utils::view");
         {
-          util::FutureGuard dstGuard{inputFuture};
+          util::FutureGuard inputGuard{inputFuture};
+          util::FutureGuard outputGuard{outputFuture};
           DLLM_EXTRACT_TENSOR(output) =
               DLLM_EXTRACT_TENSOR(input).view(output->sizes());
           input.reset();
@@ -321,24 +322,61 @@ TaskCompute view(std::shared_ptr<const ReadOnlyTensor> &output,
         }
         CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
       }};
-  outputNew->resetFuture(task.get_future());
+  const TaskFuture future = task.get_future();
+  input->resetFuture(future);
+  output->resetFuture(future);
   // size
-  outputNew->sizes() = size;
-  output = std::move(outputNew);
+  auto toNewShape = [&](const auto &originalShape, const auto &newShape) {
+    const int64_t totalElements =
+        std::accumulate(originalShape.begin(), originalShape.end(), 1LL,
+                        std::multiplies<int64_t>{});
+
+    int64_t productOfKnownDims = 1;
+    int unknownDimIndex = -1;
+    for (size_t i = 0; i < newShape.size(); ++i) {
+      if (newShape[i] == -1) {
+        if (unknownDimIndex != -1) {
+          DLLM_ASSERT_TRUE(false,
+                           "More than one unknown dimension (-1) specified.");
+        }
+        unknownDimIndex = i;
+      } else {
+        productOfKnownDims *= newShape[i];
+      }
+    }
+
+    IntArray resolvedShape(newShape.begin(), newShape.end());
+
+    if (unknownDimIndex != -1) {
+      const int64_t inferredDim = totalElements / productOfKnownDims;
+      DLLM_ASSERT_TRUE(
+          totalElements % productOfKnownDims == 0,
+          "Invalid shape: total size of new array must be unchanged.");
+      resolvedShape[unknownDimIndex] = inferredDim;
+    } else {
+      DLLM_ASSERT_TRUE(
+          productOfKnownDims == totalElements,
+          "Invalid shape: total size of new array must be unchanged.");
+    }
+
+    return resolvedShape;
+  };
+  output->sizes() = toNewShape(input->sizes(), size);
   return task;
 }
 
-TaskCompute broadcast_to(std::shared_ptr<const ReadOnlyTensor> &output,
+TaskCompute broadcast_to(const std::shared_ptr<Tensor> &output,
                          const std::shared_ptr<const ReadOnlyTensor> &input,
                          const IntArrayRef &size) {
-  auto outputNew =
-      TensorFriend::create(TensorFriend::extract_future_ptr(input));
+  TensorFriend::extract_future_ptr(output) =
+      TensorFriend::extract_future_ptr(input);
   auto task = TaskCompute{
-      [output = outputNew, input = input,
-       inputFuture = input->future()](const ContextCompute *context) mutable {
-        DLLM_NVTX_RANGE_FN("dllm::compute::Utils::broadcast");
+      [output = output, input = input, inputFuture = input->future(),
+       outputFuture = output->future()](const ContextCompute *context) mutable {
+        DLLM_NVTX_RANGE_FN("dllm::compute::Utils::broadcast_to");
         {
-          util::FutureGuard dstGuard{inputFuture};
+          util::FutureGuard inputGuard{inputFuture};
+          util::FutureGuard outputGuard{outputFuture};
           DLLM_EXTRACT_TENSOR(output) =
               DLLM_EXTRACT_TENSOR(input).broadcast_to(output->sizes());
           input.reset();
@@ -346,10 +384,11 @@ TaskCompute broadcast_to(std::shared_ptr<const ReadOnlyTensor> &output,
         }
         CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
       }};
-  outputNew->resetFuture(task.get_future());
+  const TaskFuture future = task.get_future();
+  input->resetFuture(future);
+  output->resetFuture(future);
   // size
-  outputNew->sizes() = size;
-  output = std::move(outputNew);
+  output->sizes() = size;
   return task;
 }
 

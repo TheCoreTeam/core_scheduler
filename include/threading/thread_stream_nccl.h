@@ -10,6 +10,7 @@
 #include <thread>
 
 #include "threading/context_nccl.h"
+#include "threading/submit_task_macro.h"
 #include "threading/task_nccl.h"
 
 namespace dllm {
