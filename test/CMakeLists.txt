@@ -10,6 +10,7 @@ add_executable(dllm_tests
         test_embedding.cpp
         test_cross_entropy.cpp
         test_utils.cpp
+        test_layer_norm.cpp
 )
 
 target_link_libraries(dllm_tests PRIVATE

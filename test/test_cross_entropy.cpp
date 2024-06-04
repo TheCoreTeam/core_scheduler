@@ -78,5 +78,5 @@ void TestCrossEntropyFixture::Test(const int size) {
   ASSERT_TRUE(at::allclose(x_torch.grad(), dx));
 }
 
-TEST_F(TestCrossEntropyFixture, TestCatF32) { Test<float>(128); }
-TEST_F(TestCrossEntropyFixture, TestCatF64) { Test<double>(128); }
+TEST_F(TestCrossEntropyFixture, TestF32) { Test<float>(128); }
+TEST_F(TestCrossEntropyFixture, TestF64) { Test<double>(128); }
