@@ -119,7 +119,7 @@ TaskCompute Linear::backwardInput(
   return task;
 }
 
-TaskCompute Linear::backwardWeight(
+TaskCompute Linear::backwardParameter(
     const std::shared_ptr<State> &state,
     const std::shared_ptr<const ReadOnlyTensor> &grad_output) {
   auto task =
