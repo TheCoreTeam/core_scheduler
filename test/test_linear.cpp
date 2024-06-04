@@ -68,7 +68,7 @@ void TestThreadPoolComputeBackwardT(dllm::ThreadPoolCompute &threadPool) {
     threadPool.submit(std::move(task));
   }
   {
-    auto task = dllm::compute::Linear::backwardWeight(state, yGrad);
+    auto task = dllm::compute::Linear::backwardParameter(state, yGrad);
     threadPool.submit(std::move(task));
   }
   dx->wait();

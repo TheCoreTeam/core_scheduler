@@ -3,9 +3,30 @@
 #include "threading/task_compute.h"
 
 namespace dllm::compute::Utils {
+TaskCompute sum(const std::shared_ptr<Tensor> &output,
+                const std::shared_ptr<const ReadOnlyTensor> &input,
+                const IntArray &dim, bool keep_dim = false,
+                c10::optional<at::ScalarType> dtype = c10::nullopt);
+
+inline TaskCompute sum(
+    const std::shared_ptr<Tensor> &output,
+    const std::shared_ptr<const ReadOnlyTensor> &input, const int64_t dim,
+    const bool keep_dim = false,
+    const c10::optional<at::ScalarType> dtype = c10::nullopt) {
+  return sum(output, input, IntArray{dim}, keep_dim, dtype);
+}
+
 TaskCompute range(const std::shared_ptr<Tensor> &tensor,
                   const at::Scalar &start, const at::Scalar &end,
                   at::TensorOptions options = {});
+
+TaskCompute arange(const std::shared_ptr<Tensor> &tensor,
+                   const at::Scalar &start, const at::Scalar &end,
+                   at::TensorOptions options = {});
+
+TaskCompute arange(const std::shared_ptr<Tensor> &tensor,
+                   const at::Scalar &start, const at::Scalar &end,
+                   const at::Scalar &step, at::TensorOptions options = {});
 
 TaskCompute randint(const std::shared_ptr<Tensor> &tensor, int64_t low,
                     int64_t high, const IntArrayRef &size,

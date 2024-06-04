@@ -33,7 +33,7 @@ struct Linear {
       const std::shared_ptr<Tensor> &dinput,
       const std::shared_ptr<const ReadOnlyTensor> &grad_output);
 
-  static TaskCompute backwardWeight(
+  static TaskCompute backwardParameter(
       const std::shared_ptr<State> &state,
       const std::shared_ptr<const ReadOnlyTensor> &grad_output);
 };
