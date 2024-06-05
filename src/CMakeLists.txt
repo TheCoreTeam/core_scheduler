@@ -1,3 +1,6 @@
+set(DLLM_MODULE_SRCS "")
+add_subdirectory(module)
+
 set(DLLM_COMPUTE_SRCS "")
 add_subdirectory(compute)
 
@@ -16,6 +19,7 @@ add_subdirectory(threading)
 add_library(dllm_core SHARED
         logger.cpp
         tensor.cpp
+        ${DLLM_MODULE_SRCS}
         ${DLLM_COMPUTE_SRCS}
         ${DLLM_MEMORY_SRCS}
         ${DLLM_COMMUNICATION_SRCS}

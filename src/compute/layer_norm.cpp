@@ -12,6 +12,28 @@
 #include "tensor_friend.h"
 
 namespace dllm::compute {
+OrderedDict<std::string, std::shared_ptr<Tensor>> LayerNorm::State::parameters()
+    const {
+  OrderedDict<std::string, std::shared_ptr<Tensor>> dict;
+  dict.insert("weight", forward.weight);
+  if (args.bias) {
+    dict.insert("bias", forward.bias);
+  }
+  return dict;
+}
+
+OrderedDict<std::string, module::State::Increment>
+LayerNorm::State::increments() {
+  OrderedDict<std::string, Increment> dict;
+  dict.insert("weight",
+              {forward.weight, forward.grad_weight, forward.optimizer_weight});
+  if (args.bias) {
+    dict.insert("bias",
+                {forward.bias, forward.grad_bias, forward.optimizer_bias});
+  }
+  return dict;
+}
+
 TaskCompute LayerNorm::init(std::shared_ptr<State>& state,
                             IntArray normalized_shape, const double eps,
                             const bool elementwise_affine, const bool use_bias,
@@ -46,7 +68,7 @@ TaskCompute LayerNorm::init(std::shared_ptr<State>& state,
         State::Args{normalized_shape, eps, elementwise_affine, use_bias});
   } else {
     task =
-        TaskCompute{[=, normalized_shape = std::move(normalized_shape),
+        TaskCompute{[=, normalized_shape = normalized_shape,
                      weight = weight](const ContextCompute* context) mutable {
           at::TensorOptions options{};
           if (device.has_value()) {
@@ -147,24 +169,31 @@ TaskCompute LayerNorm::forward(
 }
 
 TaskCompute LayerNorm::backward(
-    const std::shared_ptr<State>& state, const std::shared_ptr<Tensor>& dinput,
-    const std::shared_ptr<const ReadOnlyTensor>& doutput) {
+    const std::shared_ptr<State>& state,
+    const std::shared_ptr<Tensor>& grad_input,
+    const std::shared_ptr<const ReadOnlyTensor>& grad_output) {
+  if (state->forward.grad_weight == nullptr) {
+    state->forward.grad_weight = Tensor::create();
+  }
   auto weight =
       std::static_pointer_cast<const ReadOnlyTensor>(state->forward.weight);
   TaskCompute task;
   if (state->args.bias) {
+    if (state->forward.grad_bias == nullptr) {
+      state->forward.grad_bias = Tensor::create();
+    }
     auto bias =
         std::static_pointer_cast<const ReadOnlyTensor>(state->forward.bias);
     task = TaskCompute{
-        [args = state->args, dinput = dinput, doutput = doutput,
-         weight = weight, bias = bias, dweight = state->forward.dweight,
-         dbias = state->forward.dbias, mean = state->backward.mean,
+        [args = state->args, grad_input = grad_input, grad_output = grad_output,
+         weight = weight, bias = bias, dweight = state->forward.grad_weight,
+         dbias = state->forward.grad_bias, mean = state->backward.mean,
          rstd = state->backward.rstd, input = state->backward.input,
-         dinputFuture = dinput->future(), doutputFuture = doutput->future(),
-         weightFuture = weight->future(),
-         dweightFuture = state->forward.dweight->future(),
+         dinputFuture = grad_input->future(),
+         doutputFuture = grad_output->future(), weightFuture = weight->future(),
+         dweightFuture = state->forward.grad_weight->future(),
          biasFuture = bias->future(),
-         dbiasFuture = state->forward.dbias->future(),
+         dbiasFuture = state->forward.grad_bias->future(),
          meanFuture = state->backward.mean->future(),
          rstdFuture = state->backward.rstd->future(),
          inputFuture = state->backward.input->future()](
@@ -179,11 +208,11 @@ TaskCompute LayerNorm::backward(
           util::FutureGuard rstdGuard{rstdFuture};
           util::FutureGuard inputGuard{inputFuture};
           auto [dx, dw, db] = at::native_layer_norm_backward(
-              DLLM_EXTRACT_TENSOR(doutput), DLLM_EXTRACT_TENSOR(input),
+              DLLM_EXTRACT_TENSOR(grad_output), DLLM_EXTRACT_TENSOR(input),
               args.normalized_shape, DLLM_EXTRACT_TENSOR(mean),
               DLLM_EXTRACT_TENSOR(rstd), DLLM_EXTRACT_TENSOR(weight),
               DLLM_EXTRACT_TENSOR(bias), {true, true, true});
-          DLLM_EXTRACT_TENSOR(dinput) = dx;
+          DLLM_EXTRACT_TENSOR(grad_input) = dx;
           if (DLLM_EXTRACT_TENSOR(dweight).defined()) {
             DLLM_EXTRACT_TENSOR(dweight) += dw;
           } else {
@@ -194,8 +223,8 @@ TaskCompute LayerNorm::backward(
           } else {
             DLLM_EXTRACT_TENSOR(dbias) = db;
           }
-          dinput.reset();
-          doutput.reset();
+          grad_input.reset();
+          grad_output.reset();
           weight.reset();
           bias.reset();
           dweight.reset();
@@ -206,23 +235,23 @@ TaskCompute LayerNorm::backward(
           CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
         }};
     const TaskFuture future = task.get_future();
-    dinput->resetFuture(future);
-    doutput->resetFuture(future);
+    grad_input->resetFuture(future);
+    grad_output->resetFuture(future);
     weight->resetFuture(future);
     bias->resetFuture(future);
-    state->forward.dweight->resetFuture(future);
-    state->forward.dbias->resetFuture(future);
+    state->forward.grad_weight->resetFuture(future);
+    state->forward.grad_bias->resetFuture(future);
     state->backward.input->resetFuture(future);
     state->backward.mean->resetFuture(future);
     state->backward.rstd->resetFuture(future);
   } else {
     task = TaskCompute{
-        [args = state->args, dinput = dinput, doutput = doutput,
-         weight = weight, dweight = state->forward.dweight,
+        [args = state->args, grad_input = grad_input, grad_output = grad_output,
+         weight = weight, dweight = state->forward.grad_weight,
          mean = state->backward.mean, rstd = state->backward.rstd,
-         input = state->backward.input, dinputFuture = dinput->future(),
-         doutputFuture = doutput->future(), weightFuture = weight->future(),
-         dweightFuture = state->forward.dweight->future(),
+         input = state->backward.input, dinputFuture = grad_input->future(),
+         doutputFuture = grad_output->future(), weightFuture = weight->future(),
+         dweightFuture = state->forward.grad_weight->future(),
          meanFuture = state->backward.mean->future(),
          rstdFuture = state->backward.rstd->future(),
          inputFuture = state->backward.input->future()](
@@ -235,18 +264,18 @@ TaskCompute LayerNorm::backward(
           util::FutureGuard rstdGuard{rstdFuture};
           util::FutureGuard inputGuard{inputFuture};
           auto [dx, dw, db] = at::native_layer_norm_backward(
-              DLLM_EXTRACT_TENSOR(doutput), DLLM_EXTRACT_TENSOR(input),
+              DLLM_EXTRACT_TENSOR(grad_output), DLLM_EXTRACT_TENSOR(input),
               args.normalized_shape, DLLM_EXTRACT_TENSOR(mean),
               DLLM_EXTRACT_TENSOR(rstd), DLLM_EXTRACT_TENSOR(weight), {},
               {true, true, true});
-          DLLM_EXTRACT_TENSOR(dinput) = dx;
+          DLLM_EXTRACT_TENSOR(grad_input) = dx;
           if (DLLM_EXTRACT_TENSOR(dweight).defined()) {
             DLLM_EXTRACT_TENSOR(dweight) += dw;
           } else {
             DLLM_EXTRACT_TENSOR(dweight) = dw;
           }
-          dinput.reset();
-          doutput.reset();
+          grad_input.reset();
+          grad_output.reset();
           weight.reset();
           dweight.reset();
           mean.reset();
@@ -255,16 +284,16 @@ TaskCompute LayerNorm::backward(
           CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
         }};
     const TaskFuture future = task.get_future();
-    dinput->resetFuture(future);
-    doutput->resetFuture(future);
+    grad_input->resetFuture(future);
+    grad_output->resetFuture(future);
     weight->resetFuture(future);
-    state->forward.dweight->resetFuture(future);
+    state->forward.grad_weight->resetFuture(future);
     state->backward.input->resetFuture(future);
     state->backward.mean->resetFuture(future);
     state->backward.rstd->resetFuture(future);
   }
 
-  dinput->sizes() = state->backward.input->sizes();
+  grad_input->sizes() = state->backward.input->sizes();
   state->backward.input.reset();
   state->backward.mean.reset();
   state->backward.rstd.reset();

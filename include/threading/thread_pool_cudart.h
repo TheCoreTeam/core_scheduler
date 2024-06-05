@@ -1,13 +1,13 @@
 #pragma once
 #include <atomic>
-#include <barrier>
 #include <condition_variable>
 #include <future>
+#include <latch>
 #include <mutex>
 #include <queue>
 #include <thread>
 
-#include "threading/context_cudart.h"
+// ReSharper disable once CppUnusedIncludeDirective
 #include "threading/submit_task_macro.h"
 #include "threading/task_cudart.h"
 
@@ -23,8 +23,8 @@ struct ThreadPoolCudart {
   void submit(const TaskCudart &task) = delete;
 
  private:
-  std::barrier<> barrier_;
-  std::vector<std::thread> threadVector{};
+  std::latch latch_;
+  std::vector<std::jthread> threadVector{};
   std::queue<TaskCudart> taskQueue{};
   std::mutex queueMutex{};
   std::condition_variable cv{};

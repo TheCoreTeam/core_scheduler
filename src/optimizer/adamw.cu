@@ -74,7 +74,7 @@ __global__ void step(T *__restrict w, T *__restrict m, T *__restrict v,
 }
 }  // namespace
 
-void stepKernel(cudaStream_t stream, const AdamW<false>::State::Args &args,
+void stepKernel(cudaStream_t stream, const AdamW::State::Args &args,
                 const std::shared_ptr<Tensor> &w,
                 const std::shared_ptr<Tensor> &m,
                 const std::shared_ptr<Tensor> &v,
@@ -104,12 +104,12 @@ void stepKernel(cudaStream_t stream, const AdamW<false>::State::Args &args,
       });
 }
 
-void stepKernel(cudaStream_t stream, const AdamW<true>::State::Args &args,
-                const std::shared_ptr<Tensor> &w,
-                const std::shared_ptr<Tensor> &m,
-                const std::shared_ptr<Tensor> &v,
-                const std::shared_ptr<Tensor> &vMax,
-                const std::shared_ptr<const ReadOnlyTensor> &dw) {
+void stepKernelAmsgrad(cudaStream_t stream, const AdamW::State::Args &args,
+                       const std::shared_ptr<Tensor> &w,
+                       const std::shared_ptr<Tensor> &m,
+                       const std::shared_ptr<Tensor> &v,
+                       const std::shared_ptr<Tensor> &vMax,
+                       const std::shared_ptr<const ReadOnlyTensor> &dw) {
   const auto size = [&] {
     const auto sizes = DLLM_EXTRACT_TENSOR(dw).sizes();
     int64_t s = 1;

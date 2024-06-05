@@ -10,7 +10,7 @@
 
 namespace dllm {
 namespace {
-void setThreadAffinity(std::thread &th, const int coreId) {
+void setThreadAffinity(std::jthread &th, const int coreId) {
   cpu_set_t cpuset;
   CPU_ZERO(&cpuset);
   CPU_SET(coreId, &cpuset);
@@ -23,7 +23,7 @@ void setThreadAffinity(std::thread &th, const int coreId) {
 void threadTask(const int deviceRank, std::queue<TaskCudart> *taskQueue,
                 std::mutex *queueMutex, std::condition_variable *cv,
                 std::mutex *cvMutex, const std::atomic<bool> *shutDown,
-                std::barrier<> *barrier) {
+                std::latch *barrier) {
   ContextCudart context;
   barrier->arrive_and_wait();
   CHECK_CUDART(cudaSetDevice(deviceRank));
@@ -81,11 +81,11 @@ void ThreadStreamCudart::submit(TaskCudart &&task) {
 
 ThreadStreamCudart::ThreadStreamCudart(
     const int deviceRank, const std::optional<const int> bindingMap)
-    : barrier_{2}, thread{threadTask, deviceRank, &taskQueue, &queueMutex,
-                          &cv,        &cvMutex,   &shutDown,  &barrier_} {
+    : latch_{2}, thread{threadTask, deviceRank, &taskQueue, &queueMutex,
+                        &cv,        &cvMutex,   &shutDown,  &latch_} {
   if (bindingMap.has_value()) {
     setThreadAffinity(thread, bindingMap.value());
   }
-  barrier_.arrive_and_wait();
+  latch_.arrive_and_wait();
 }
 }  // namespace dllm

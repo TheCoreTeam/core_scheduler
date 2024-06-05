@@ -8,7 +8,7 @@
 
 namespace dllm {
 namespace {
-void setThreadAffinity(std::thread &th, const int coreId) {
+void setThreadAffinity(std::jthread &th, const int coreId) {
   cpu_set_t cpuset;
   CPU_ZERO(&cpuset);
   CPU_SET(coreId, &cpuset);
@@ -21,7 +21,7 @@ void setThreadAffinity(std::thread &th, const int coreId) {
 void threadTask(const ContextMpi *context, std::queue<TaskMpi> *taskQueue,
                 std::mutex *queueMutex, std::condition_variable *cv,
                 std::mutex *cvMutex, const std::atomic<bool> *shutDown,
-                std::barrier<> *barrier) {
+                std::latch *barrier) {
   barrier->arrive_and_wait();
   while (!shutDown->load()) {
     TaskMpi task;
@@ -71,12 +71,12 @@ int64_t ThreadStreamMpi::rank() const { return context_.mpiRank; }
 
 ThreadStreamMpi::ThreadStreamMpi(const ContextMpi &context,
                                  const std::optional<const int> bindingMap)
-    : context_{context}, barrier_{2}, thread{threadTask,  &context_, &taskQueue,
-                                             &queueMutex, &cv,       &cvMutex,
-                                             &shutDown,   &barrier_} {
+    : context_{context}, latch_{2}, thread{threadTask,  &context_, &taskQueue,
+                                           &queueMutex, &cv,       &cvMutex,
+                                           &shutDown,   &latch_} {
   if (bindingMap.has_value()) {
     setThreadAffinity(thread, bindingMap.value());
   }
-  barrier_.arrive_and_wait();
+  latch_.arrive_and_wait();
 }
 }  // namespace dllm

@@ -75,8 +75,8 @@ void TestLayerNormFixture::Test(const int size) {
   y_torch.backward(dy_torch);
   ASSERT_TRUE(at::allclose(y_torch, y));
   ASSERT_TRUE(at::allclose(x_torch.grad(), dx));
-  ASSERT_TRUE(at::allclose(ln->weight.grad(), state->forward.dweight));
-  ASSERT_TRUE(at::allclose(ln->bias.grad(), state->forward.dbias));
+  ASSERT_TRUE(at::allclose(ln->weight.grad(), state->forward.grad_weight));
+  ASSERT_TRUE(at::allclose(ln->bias.grad(), state->forward.grad_bias));
 }
 
 TEST_F(TestLayerNormFixture, TestF32) { Test<float>(128); }

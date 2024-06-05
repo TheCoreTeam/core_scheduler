@@ -9,11 +9,33 @@
 #include "tensor_friend.h"
 
 namespace dllm::compute {
-TaskCompute Linear::init(std::shared_ptr<Linear::State> &state,
+OrderedDict<std::string, std::shared_ptr<Tensor>> Linear::State::parameters()
+    const {
+  OrderedDict<std::string, std::shared_ptr<Tensor>> dict;
+  dict.insert("weight", forward.weight);
+  if (args.bias) {
+    dict.insert("bias", forward.bias);
+  }
+  return dict;
+}
+
+OrderedDict<std::string, module::State::Increment> Linear::State::increments() {
+  OrderedDict<std::string, Increment> dict;
+  dict.insert("weight",
+              {forward.weight, forward.grad_weight, forward.optimizer_weight});
+  if (args.bias) {
+    dict.insert("bias",
+                {forward.bias, forward.grad_bias, forward.optimizer_bias});
+  }
+  return dict;
+}
+
+TaskCompute Linear::init(std::shared_ptr<State> &state,
                          const int64_t in_futures, const int64_t out_futures,
                          const bool has_bias,
                          const c10::optional<at::Device> device,
                          const c10::optional<at::ScalarType> dtype) {
+  DLLM_ASSERT_TRUE(has_bias == false, "we do not supprot bias now");
   at::TensorOptions options{};
   if (device.has_value()) {
     options = options.device(device.value());
@@ -22,34 +44,60 @@ TaskCompute Linear::init(std::shared_ptr<Linear::State> &state,
     options = options.dtype(dtype.value());
   }
 
-  auto weight = Tensor::create();
-  auto bias = Tensor::create();
+  TaskCompute task;
 
-  auto task = TaskCompute{
-      [=, weight = weight, bias = bias](const ContextCompute *context) mutable {
-        DLLM_NVTX_RANGE_FN("dllm::compute::Linear::init");
-        const auto weight_ = torch::empty(weight->sizes(), options);
-        DLLM_EXTRACT_TENSOR(weight) = weight_;
-        const auto bias_ =
-            has_bias ? torch::empty(bias->sizes(), options) : torch::Tensor{};
-        DLLM_EXTRACT_TENSOR(bias) = bias_;
-        torch::nn::init::kaiming_uniform_(DLLM_EXTRACT_TENSOR(weight),
-                                          std::sqrt(5));
-        CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
-        weight.reset();
-        bias.reset();
-      }};
+  if (has_bias) {
+    auto weight = Tensor::create();
+    auto bias = Tensor::create();
 
-  const TaskFuture future = task.get_future();
-  weight->resetFuture(future);
-  bias->resetFuture(future);
-  // size
-  weight->sizes() = IntArray{out_futures, in_futures};
-  bias->sizes() = has_bias ? IntArray{out_futures} : IntArray{0};
-  state = std::make_shared<State>(
-      State::Forward{std::move(weight), std::move(bias)}, State::Backward{},
-      State::Args{});
+    task = TaskCompute{[=, weight = weight,
+                        bias = bias](const ContextCompute *context) mutable {
+      DLLM_NVTX_RANGE_FN("dllm::compute::Linear::init");
+      const auto weight_ = torch::empty(weight->sizes(), options);
+      DLLM_EXTRACT_TENSOR(weight) = weight_;
+      const auto bias_ = torch::empty(bias->sizes(), options);
+      DLLM_EXTRACT_TENSOR(bias) = bias_;
+      torch::nn::init::kaiming_uniform_(DLLM_EXTRACT_TENSOR(weight),
+                                        std::sqrt(5));
+      auto [fan_in, fan_out] = torch::nn::init::_calculate_fan_in_and_fan_out(
+          DLLM_EXTRACT_TENSOR(weight));
+      const auto bound = 1 / std::sqrt(fan_in);
+      torch::nn::init::uniform_(DLLM_EXTRACT_TENSOR(bias), -bound, bound);
+      CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
+      weight.reset();
+      bias.reset();
+    }};
 
+    const TaskFuture future = task.get_future();
+    weight->resetFuture(future);
+    bias->resetFuture(future);
+    // size
+    weight->sizes() = IntArray{out_futures, in_futures};
+    bias->sizes() = IntArray{out_futures};
+    state = std::make_shared<State>(
+        State::Forward{std::move(weight), std::move(bias)}, State::Backward{},
+        State::Args{has_bias});
+  } else {
+    auto weight = Tensor::create();
+
+    task = TaskCompute{
+        [=, weight = weight](const ContextCompute *context) mutable {
+          DLLM_NVTX_RANGE_FN("dllm::compute::Linear::init");
+          const auto weight_ = torch::empty(weight->sizes(), options);
+          DLLM_EXTRACT_TENSOR(weight) = weight_;
+          torch::nn::init::kaiming_uniform_(DLLM_EXTRACT_TENSOR(weight),
+                                            std::sqrt(5));
+          CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
+          weight.reset();
+        }};
+
+    const TaskFuture future = task.get_future();
+    weight->resetFuture(future);
+    // size
+    weight->sizes() = IntArray{out_futures, in_futures};
+    state = std::make_shared<State>(State::Forward{std::move(weight)},
+                                    State::Backward{}, State::Args{has_bias});
+  }
   return task;
 }
 
@@ -122,6 +170,14 @@ TaskCompute Linear::backwardInput(
 TaskCompute Linear::backwardParameter(
     const std::shared_ptr<State> &state,
     const std::shared_ptr<const ReadOnlyTensor> &grad_output) {
+  if (state->forward.grad_weight == nullptr) {
+    state->forward.grad_weight = Tensor::create();
+  }
+  if (state->args.bias) {
+    if (state->forward.grad_bias == nullptr) {
+      state->forward.grad_bias = Tensor::create();
+    }
+  }
   auto task =
       TaskCompute{[dweight = state->forward.grad_weight,
                    input = state->backward.input, grad_output = grad_output,

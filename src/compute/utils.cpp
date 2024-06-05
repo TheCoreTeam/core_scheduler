@@ -100,6 +100,7 @@ TaskCompute arange(const std::shared_ptr<Tensor> &tensor,
   tensor->resetFuture(future);
   // size
   tensor->sizes() = IntArray{(end.toLong() - start.toLong())};
+  tensor->options() = options;
   return task;
 }
 
@@ -122,6 +123,7 @@ TaskCompute arange(const std::shared_ptr<Tensor> &tensor,
   tensor->resetFuture(future);
   // size
   tensor->sizes() = IntArray{(end.toLong() - start.toLong()) / step.toLong()};
+  tensor->options() = options;
   return task;
 }
 
@@ -144,6 +146,7 @@ TaskCompute randint(const std::shared_ptr<Tensor> &tensor, const int64_t low,
   tensor->resetFuture(future);
   // size
   tensor->sizes() = size;
+  tensor->options() = options;
   return task;
 }
 
@@ -162,7 +165,9 @@ TaskCompute empty(const std::shared_ptr<Tensor> &tensor,
       }};
   const TaskFuture future = task.get_future();
   tensor->resetFuture(future);
+  // size
   tensor->sizes() = size;
+  tensor->options() = options;
   return task;
 }
 
@@ -186,6 +191,7 @@ TaskCompute empty_like(const std::shared_ptr<Tensor> &dst,
   src->resetFuture(future);
   // size
   dst->sizes() = src->sizes();
+  dst->options() = src->options();
   return task;
 }
 
@@ -205,6 +211,7 @@ TaskCompute ones(const std::shared_ptr<Tensor> &tensor, const IntArrayRef &size,
   const TaskFuture future = task.get_future();
   tensor->resetFuture(future);
   tensor->sizes() = size;
+  tensor->options() = options;
   return task;
 }
 
@@ -228,6 +235,7 @@ TaskCompute ones_like(const std::shared_ptr<Tensor> &dst,
   src->resetFuture(future);
   // size
   dst->sizes() = src->sizes();
+  dst->options() = src->options();
   return task;
 }
 
@@ -248,6 +256,7 @@ TaskCompute zeros(const std::shared_ptr<Tensor> &tensor,
   tensor->resetFuture(future);
   // size
   tensor->sizes() = size;
+  tensor->options() = options;
   return task;
 }
 
@@ -271,6 +280,7 @@ TaskCompute zeros_like(const std::shared_ptr<Tensor> &dst,
   src->resetFuture(future);
   // size
   dst->sizes() = src->sizes();
+  dst->options() = src->options();
   return task;
 }
 
@@ -291,6 +301,7 @@ TaskCompute rand(const std::shared_ptr<Tensor> &tensor, const IntArrayRef &size,
   tensor->resetFuture(future);
   // size
   tensor->sizes() = size;
+  tensor->options() = options;
   return task;
 }
 
@@ -314,6 +325,7 @@ TaskCompute rand_like(const std::shared_ptr<Tensor> &dst,
   src->resetFuture(future);
   // size
   dst->sizes() = src->sizes();
+  dst->options() = src->options();
   return task;
 }
 
@@ -334,6 +346,7 @@ TaskCompute randn(const std::shared_ptr<Tensor> &tensor,
   tensor->resetFuture(future);
   // size
   tensor->sizes() = size;
+  tensor->options() = options;
   return task;
 }
 
@@ -357,6 +370,7 @@ TaskCompute randn_like(const std::shared_ptr<Tensor> &dst,
   src->resetFuture(future);
   // size
   dst->sizes() = src->sizes();
+  dst->options() = src->options();
   return task;
 }
 
@@ -375,6 +389,7 @@ TaskCompute split(std::vector<std::shared_ptr<const ReadOnlyTensor>> &output,
     auto pNew = TensorFriend::create(futurePtr);
     // size
     pNew->sizes() = input_size;
+    pNew->options() = src->options();
     outputNew.push_back(pNew);
     p = std::move(pNew);
   }
@@ -458,6 +473,7 @@ TaskCompute view(const std::shared_ptr<Tensor> &output,
     return resolvedShape;
   };
   output->sizes() = toNewShape(input->sizes(), size);
+  output->options() = input->options();
   return task;
 }
 
@@ -485,6 +501,7 @@ TaskCompute broadcast_to(const std::shared_ptr<Tensor> &output,
   output->resetFuture(future);
   // size
   output->sizes() = size;
+  output->options() = input->options();
   return task;
 }
 
@@ -533,6 +550,7 @@ TaskCompute cat(const std::shared_ptr<Tensor> &output,
     }
     return size;
   }();
+  output->options() = input[0]->options();
   return task;
 }
 }  // namespace dllm::compute::Utils

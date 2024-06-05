@@ -51,15 +51,15 @@ void TestDLLMAdamW::TestRoutine(const int size) {
   const torch::Dtype dtype = TypeToTorch<Element>::type;
   const auto option = torch::TensorOptions().dtype(dtype).device(device);
   torch::manual_seed(1);
-  std::shared_ptr<dllm::optimizer::AdamW<false>::State> state;
-  {
-    auto task = dllm::optimizer::AdamW<false>::init(
-        state, {size}, lr, beta1, beta2, eps, weight_decay, t);
-    tp.submit(std::move(task));
-  }
   auto x = dllm::Tensor::create();
   {
     auto task = dllm::compute::Utils::rand(x, {size}, option);
+    tp.submit(std::move(task));
+  }
+  std::shared_ptr<dllm::optimizer::AdamW::State> state;
+  {
+    auto task = dllm::optimizer::AdamW::init(state, x, lr, beta1, beta2, eps,
+                                             weight_decay, false, t);
     tp.submit(std::move(task));
   }
   auto dx = dllm::Tensor::create();
@@ -68,7 +68,7 @@ void TestDLLMAdamW::TestRoutine(const int size) {
     tp.submit(std::move(task));
   }
   {
-    auto task = dllm::optimizer::AdamW<false>::step(state, x, dx);
+    auto task = dllm::optimizer::AdamW::step(state, x, dx);
     tp.submit(std::move(task));
   }
   at::Tensor x_torch, dx_torch;
@@ -95,8 +95,8 @@ void TestDLLMAdamW::TestRoutine(const int size) {
   x_torch = x_torch - lr * m_hat / (v_hat.sqrt() + eps);
 
   ASSERT_TRUE(torch::allclose(x_torch, x));
-  ASSERT_TRUE(torch::allclose(m_torch, state->m));
-  ASSERT_TRUE(torch::allclose(v_torch, state->v));
+  ASSERT_TRUE(torch::allclose(m_torch, state->tensors.m));
+  ASSERT_TRUE(torch::allclose(v_torch, state->tensors.v));
 }
 
 TEST_F(TestDLLMAdamW, TestF32_128) { TestRoutine<float>(128); }

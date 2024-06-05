@@ -1,13 +1,13 @@
 #pragma once
 #include <atomic>
-#include <barrier>
 #include <condition_variable>
 #include <future>
+#include <latch>
 #include <mutex>
 #include <queue>
 #include <thread>
 
-#include "threading/context_compute.h"
+// ReSharper disable once CppUnusedIncludeDirective
 #include "threading/submit_task_macro.h"
 #include "threading/task_compute.h"
 
@@ -26,8 +26,8 @@ struct ThreadPoolCompute {
   void submit(const TaskCompute &task) = delete;
 
  private:
-  std::barrier<> barrier_;
-  std::vector<std::thread> threadVector{};
+  std::latch latch_;
+  std::vector<std::jthread> threadVector{};
   std::queue<TaskCompute> taskQueue{};
   std::mutex queueMutex{};
   std::condition_variable cv{};

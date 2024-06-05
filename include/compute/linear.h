@@ -1,21 +1,33 @@
 #pragma once
+#include "module/state.h"
 #include "tensor.h"
 #include "threading/task_compute.h"
 
 namespace dllm::compute {
 struct Linear {
-  struct State {
+  struct State final : module::State {
     struct Forward {
       std::shared_ptr<Tensor> weight;
-      std::shared_ptr<Tensor> bias;
-      std::shared_ptr<Tensor> grad_weight = Tensor::create();
-      std::shared_ptr<Tensor> grad_bias = Tensor::create();
+      std::shared_ptr<Tensor> bias = nullptr;
+      std::shared_ptr<Tensor> grad_weight = nullptr;
+      std::shared_ptr<Tensor> grad_bias = nullptr;
+      std::shared_ptr<module::OptimizerState> optimizer_weight = nullptr;
+      std::shared_ptr<module::OptimizerState> optimizer_bias = nullptr;
     } forward;
     struct Backward {
       std::shared_ptr<const ReadOnlyTensor> input = nullptr;
     } backward;
     struct Args {
+      const bool bias;
     } args;
+
+    State(const Forward &forward, const Backward &backward, const Args &args)
+        : forward{forward}, backward{backward}, args{args} {}
+
+    [[nodiscard]] OrderedDict<std::string, std::shared_ptr<Tensor>> parameters()
+        const override;
+
+    [[nodiscard]] OrderedDict<std::string, Increment> increments() override;
   };
 
   static TaskCompute init(std::shared_ptr<State> &state, int64_t in_futures,

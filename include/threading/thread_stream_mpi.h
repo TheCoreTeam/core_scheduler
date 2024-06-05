@@ -1,15 +1,16 @@
 #pragma once
 
 #include <atomic>
-#include <barrier>
 #include <condition_variable>
 #include <future>
+#include <latch>
 #include <mutex>
 #include <optional>
 #include <queue>
 #include <thread>
 
 #include "threading/context_mpi.h"
+// ReSharper disable once CppUnusedIncludeDirective
 #include "threading/submit_task_macro.h"
 #include "threading/task_mpi.h"
 
@@ -30,12 +31,12 @@ struct ThreadStreamMpi {
 
  private:
   const ContextMpi context_;
-  std::barrier<> barrier_;
+  std::latch latch_;
   std::queue<TaskMpi> taskQueue{};
   std::mutex queueMutex{};
   std::condition_variable cv{};
   std::mutex cvMutex{};
   std::atomic<bool> shutDown{false};
-  std::thread thread{};
+  std::jthread thread{};
 };
 }  // namespace dllm

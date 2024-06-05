@@ -55,6 +55,10 @@ struct ReadOnlyTensor {
     future_->rFuture = future;
   }
 
+  [[nodiscard]] const TensorOptions &options() const { return options_; }
+
+  [[nodiscard]] TensorOptions &options() { return options_; }
+
   [[nodiscard]] IntArray &sizes() { return sizes_; }
 
   [[nodiscard]] const IntArray &sizes() const { return sizes_; }
@@ -92,6 +96,8 @@ struct ReadOnlyTensor {
   std::shared_ptr<TensorFuture> future_{};
 
   IntArray sizes_{0};
+
+  TensorOptions options_;
 
 #ifdef DLLM_ENABLE_INTERNAL_BUILD
   friend TensorFriend;

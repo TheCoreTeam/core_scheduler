@@ -16,7 +16,7 @@
 
 namespace dllm {
 namespace {
-void setThreadAffinity(std::thread &th, const int coreId) {
+void setThreadAffinity(std::jthread &th, const int coreId) {
   cpu_set_t cpuset;
   CPU_ZERO(&cpuset);
   CPU_SET(coreId, &cpuset);
@@ -29,7 +29,7 @@ void setThreadAffinity(std::thread &th, const int coreId) {
 void threadTask(const MPI_Comm mpiComm, const int deviceRank,
                 std::queue<TaskNccl> *taskQueue, std::mutex *queueMutex,
                 std::condition_variable *cv, std::mutex *cvMutex,
-                const std::atomic<bool> *shutDown, std::barrier<> *barrier) {
+                const std::atomic<bool> *shutDown, std::latch *barrier) {
   barrier->arrive_and_wait();
   ContextNccl context;
   {
@@ -133,12 +133,12 @@ ThreadStreamNccl::ThreadStreamNccl(const MPI_Comm mpiComm, const int deviceRank,
         MPI_Comm_rank(mpiComm, &rank);
         return rank;
       }()},
-      barrier_{2},
+      latch_{2},
       thread{threadTask, mpiComm,  deviceRank, &taskQueue, &queueMutex,
-             &cv,        &cvMutex, &shutDown,  &barrier_} {
+             &cv,        &cvMutex, &shutDown,  &latch_} {
   if (bindingMap.has_value()) {
     setThreadAffinity(thread, bindingMap.value());
   }
-  barrier_.arrive_and_wait();
+  latch_.arrive_and_wait();
 }
 }  // namespace dllm

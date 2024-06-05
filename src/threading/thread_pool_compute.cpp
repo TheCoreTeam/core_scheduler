@@ -11,7 +11,7 @@
 
 namespace dllm {
 namespace {
-void setThreadAffinity(std::thread &th, const int coreId) {
+void setThreadAffinity(std::jthread &th, const int coreId) {
   cpu_set_t cpuset;
   CPU_ZERO(&cpuset);
   CPU_SET(coreId, &cpuset);
@@ -24,7 +24,7 @@ void setThreadAffinity(std::thread &th, const int coreId) {
 void threadTask(const int localRank, std::queue<TaskCompute> *taskQueue,
                 std::mutex *queueMutex, std::condition_variable *cv,
                 std::mutex *cvMutex, const std::atomic<bool> *shutDown,
-                std::barrier<> *barrier) {
+                std::latch *barrier) {
   ContextCompute context{.deviceRank = localRank};
   barrier->arrive_and_wait();
   CHECK_CUDART(cudaSetDevice(localRank));
@@ -100,7 +100,7 @@ void ThreadPoolCompute::submit(TaskCompute &&task) {
 
 ThreadPoolCompute::ThreadPoolCompute(const int localRank, const int threadNum,
                                      const std::vector<int> &bindingMap)
-    : barrier_{threadNum + 1} {
+    : latch_{threadNum + 1} {
   DLLM_ASSERT_TRUE(threadNum > 0, "Wrong thread num");
   DLLM_ASSERT_TRUE(bindingMap.empty() ||
                        bindingMap.size() == static_cast<std::size_t>(threadNum),
@@ -108,13 +108,13 @@ ThreadPoolCompute::ThreadPoolCompute(const int localRank, const int threadNum,
   threadVector.reserve(threadNum);
   for (int i = 0; i < threadNum; ++i) {
     threadVector.emplace_back(threadTask, localRank, &taskQueue, &queueMutex,
-                              &cv, &cvMutex, &shutDown, &barrier_);
+                              &cv, &cvMutex, &shutDown, &latch_);
   }
   if (!bindingMap.empty()) {
     for (int i = 0; i < threadNum; ++i) {
       setThreadAffinity(threadVector[i], bindingMap[i]);
     }
   }
-  barrier_.arrive_and_wait();
+  latch_.arrive_and_wait();
 }
 }  // namespace dllm

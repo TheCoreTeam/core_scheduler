@@ -10,7 +10,7 @@
 
 namespace dllm::dataset {
 namespace {
-void setThreadAffinity(std::thread &th, const int coreId) {
+void setThreadAffinity(std::jthread &th, const int coreId) {
   cpu_set_t cpuset;
   CPU_ZERO(&cpuset);
   CPU_SET(coreId, &cpuset);
