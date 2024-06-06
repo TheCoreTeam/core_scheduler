@@ -17,7 +17,8 @@ void stepKernel(cudaStream_t stream, const AdamW::State::Options &options,
                 const std::shared_ptr<Tensor> &v,
                 const std::shared_ptr<const ReadOnlyTensor> &dw);
 
-void stepKernelAmsgrad(cudaStream_t stream, const AdamW::State::Options &options,
+void stepKernelAmsgrad(cudaStream_t stream,
+                       const AdamW::State::Options &options,
                        const std::shared_ptr<Tensor> &w,
                        const std::shared_ptr<Tensor> &m,
                        const std::shared_ptr<Tensor> &v,
