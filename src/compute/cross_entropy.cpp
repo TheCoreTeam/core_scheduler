@@ -140,7 +140,6 @@ TaskCompute CrossEntropy::backward(const std::shared_ptr<State> &state,
   state->backward.total_weight.reset();
   state->backward.target.reset();
   state->backward.loss.reset();
-  state->forward.weight.reset();
   return task;
 }
 }  // namespace dllm::compute
