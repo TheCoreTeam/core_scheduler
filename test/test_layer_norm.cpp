@@ -53,8 +53,12 @@ void TestLayerNormFixture::Test(const int size) {
   auto dx = dllm::Tensor::create();
   auto y = dllm::Tensor::create();
   auto dy = dllm::Tensor::create();
-  DLLM_SUBMIT_TASK(tp, dllm::compute::LayerNorm::init(
-                           state, {3 * size}, 1e-5, true, true, device, dtype));
+  DLLM_SUBMIT_TASK(
+      tp,
+      dllm::compute::LayerNorm::init(
+          state,
+          dllm::compute::LayerNorm::Options{{3 * size}}.device(device).dtype(
+              dtype)));
   DLLM_SUBMIT_TASK(
       tp, dllm::compute::Utils::rand(x, {size, 2 * size, 3 * size}, option));
   DLLM_SUBMIT_TASK(tp, dllm::compute::LayerNorm::forward(state, y, x));

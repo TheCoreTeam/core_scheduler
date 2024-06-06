@@ -70,7 +70,9 @@ void TestT(dllm::ThreadPoolCompute& tp) {
       std::make_shared<dllm::compute::ScaledDotProductFlashAttention::State>();
   {
     auto task = dllm::compute::ScaledDotProductFlashAttention::init(
-        state, {}, true, {}, scale);
+        state, dllm::compute::ScaledDotProductFlashAttention::Options{}
+                   .is_causal(true)
+                   .scale(scale));
     tp.submit(std::move(task));
   }
   auto qview = dllm::Tensor::create();

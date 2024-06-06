@@ -64,8 +64,9 @@ void TestEmbedding::TestRoutine(const double tol_forward,
     tp.submit(std::move(task));
   }
   {
-    auto task = dllm::compute::Embedding::init(state, vocab, d, {}, {}, {}, {},
-                                               {}, device, dtype);
+    auto task = dllm::compute::Embedding::init(
+        state, dllm::compute::Embedding::Options(vocab, d).device(device).dtype(
+                   dtype));
     tp.submit(std::move(task));
   }
 

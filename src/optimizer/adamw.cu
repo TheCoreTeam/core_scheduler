@@ -74,7 +74,7 @@ __global__ void step(T *__restrict w, T *__restrict m, T *__restrict v,
 }
 }  // namespace
 
-void stepKernel(cudaStream_t stream, const AdamW::State::Args &args,
+void stepKernel(cudaStream_t stream, const AdamW::State::Options &options,
                 const std::shared_ptr<Tensor> &w,
                 const std::shared_ptr<Tensor> &m,
                 const std::shared_ptr<Tensor> &v,
@@ -97,14 +97,15 @@ void stepKernel(cudaStream_t stream, const AdamW::State::Args &args,
             DLLM_EXTRACT_TENSOR(w).data_ptr<T>(),
             DLLM_EXTRACT_TENSOR(m).data_ptr<T>(),
             DLLM_EXTRACT_TENSOR(v).data_ptr<T>(),
-            DLLM_EXTRACT_TENSOR(dw).data_ptr<T>(), args.lr, args.beta1,
-            args.beta2, 1. / (1. - std::pow(args.beta1, args.t)),
-            1. / (1. - std::pow(args.beta2, args.t)), args.eps,
-            args.weight_decay, size);
+            DLLM_EXTRACT_TENSOR(dw).data_ptr<T>(), options.lr, options.beta1,
+            options.beta2, 1. / (1. - std::pow(options.beta1, options.t)),
+            1. / (1. - std::pow(options.beta2, options.t)), options.eps,
+            options.weight_decay, size);
       });
 }
 
-void stepKernelAmsgrad(cudaStream_t stream, const AdamW::State::Args &args,
+void stepKernelAmsgrad(cudaStream_t stream,
+                       const AdamW::State::Options &options,
                        const std::shared_ptr<Tensor> &w,
                        const std::shared_ptr<Tensor> &m,
                        const std::shared_ptr<Tensor> &v,
@@ -129,10 +130,10 @@ void stepKernelAmsgrad(cudaStream_t stream, const AdamW::State::Args &args,
             DLLM_EXTRACT_TENSOR(m).data_ptr<T>(),
             DLLM_EXTRACT_TENSOR(v).data_ptr<T>(),
             DLLM_EXTRACT_TENSOR(vMax).data_ptr<T>(),
-            DLLM_EXTRACT_TENSOR(dw).data_ptr<T>(), args.lr, args.beta1,
-            args.beta2, 1. / (1. - std::pow(args.beta1, args.t)),
-            1. / (1. - std::pow(args.beta2, args.t)), args.eps,
-            args.weight_decay, size);
+            DLLM_EXTRACT_TENSOR(dw).data_ptr<T>(), options.lr, options.beta1,
+            options.beta2, 1. / (1. - std::pow(options.beta1, options.t)),
+            1. / (1. - std::pow(options.beta2, options.t)), options.eps,
+            options.weight_decay, size);
       });
 }
 }  // namespace dllm::optimizer

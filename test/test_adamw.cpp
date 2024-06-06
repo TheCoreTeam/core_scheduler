@@ -58,8 +58,8 @@ void TestDLLMAdamW::TestRoutine(const int size) {
   }
   std::shared_ptr<dllm::optimizer::AdamW::State> state;
   {
-    auto task = dllm::optimizer::AdamW::init(state, x, lr, beta1, beta2, eps,
-                                             weight_decay, false, t);
+    auto task = dllm::optimizer::AdamW::init(
+        state, x, {lr, beta1, beta2, eps, weight_decay, false, t});
     tp.submit(std::move(task));
   }
   auto dx = dllm::Tensor::create();

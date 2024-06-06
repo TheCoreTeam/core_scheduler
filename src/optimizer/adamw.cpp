@@ -11,13 +11,14 @@
 #include "threading/thread_pool_compute.h"
 
 namespace dllm::optimizer {
-void stepKernel(cudaStream_t stream, const AdamW::State::Args &args,
+void stepKernel(cudaStream_t stream, const AdamW::State::Options &options,
                 const std::shared_ptr<Tensor> &w,
                 const std::shared_ptr<Tensor> &m,
                 const std::shared_ptr<Tensor> &v,
                 const std::shared_ptr<const ReadOnlyTensor> &dw);
 
-void stepKernelAmsgrad(cudaStream_t stream, const AdamW::State::Args &args,
+void stepKernelAmsgrad(cudaStream_t stream,
+                       const AdamW::State::Options &options,
                        const std::shared_ptr<Tensor> &w,
                        const std::shared_ptr<Tensor> &m,
                        const std::shared_ptr<Tensor> &v,
@@ -25,14 +26,11 @@ void stepKernelAmsgrad(cudaStream_t stream, const AdamW::State::Args &args,
                        const std::shared_ptr<const ReadOnlyTensor> &dw);
 
 void AdamW::init(ThreadPoolCompute &tp, const module::Module &module,
-                 const double lr, const double beta1, const double beta2,
-                 const double eps, const double weight_decay,
-                 const bool amsgrad, const long t) {
+                 const Options &options) {
   for (auto &kvState : module.named_states()) {
     for (auto &kvIncrement : kvState.value()->increments()) {
       std::shared_ptr<State> state;
-      tp.submit(init(state, kvIncrement->parameter, lr, beta1, beta2, eps,
-                     weight_decay, amsgrad, t));
+      tp.submit(init(state, kvIncrement->parameter, options));
       kvIncrement->optimizerState = state;
     }
   }
@@ -51,20 +49,17 @@ void AdamW::step(ThreadPoolCompute &tp, const module::Module &module) {
 
 TaskCompute AdamW::init(std::shared_ptr<State> &state,
                         const std::shared_ptr<const ReadOnlyTensor> &parameter,
-                        const double lr, const double beta1, const double beta2,
-                        const double eps, const double weight_decay,
-                        const bool amsgrad, const long t) {
+                        const Options &options) {
   auto m = Tensor::create();
   auto v = Tensor::create();
   m->sizes() = parameter->sizes();
   v->sizes() = parameter->sizes();
   TaskCompute task;
-  if (amsgrad) {
+  if (options.amsgrad) {
     auto vMax = Tensor::create();
     vMax->sizes() = parameter->sizes();
-    state = std::make_shared<State>(
-        State::Tensors{m, v, vMax},
-        State::Args{lr, beta1, beta2, eps, weight_decay, amsgrad, t});
+    state = std::make_shared<State>(State::Tensors{m, v, vMax},
+                                    State::Options{options});
     task = TaskCompute{[parameter = parameter, m = m, v = v, vMax = vMax,
                         parameterFuture = parameter->future()](
                            const ContextCompute *context) mutable {
@@ -84,9 +79,8 @@ TaskCompute AdamW::init(std::shared_ptr<State> &state,
     v->resetFuture(future);
     vMax->resetFuture(future);
   } else {
-    state = std::make_shared<State>(
-        State::Tensors{m, v},
-        State::Args{lr, beta1, beta2, eps, weight_decay, amsgrad, t});
+    state =
+        std::make_shared<State>(State::Tensors{m, v}, State::Options{options});
     task = TaskCompute{[parameter = parameter, m = m, v = v,
                         parameterFuture = parameter->future()](
                            const ContextCompute *context) mutable {
@@ -108,15 +102,15 @@ TaskCompute AdamW::init(std::shared_ptr<State> &state,
 TaskCompute AdamW::step(const std::shared_ptr<State> &state,
                         const std::shared_ptr<Tensor> &w,
                         const std::shared_ptr<const ReadOnlyTensor> &dw) {
-  state->args.t++;
+  state->options.t++;
   TaskCompute task;
-  if (state->args.amsgrad) {
+  if (state->options.amsgrad) {
     const auto m = std::reinterpret_pointer_cast<Tensor>(state->tensors.m);
     const auto v = std::reinterpret_pointer_cast<Tensor>(state->tensors.v);
     const auto vMax =
         std::reinterpret_pointer_cast<Tensor>(state->tensors.vMax);
     task = TaskCompute{
-        [args = state->args, m = m, v = v, vMax = vMax, w = w, dw = dw,
+        [options = state->options, m = m, v = v, vMax = vMax, w = w, dw = dw,
          wFuture = w->future(), mFuture = m->future(), vFuture = v->future(),
          vMaxFuture = vMax->future(),
          dwFuture = dw->future()](const ContextCompute *context) mutable {
@@ -126,7 +120,7 @@ TaskCompute AdamW::step(const std::shared_ptr<State> &state,
           util::FutureGuard vGuard{vFuture};
           util::FutureGuard vMaxGuard{vMaxFuture};
           util::FutureGuard dwGuard{dwFuture};
-          stepKernelAmsgrad(context->cudaStream, args, w, m, v, vMax, dw);
+          stepKernelAmsgrad(context->cudaStream, options, w, m, v, vMax, dw);
           CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
           m.reset();
           v.reset();
@@ -144,7 +138,7 @@ TaskCompute AdamW::step(const std::shared_ptr<State> &state,
     const auto m = std::reinterpret_pointer_cast<Tensor>(state->tensors.m);
     const auto v = std::reinterpret_pointer_cast<Tensor>(state->tensors.v);
     task = TaskCompute{
-        [args = state->args, m = m, v = v, w = w, dw = dw,
+        [options = state->options, m = m, v = v, w = w, dw = dw,
          wFuture = w->future(), mFuture = m->future(), vFuture = v->future(),
          dwFuture = dw->future()](const ContextCompute *context) mutable {
           DLLM_NVTX_RANGE_FN("dllm::optimizer::AdamW<true>::step");
@@ -152,7 +146,7 @@ TaskCompute AdamW::step(const std::shared_ptr<State> &state,
           util::FutureGuard mGuard{mFuture};
           util::FutureGuard vGuard{vFuture};
           util::FutureGuard dwGuard{dwFuture};
-          stepKernel(context->cudaStream, args, w, m, v, dw);
+          stepKernel(context->cudaStream, options, w, m, v, dw);
           CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
           m.reset();
           v.reset();

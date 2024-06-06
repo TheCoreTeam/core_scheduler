@@ -1,4 +1,5 @@
 #pragma once
+#include "arg.h"
 #include "module/state.h"
 #include "tensor.h"
 #include "threading/task_compute.h"
@@ -30,10 +31,18 @@ struct Linear {
     [[nodiscard]] OrderedDict<std::string, Increment> increments() override;
   };
 
-  static TaskCompute init(std::shared_ptr<State> &state, int64_t in_futures,
-                          int64_t out_futures, bool bias = true,
-                          c10::optional<at::Device> device = {},
-                          c10::optional<at::ScalarType> dtype = {});
+  struct Options {
+    Options(const int64_t in_futures, const int64_t out_futures)
+        : in_futures_(in_futures), out_futures_(out_futures) {}
+    DLLM_ARG(int64_t, in_futures);
+    DLLM_ARG(int64_t, out_futures);
+    DLLM_ARG(bool, bias) = true;
+    DLLM_ARG(c10::optional<at::Device>, device) = {};
+    DLLM_ARG(c10::optional<at::ScalarType>, dtype) = {};
+  };
+
+  static TaskCompute init(std::shared_ptr<State> &state,
+                          const Options &options);
 
   static TaskCompute forward(
       const std::shared_ptr<State> &state,

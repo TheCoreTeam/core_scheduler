@@ -35,27 +35,26 @@ LayerNorm::State::increments() {
 }
 
 TaskCompute LayerNorm::init(std::shared_ptr<State>& state,
-                            IntArray normalized_shape, const double eps,
-                            const bool elementwise_affine, const bool use_bias,
-                            const c10::optional<at::Device> device,
-                            const c10::optional<at::ScalarType> dtype) {
-  DLLM_ASSERT_TRUE(elementwise_affine == true,
+                            const Options& options) {
+  DLLM_ASSERT_TRUE(options.elementwise_affine() == true,
                    "elementwise_affine must be enabled now");
   auto weight = Tensor::create();
   TaskCompute task;
-  if (use_bias) {
+  if (options.bias()) {
     auto bias = Tensor::create();
     task = TaskCompute{[=, weight = weight,
                         bias = bias](const ContextCompute* context) mutable {
-      at::TensorOptions options{};
-      if (device.has_value()) {
-        options = options.device(device);
+      at::TensorOptions tensorOptions{};
+      if (options.device().has_value()) {
+        tensorOptions = tensorOptions.device(options.device());
       }
-      if (dtype.has_value()) {
-        options = options.dtype(dtype);
+      if (options.dtype().has_value()) {
+        tensorOptions = tensorOptions.dtype(options.dtype());
       }
-      DLLM_EXTRACT_TENSOR(weight) = at::ones(normalized_shape, options);
-      DLLM_EXTRACT_TENSOR(bias) = at::zeros(normalized_shape, options);
+      DLLM_EXTRACT_TENSOR(weight) =
+          at::ones(options.normalized_shape(), tensorOptions);
+      DLLM_EXTRACT_TENSOR(bias) =
+          at::zeros(options.normalized_shape(), tensorOptions);
       CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
       weight.reset();
       bias.reset();
@@ -65,19 +64,22 @@ TaskCompute LayerNorm::init(std::shared_ptr<State>& state,
     bias->resetFuture(future);
     state = std::make_shared<State>(
         State::Forward{std::move(weight), std::move(bias)}, State::Backward{},
-        State::Args{normalized_shape, eps, elementwise_affine, use_bias});
+        State::Args{options.normalized_shape(), options.eps(),
+                    options.elementwise_affine(), options.bias()});
   } else {
+    // ReSharper disable once CppDFAUnreachableCode
     task =
-        TaskCompute{[=, normalized_shape = normalized_shape,
+        TaskCompute{[=, normalized_shape = options.normalized_shape(),
                      weight = weight](const ContextCompute* context) mutable {
-          at::TensorOptions options{};
-          if (device.has_value()) {
-            options = options.device(device);
+          at::TensorOptions tensorOptions{};
+          if (options.device().has_value()) {
+            tensorOptions = tensorOptions.device(options.device());
           }
-          if (dtype.has_value()) {
-            options = options.dtype(dtype);
+          if (options.dtype().has_value()) {
+            tensorOptions = tensorOptions.dtype(options.dtype());
           }
-          DLLM_EXTRACT_TENSOR(weight) = at::ones(normalized_shape, options);
+          DLLM_EXTRACT_TENSOR(weight) =
+              at::ones(normalized_shape, tensorOptions);
           CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
           weight.reset();
         }};
@@ -85,7 +87,8 @@ TaskCompute LayerNorm::init(std::shared_ptr<State>& state,
     weight->resetFuture(future);
     state = std::make_shared<State>(
         State::Forward{std::move(weight)}, State::Backward{},
-        State::Args{normalized_shape, eps, elementwise_affine, use_bias});
+        State::Args{options.normalized_shape(), options.eps(),
+                    options.elementwise_affine(), options.bias()});
   }
   return task;
 }

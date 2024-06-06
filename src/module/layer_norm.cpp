@@ -4,14 +4,9 @@
 
 namespace dllm::module {
 LayerNormImpl::LayerNormImpl(ThreadPoolCompute& tp,
-                             const IntArray& normalized_shape, const double eps,
-                             const bool elementwise_affine, const bool bias,
-                             const c10::optional<at::Device> device,
-                             const c10::optional<at::ScalarType> dtype) {
+                             const compute::LayerNorm::Options& options) {
   std::shared_ptr<compute::LayerNorm::State> state;
-  DLLM_SUBMIT_TASK(
-      tp, compute::LayerNorm::init(state, normalized_shape, eps,
-                                   elementwise_affine, bias, device, dtype));
+  DLLM_SUBMIT_TASK(tp, compute::LayerNorm::init(state, options));
   register_state("LayerNormState", state);
   state_ = state;
 }

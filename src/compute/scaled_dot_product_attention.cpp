@@ -9,13 +9,12 @@
 #include "tensor_friend.h"
 
 namespace dllm::compute {
-TaskCompute ScaledDotProductFlashAttention::init(
-    std::shared_ptr<State> &state, const double dropout_p, const bool is_causal,
-    const bool return_debug_mask /* This must be false! */,
-    const c10::optional<double> scale) {
+TaskCompute ScaledDotProductFlashAttention::init(std::shared_ptr<State> &state,
+                                                 const Options &options) {
   state = std::make_shared<State>(
       State::Forward{}, State::Backward{},
-      State::Args{dropout_p, is_causal, return_debug_mask, scale});
+      State::Args{options.dropout_p(), options.is_causal(),
+                  options.return_debug_mask(), options.scale()});
   return TaskCompute{[](const ContextCompute *) {}};
 }
 

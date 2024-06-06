@@ -20,32 +20,31 @@ struct AdamW {
       std::shared_ptr<Tensor> v;
       std::shared_ptr<Tensor> vMax = nullptr;
     } tensors;
-    struct Args {
-      const double lr;
-      const double beta1;
-      const double beta2;
-      const double eps;
-      const double weight_decay;
-      const bool amsgrad;
-      long t;
-    } args;
+    struct Options {
+      const double lr = 1e-3;
+      const double beta1 = 0.9;
+      const double beta2 = 0.999;
+      const double eps = 1e-8;
+      const double weight_decay = 1e-2;
+      const bool amsgrad = false;
+      long t = 0;
+    } options;
 
-    State(const Tensors &tensors, const Args &args)
-        : tensors{tensors}, args{args} {}
+    State(const Tensors &tensors, const Options &options)
+        : tensors{tensors}, options{options} {}
   };
 
+  using Options = State::Options;
+
   static void init(ThreadPoolCompute &tp, const module::Module &module,
-                   double lr = 1e-3, double beta1 = 0.9, double beta2 = 0.999,
-                   double eps = 1e-8, double weight_decay = 1e-2,
-                   bool amsgrad = false, long t = 0);
+                   const Options &options);
 
   static void step(ThreadPoolCompute &tp, const module::Module &module);
 
   static TaskCompute init(
       std::shared_ptr<State> &state,
-      const std::shared_ptr<const ReadOnlyTensor> &parameter, double lr = 1e-3,
-      double beta1 = 0.9, double beta2 = 0.999, double eps = 1e-8,
-      double weight_decay = 1e-2, bool amsgrad = false, long t = 0);
+      const std::shared_ptr<const ReadOnlyTensor> &parameter,
+      const Options &options);
 
   static TaskCompute step(const std::shared_ptr<State> &state,
                           const std::shared_ptr<Tensor> &w,
