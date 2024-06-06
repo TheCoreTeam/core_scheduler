@@ -172,6 +172,7 @@ TaskCompute ScaledDotProductFlashAttention::backward(
           query.reset();
           key.reset();
           value.reset();
+          out.reset();
           logsumexp.reset();
           cum_seq_q.reset();
           cum_seq_k.reset();
