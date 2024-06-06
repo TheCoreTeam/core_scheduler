@@ -9,34 +9,29 @@
 
 namespace dllm::compute {
 TaskCompute Embedding::init(std::shared_ptr<State> &state,
-                            int64_t num_embeddings, int64_t embedding_dim,
-                            c10::optional<int64_t> padding_idx,
-                            c10::optional<double> max_norm, double norm_type,
-                            bool scale_grad_by_freq, bool sparse,
-                            const c10::optional<at::Device> device,
-                            const c10::optional<at::ScalarType> dtype) {
-  if (padding_idx != c10::nullopt) {
-    if (*padding_idx > 0) {
-      TORCH_CHECK(*padding_idx < num_embeddings,
+                            const Options &options) {
+  int64_t padding_idx = -1;
+  if (options.padding_idx() != c10::nullopt) {
+    if (*options.padding_idx() > 0) {
+      TORCH_CHECK(*options.padding_idx() < options.num_embeddings(),
                   "Padding_idx must be within num_embeddings");
-    } else if (*padding_idx < 0) {
-      TORCH_CHECK(*padding_idx >= -num_embeddings,
+    } else if (*options.padding_idx() < 0) {
+      TORCH_CHECK(*options.padding_idx() >= -options.num_embeddings(),
                   "Padding_idx must be within num_embedding");
-      padding_idx = num_embeddings + *padding_idx;
+      padding_idx = options.num_embeddings() + *options.padding_idx();
     }
-  } else {
-    padding_idx = -1;
   }
 
-  TORCH_CHECK(max_norm == c10::nullopt)
+  TORCH_CHECK(options.max_norm() == c10::nullopt)
 
   auto weight = Tensor::create();
 
   auto task =
       TaskCompute{[=, weight = weight](const ContextCompute *context) mutable {
         DLLM_NVTX_RANGE_FN("dllm::compute::Embedding::init");
-        const auto weight_ = at::normal(0, 1, {num_embeddings, embedding_dim},
-                                        {}, dtype, {}, device, {});
+        const auto weight_ = at::normal(
+            0, 1, {options.num_embeddings(), options.embedding_dim()}, {},
+            options.dtype(), {}, options.device(), {});
         DLLM_EXTRACT_TENSOR(weight) = weight_;
         // if (max_norm != c10::nullopt) {
         //   input_ = input_.contiguous();
@@ -48,12 +43,13 @@ TaskCompute Embedding::init(std::shared_ptr<State> &state,
 
   const TaskFuture future = task.get_future();
   weight->resetFuture(future);
-  weight->sizes() = IntArray{num_embeddings, embedding_dim};
+  weight->sizes() = IntArray{options.num_embeddings(), options.embedding_dim()};
 
   state = std::make_shared<State>(
       State::Forward{std::move(weight)}, State::Backward{},
-      State::Args{num_embeddings, padding_idx.value(), max_norm, norm_type,
-                  scale_grad_by_freq, sparse});
+      State::Args{options.num_embeddings(), padding_idx, options.max_norm(),
+                  options.norm_type(), options.scale_grad_by_freq(),
+                  options.sparse()});
   return task;
 }
 

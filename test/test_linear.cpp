@@ -51,7 +51,10 @@ void TestThreadPoolComputeBackwardT(dllm::ThreadPoolCompute &threadPool) {
   }
   std::shared_ptr<dllm::compute::Linear::State> state;
   {
-    auto task = dllm::compute::Linear::init(state, k, n, false, device, dtype);
+    auto task = dllm::compute::Linear::init(
+        state,
+        dllm::compute::Linear::Options{k, n}.bias(false).device(device).dtype(
+            dtype));
     threadPool.submit(std::move(task));
   }
   {

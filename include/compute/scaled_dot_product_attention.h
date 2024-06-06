@@ -1,4 +1,5 @@
 #pragma once
+#include "arg.h"
 #include "tensor.h"
 #include "threading/task_compute.h"
 
@@ -24,18 +25,23 @@ struct ScaledDotProductFlashAttention {
       std::shared_ptr<const ReadOnlyTensor> philox_offset = nullptr;
     } backward;
     struct Args {
-      double dropout_p;
-      bool is_causal;
-      bool return_debug_mask;
-      c10::optional<double> scale;
+      const double dropout_p = 0;
+      const bool is_causal = false;
+      const bool return_debug_mask = false /* This must be false! */;
+      const c10::optional<double> scale = c10::nullopt;
     } args;
   };
 
-  static TaskCompute init(
-      std::shared_ptr<State> &state, double dropout_p = 0,
-      bool is_causal = false,
-      bool return_debug_mask = false /* This must be false! */,
-      c10::optional<double> scale = c10::nullopt);
+  struct Options {
+    Options() {}
+    DLLM_ARG(double, dropout_p) = 0;
+    DLLM_ARG(bool, is_causal) = false;
+    DLLM_ARG(bool, return_debug_mask) = false;
+    DLLM_ARG(c10::optional<double>, scale) = {};
+  };
+
+  static TaskCompute init(std::shared_ptr<State> &state,
+                          const Options &options = {});
 
   static TaskCompute forward(
       const std::shared_ptr<State> &state,

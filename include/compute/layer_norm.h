@@ -1,4 +1,5 @@
 #pragma once
+#include "arg.h"
 #include "module/state.h"
 #include "tensor.h"
 #include "threading/task_compute.h"
@@ -35,11 +36,19 @@ struct LayerNorm {
     [[nodiscard]] OrderedDict<std::string, Increment> increments() override;
   };
 
+  struct Options {
+    Options(IntArrayRef normalized_shape)
+        : normalized_shape_{normalized_shape} {}
+    DLLM_ARG(IntArray, normalized_shape);
+    DLLM_ARG(double, eps) = 1e-05;
+    DLLM_ARG(bool, elementwise_affine) = true;
+    DLLM_ARG(bool, bias) = true;
+    DLLM_ARG(c10::optional<at::Device>, device) = {};
+    DLLM_ARG(c10::optional<at::ScalarType>, dtype) = {};
+  };
+
   static TaskCompute init(std::shared_ptr<State> &state,
-                          IntArray normalized_shape, double eps = 1e-05,
-                          bool elementwise_affine = true, bool bias = true,
-                          c10::optional<at::Device> device = {},
-                          c10::optional<at::ScalarType> dtype = {});
+                          const Options &options);
 
   static TaskCompute forward(
       const std::shared_ptr<State> &state,

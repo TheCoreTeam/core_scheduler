@@ -1,4 +1,5 @@
 #pragma once
+#include "arg.h"
 #include "tensor.h"
 #include "threading/task_compute.h"
 
@@ -22,20 +23,31 @@ struct Embedding {
     } args;
   };
 
-  static TaskCompute init(std::shared_ptr<State> &state, int64_t num_embeddings,
-                          int64_t embedding_dim,
-                          c10::optional<int64_t> padding_idx,
-                          c10::optional<double> max_norm, double norm_type = 2.,
-                          bool scale_grad_by_freq = false, bool sparse = false,
-                          c10::optional<at::Device> device = {},
-                          c10::optional<at::ScalarType> dtype = {});
+  struct Options {
+    Options(const int64_t num_embeddings, const int64_t embedding_dim)
+        : num_embeddings_{num_embeddings}, embedding_dim_{embedding_dim} {}
+    DLLM_ARG(int64_t, num_embeddings);
+    DLLM_ARG(int64_t, embedding_dim);
+    DLLM_ARG(c10::optional<int64_t>, padding_idx) = {};
+    DLLM_ARG(c10::optional<double>, max_norm) = {};
+    DLLM_ARG(double, norm_type) = 2.;
+    DLLM_ARG(bool, scale_grad_by_freq) = false;
+    DLLM_ARG(bool, sparse) = false;
+    DLLM_ARG(c10::optional<at::Device>, device) = {};
+    DLLM_ARG(c10::optional<at::ScalarType>, dtype) = {};
+  };
 
-  static TaskCompute forward(const std::shared_ptr<State> &state,
-                             const std::shared_ptr<Tensor> &output,
-                             const std::shared_ptr<const ReadOnlyTensor> &indices);
+  static TaskCompute init(std::shared_ptr<State> &state,
+                          const Options &options);
 
-  static TaskCompute backward(const std::shared_ptr<State> &state,
-                              const std::shared_ptr<const ReadOnlyTensor> &grad_output);
+  static TaskCompute forward(
+      const std::shared_ptr<State> &state,
+      const std::shared_ptr<Tensor> &output,
+      const std::shared_ptr<const ReadOnlyTensor> &indices);
+
+  static TaskCompute backward(
+      const std::shared_ptr<State> &state,
+      const std::shared_ptr<const ReadOnlyTensor> &grad_output);
 };
 
 }  // namespace dllm::compute

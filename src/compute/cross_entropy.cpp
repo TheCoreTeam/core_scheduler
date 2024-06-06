@@ -9,15 +9,14 @@
 #include "tensor_friend.h"
 
 namespace dllm::compute {
-TaskCompute CrossEntropy::init(
-    std::shared_ptr<State> &state,
-    const std::shared_ptr<const ReadOnlyTensor> &weight,
-    const int64_t reduction, const int64_t ignore_index,
-    const double label_smoothing) {
-  DLLM_ASSERT_TRUE(label_smoothing == 0.0, "We do not support label_smoothing");
+TaskCompute CrossEntropy::init(std::shared_ptr<State> &state,
+                               const Options &options) {
+  DLLM_ASSERT_TRUE(options.label_smoothing() == 0.0,
+                   "We do not support label_smoothing");
   state = std::make_shared<State>(
-      State::Forward{weight}, State::Backward{},
-      State::Args{reduction, ignore_index, label_smoothing});
+      State::Forward{}, State::Backward{},
+      State::Args{options.reduction(), options.ignore_index(),
+                  options.label_smoothing()});
   return TaskCompute{[](const ContextCompute *) {}};
 }
 

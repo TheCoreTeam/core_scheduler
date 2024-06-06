@@ -31,31 +31,29 @@ OrderedDict<std::string, module::State::Increment> Linear::State::increments() {
 }
 
 TaskCompute Linear::init(std::shared_ptr<State> &state,
-                         const int64_t in_futures, const int64_t out_futures,
-                         const bool has_bias,
-                         const c10::optional<at::Device> device,
-                         const c10::optional<at::ScalarType> dtype) {
-  DLLM_ASSERT_TRUE(has_bias == false, "we do not supprot bias now");
-  at::TensorOptions options{};
-  if (device.has_value()) {
-    options = options.device(device.value());
+                         const Options &options) {
+  DLLM_ASSERT_TRUE(options.bias() == false, "we do not supprot bias now");
+  // ReSharper disable once CppDFAUnreachableCode
+  at::TensorOptions tensorOptions{};
+  if (options.device().has_value()) {
+    tensorOptions = tensorOptions.device(options.device().value());
   }
-  if (dtype.has_value()) {
-    options = options.dtype(dtype.value());
+  if (options.dtype().has_value()) {
+    tensorOptions = tensorOptions.dtype(options.dtype().value());
   }
 
   TaskCompute task;
 
-  if (has_bias) {
+  if (options.bias()) {
     auto weight = Tensor::create();
     auto bias = Tensor::create();
 
     task = TaskCompute{[=, weight = weight,
                         bias = bias](const ContextCompute *context) mutable {
       DLLM_NVTX_RANGE_FN("dllm::compute::Linear::init");
-      const auto weight_ = torch::empty(weight->sizes(), options);
+      const auto weight_ = torch::empty(weight->sizes(), tensorOptions);
       DLLM_EXTRACT_TENSOR(weight) = weight_;
-      const auto bias_ = torch::empty(bias->sizes(), options);
+      const auto bias_ = torch::empty(bias->sizes(), tensorOptions);
       DLLM_EXTRACT_TENSOR(bias) = bias_;
       torch::nn::init::kaiming_uniform_(DLLM_EXTRACT_TENSOR(weight),
                                         std::sqrt(5));
@@ -72,18 +70,18 @@ TaskCompute Linear::init(std::shared_ptr<State> &state,
     weight->resetFuture(future);
     bias->resetFuture(future);
     // size
-    weight->sizes() = IntArray{out_futures, in_futures};
-    bias->sizes() = IntArray{out_futures};
+    weight->sizes() = IntArray{options.out_futures(), options.in_futures()};
+    bias->sizes() = IntArray{options.out_futures()};
     state = std::make_shared<State>(
         State::Forward{std::move(weight), std::move(bias)}, State::Backward{},
-        State::Args{has_bias});
+        State::Args{options.bias()});
   } else {
     auto weight = Tensor::create();
 
     task = TaskCompute{
         [=, weight = weight](const ContextCompute *context) mutable {
           DLLM_NVTX_RANGE_FN("dllm::compute::Linear::init");
-          const auto weight_ = torch::empty(weight->sizes(), options);
+          const auto weight_ = torch::empty(weight->sizes(), tensorOptions);
           DLLM_EXTRACT_TENSOR(weight) = weight_;
           torch::nn::init::kaiming_uniform_(DLLM_EXTRACT_TENSOR(weight),
                                             std::sqrt(5));
@@ -94,9 +92,10 @@ TaskCompute Linear::init(std::shared_ptr<State> &state,
     const TaskFuture future = task.get_future();
     weight->resetFuture(future);
     // size
-    weight->sizes() = IntArray{out_futures, in_futures};
-    state = std::make_shared<State>(State::Forward{std::move(weight)},
-                                    State::Backward{}, State::Args{has_bias});
+    weight->sizes() = IntArray{options.out_futures(), options.in_futures()};
+    state =
+        std::make_shared<State>(State::Forward{std::move(weight)},
+                                State::Backward{}, State::Args{options.bias()});
   }
   return task;
 }

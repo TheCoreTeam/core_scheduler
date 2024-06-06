@@ -1,5 +1,6 @@
 #pragma once
 #include "ATen/core/Reduction.h"
+#include "arg.h"
 #include "tensor.h"
 #include "threading/task_compute.h"
 
@@ -7,7 +8,7 @@ namespace dllm::compute {
 struct CrossEntropy {
   struct State {
     struct Forward {
-      std::shared_ptr<const ReadOnlyTensor> weight;
+      std::shared_ptr<const ReadOnlyTensor> weight = Tensor::create();
     } forward;
     struct Backward {
       std::shared_ptr<const ReadOnlyTensor> total_weight = nullptr;
@@ -22,11 +23,15 @@ struct CrossEntropy {
     } args;
   };
 
-  static TaskCompute init(
-      std::shared_ptr<State> &state,
-      const std::shared_ptr<const ReadOnlyTensor> &weight = Tensor::create(),
-      int64_t reduction = at::Reduction::Mean, int64_t ignore_index = -100,
-      double label_smoothing = 0.0);
+  struct Options {
+    Options() {}
+    DLLM_ARG(at::Reduction::Reduction, reduction) = at::Reduction::Mean;
+    DLLM_ARG(int64_t, ignore_index) = -100;
+    DLLM_ARG(double, label_smoothing) = 0.0;
+  };
+
+  static TaskCompute init(std::shared_ptr<State> &state,
+                          const Options &options = {});
 
   static TaskCompute forward(
       const std::shared_ptr<State> &state, const std::shared_ptr<Tensor> &loss,
