@@ -69,11 +69,12 @@ TaskCompute CrossEntropy::forward(
   log_probs->resetFuture(future);
   total_weight->resetFuture(future);
   state->forward.weight->resetFuture(future);
-  state->backward.log_probs = std::move(log_probs);
+  state->backward.log_probs = log_probs;
   state->backward.total_weight = std::move(total_weight);
   state->backward.target = target;
   state->backward.loss = loss;
   // size
+  log_probs->sizes() = input->sizes();
   loss->sizes() = IntArray{1};
   return task;
 }
