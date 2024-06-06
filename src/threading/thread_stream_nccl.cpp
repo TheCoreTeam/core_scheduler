@@ -47,7 +47,7 @@ void threadTask(const MPI_Comm mpiComm, const int deviceRank,
       const hostent *he = gethostbyname(processor_name);
       DLLM_ASSERT_TRUE(
           he != nullptr,
-          std::format("Error resolving hostname: {}", hstrerror(h_errno)));
+          fmt::format("Error resolving hostname: {}", hstrerror(h_errno)));
       // Convert the first host address to a string
       strcpy(addr0, inet_ntoa(*reinterpret_cast<in_addr *>(he->h_addr)));
     }
