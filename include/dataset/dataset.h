@@ -5,10 +5,7 @@
 
 namespace dllm::dataset {
 struct LlmDataset {
-  LlmDataset() = delete;
-
-  static std::shared_ptr<const LlmDataset> create(
-      const std::vector<std::string> &path);
+  LlmDataset(const std::vector<std::string> &path);
 
   struct Element {
     std::int64_t input_id;
@@ -16,20 +13,24 @@ struct LlmDataset {
   };
 
   struct RowAccessor {
-    RowAccessor() = delete;
-
+    struct Impl;
+    RowAccessor(std::unique_ptr<Impl> impl) : impl_{std::move(impl)} {}
     [[nodiscard]] Element accessCol(std::int64_t colIdx) const;
 
-    std::int64_t cols() const;
+    [[nodiscard]] std::int64_t cols() const;
 
-    ~RowAccessor();
+   private:
+    std::unique_ptr<Impl> impl_;
   };
 
-  [[nodiscard]] std::shared_ptr<const RowAccessor> accessRow(
-      std::int64_t rowIdx) const;
+  [[nodiscard]] RowAccessor accessRow(std::int64_t rowIdx) const;
 
-  std::int64_t rows() const;
+  [[nodiscard]] std::int64_t rows() const;
 
-  std::int64_t cols() const;
+  [[nodiscard]] std::int64_t cols() const;
+
+ private:
+  struct Impl;
+  std::unique_ptr<Impl> impl_;
 };
 }  // namespace dllm::dataset
