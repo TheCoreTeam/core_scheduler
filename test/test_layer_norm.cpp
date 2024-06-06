@@ -8,6 +8,7 @@
 #include "compute/layer_norm.h"
 #include "compute/utils.h"
 #include "memory/to_torch.h"
+#include "module/layer_norm.h"
 #include "threading/thread_pool_compute.h"
 #include "threading/thread_stream_cudart.h"
 
@@ -38,11 +39,14 @@ class TestLayerNormFixture : public ::testing::Test {
   dllm::ThreadStreamCudart stream{0};
 
   template <typename T>
-  void Test(int size);
+  void TestFunctional(int size);
+
+  template <typename T>
+  void TestModule(int size);
 };
 
 template <typename T>
-void TestLayerNormFixture::Test(const int size) {
+void TestLayerNormFixture::TestFunctional(const int size) {
   at::manual_seed(1);
   const at::Device device(at::kCUDA, 0);
   const at::ScalarType dtype = TypeToTorch<T>::type;
@@ -83,5 +87,48 @@ void TestLayerNormFixture::Test(const int size) {
   ASSERT_TRUE(at::allclose(ln->bias.grad(), state->forward.grad_bias));
 }
 
-TEST_F(TestLayerNormFixture, TestF32) { Test<float>(128); }
-TEST_F(TestLayerNormFixture, TestF64) { Test<double>(128); }
+TEST_F(TestLayerNormFixture, TestFunctionalF32) { TestFunctional<float>(128); }
+TEST_F(TestLayerNormFixture, TestFunctionalF64) { TestFunctional<double>(128); }
+
+template <typename T>
+void TestLayerNormFixture::TestModule(const int size) {
+  at::manual_seed(1);
+  const at::Device device(at::kCUDA, 0);
+  const at::ScalarType dtype = TypeToTorch<T>::type;
+  const auto option = at::TensorOptions().dtype(dtype).device(device);
+
+  auto x = dllm::Tensor::create();
+  auto dx = dllm::Tensor::create();
+  auto y = dllm::Tensor::create();
+  auto dy = dllm::Tensor::create();
+  dllm::module::LayerNorm lnOurs{
+      tp,
+      dllm::module::LayerNorm::Options{{3 * size}}.device(device).dtype(dtype)};
+  DLLM_SUBMIT_TASK(
+      tp, dllm::compute::Utils::rand(x, {size, 2 * size, 3 * size}, option));
+  lnOurs->forward(tp, y, x);
+  DLLM_SUBMIT_TASK(tp, dllm::compute::Utils::rand_like(dy, y));
+  lnOurs->backward(tp, dx, dy);
+
+  at::Tensor x_torch, dx_torch, y_ref_torch, dy_torch;
+  DLLM_SUBMIT_TASK(stream, dllm::memory::toTorch(x_torch, x));
+  x->wait();
+  DLLM_SUBMIT_TASK(stream, dllm::memory::toTorch(y_ref_torch, y));
+  y->wait();
+  DLLM_SUBMIT_TASK(stream, dllm::memory::toTorch(dy_torch, dy));
+  dy->wait();
+  x_torch.set_requires_grad(true);
+  torch::nn::LayerNorm ln{torch::nn::LayerNormOptions({3 * size})};
+  ln->to(device, dtype);
+  auto y_torch = ln->forward(x_torch);
+  y_torch.backward(dy_torch);
+  ASSERT_TRUE(at::allclose(y_torch, y));
+  ASSERT_TRUE(at::allclose(x_torch.grad(), dx));
+  ASSERT_TRUE(
+      at::allclose(ln->weight.grad(), lnOurs->state()->forward.grad_weight));
+  ASSERT_TRUE(
+      at::allclose(ln->bias.grad(), lnOurs->state()->forward.grad_bias));
+}
+
+TEST_F(TestLayerNormFixture, TestTestModuleF32) { TestModule<float>(128); }
+TEST_F(TestLayerNormFixture, TestTestModuleF64) { TestModule<double>(128); }

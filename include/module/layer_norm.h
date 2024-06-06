@@ -9,13 +9,16 @@ struct ThreadPoolCompute;
 
 namespace dllm::module {
 struct DLLM_API LayerNormImpl : Module {
-  explicit LayerNormImpl(ThreadPoolCompute &tp,
-                         const compute::LayerNorm::Options &options);
+  using Options = compute::LayerNorm::Options;
 
-  /// Transforms the `input` tensor by multiplying with the `weight` and
-  /// optionally adding the `bias`, if `with_bias` is true in the options.
+  explicit LayerNormImpl(ThreadPoolCompute &tp, const Options &options);
+
   void forward(ThreadPoolCompute &tp, const std::shared_ptr<Tensor> &output,
                const std::shared_ptr<const ReadOnlyTensor> &input) const;
+
+  void backward(ThreadPoolCompute &tp,
+                const std::shared_ptr<Tensor> &grad_input,
+                const std::shared_ptr<const ReadOnlyTensor> &grad_output) const;
 
   std::shared_ptr<compute::LayerNorm::State> state() const;
 

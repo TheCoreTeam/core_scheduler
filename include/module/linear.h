@@ -9,13 +9,20 @@ struct ThreadPoolCompute;
 
 namespace dllm::module {
 struct DLLM_API LinearImpl : Module {
-  explicit LinearImpl(ThreadPoolCompute &tp,
-                      const compute::Linear::Options &options);
+  using Options = compute::Linear::Options;
 
-  /// Transforms the `input` tensor by multiplying with the `weight` and
-  /// optionally adding the `bias`, if `with_bias` is true in the options.
+  explicit LinearImpl(ThreadPoolCompute &tp, const Options &options);
+
   void forward(ThreadPoolCompute &tp, const std::shared_ptr<Tensor> &output,
                const std::shared_ptr<const ReadOnlyTensor> &input) const;
+
+  void backward(ThreadPoolCompute &tp,
+                const std::shared_ptr<Tensor> &grad_input,
+                const std::shared_ptr<const ReadOnlyTensor> &grad_output) const;
+
+  void backwardInputOnly(
+      ThreadPoolCompute &tp, const std::shared_ptr<Tensor> &grad_input,
+      const std::shared_ptr<const ReadOnlyTensor> &grad_output) const;
 
   std::shared_ptr<compute::Linear::State> state() const;
 

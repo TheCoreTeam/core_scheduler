@@ -1,7 +1,11 @@
 #pragma once
+#include <type_traits>
+
+#include "arg.h"
 #include "module/state.h"
 #include "tensor.h"
 #include "threading/task_compute.h"
+
 namespace dllm::module {
 struct Module;
 }
@@ -34,12 +38,33 @@ struct AdamW {
         : tensors{tensors}, options{options} {}
   };
 
-  using Options = State::Options;
+  struct Options {
+    DLLM_ARG(double, lr) = 1e-3;
+    DLLM_ARG(double, beta1) = 0.9;
+    DLLM_ARG(double, beta2) = 0.999;
+    DLLM_ARG(double, eps) = 1e-8;
+    DLLM_ARG(double, weight_decay) = 1e-2;
+    DLLM_ARG(bool, amsgrad) = false;
+    DLLM_ARG(long, t) = 0;
+  };
 
   static void init(ThreadPoolCompute &tp, const module::Module &module,
                    const Options &options);
 
+  template <typename Module, typename = std::enable_if_t<
+                                 !std::is_base_of_v<module::Module, Module>>>
+  static void init(ThreadPoolCompute &tp, const Module &module,
+                   const Options &options) {
+    init(tp, *module, options);
+  }
+
   static void step(ThreadPoolCompute &tp, const module::Module &module);
+
+  template <typename Module, typename = std::enable_if_t<
+                                 !std::is_base_of_v<module::Module, Module>>>
+  static void step(ThreadPoolCompute &tp, const Module &module) {
+    step(tp, *module);
+  }
 
   static TaskCompute init(
       std::shared_ptr<State> &state,

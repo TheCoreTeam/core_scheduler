@@ -4,6 +4,7 @@
 
 #include "compute/utils.h"
 #include "memory/to_torch.h"
+#include "module/linear.h"
 #include "optimizer/adamw.h"
 #include "tensor.h"
 #include "threading/thread_pool_compute.h"
@@ -36,11 +37,14 @@ class TestDLLMAdamW : public ::testing::Test {
   dllm::ThreadPoolCompute tp{0, 1};
 
   template <typename Element>
-  void TestRoutine(int size);
+  void TestFunctionalRoutine(int size);
+
+  template <typename Element>
+  void TestModuleRoutine(int size);
 };
 
 template <typename Element>
-void TestDLLMAdamW::TestRoutine(const int size) {
+void TestDLLMAdamW::TestFunctionalRoutine(const int size) {
   const double lr = 1e-3;
   const double beta1 = 0.9;
   const double beta2 = 0.999;
@@ -58,8 +62,14 @@ void TestDLLMAdamW::TestRoutine(const int size) {
   }
   std::shared_ptr<dllm::optimizer::AdamW::State> state;
   {
-    auto task = dllm::optimizer::AdamW::init(
-        state, x, {lr, beta1, beta2, eps, weight_decay, false, t});
+    auto task = dllm::optimizer::AdamW::init(state, x,
+                                             dllm::optimizer::AdamW::Options{}
+                                                 .lr(lr)
+                                                 .beta1(beta1)
+                                                 .beta2(beta2)
+                                                 .eps(eps)
+                                                 .weight_decay(weight_decay)
+                                                 .t(t));
     tp.submit(std::move(task));
   }
   auto dx = dllm::Tensor::create();
@@ -99,8 +109,105 @@ void TestDLLMAdamW::TestRoutine(const int size) {
   ASSERT_TRUE(torch::allclose(v_torch, state->tensors.v));
 }
 
-TEST_F(TestDLLMAdamW, TestF32_128) { TestRoutine<float>(128); }
+TEST_F(TestDLLMAdamW, TestFunctionalF32_128) {
+  TestFunctionalRoutine<float>(128);
+}
 
-TEST_F(TestDLLMAdamW, TestF32_512) { TestRoutine<float>(512); }
+TEST_F(TestDLLMAdamW, TestFunctionalF32_512) {
+  TestFunctionalRoutine<float>(512);
+}
 
-TEST_F(TestDLLMAdamW, TestF32_1024) { TestRoutine<float>(1024); }
+TEST_F(TestDLLMAdamW, TestFunctionalF32_1024) {
+  TestFunctionalRoutine<float>(1024);
+}
+
+template <typename Element>
+void TestDLLMAdamW::TestModuleRoutine(const int size) {
+  const double lr = 1e-3;
+  const double beta1 = 0.9;
+  const double beta2 = 0.999;
+  const double eps = 1e-8;
+  const double weight_decay = 1e-2;
+  const long t = 0;
+  dllm::ThreadStreamCudart stream{0};
+  const int m = size, n = 16, k = 4, s = 3;
+  const torch::Device device = torch::kCUDA;
+  const torch::Dtype dtype = TypeToTorch<Element>::type;
+  const auto option = torch::TensorOptions().dtype(dtype).device(device);
+  auto y = dllm::Tensor::create();
+  auto dx = dllm::Tensor::create();
+  auto x = dllm::Tensor::create();
+  {
+    auto task = dllm::compute::Utils::randn(x, {m, s, k}, option);
+    tp.submit(std::move(task));
+  }
+  dllm::module::Linear fc{
+      tp, dllm::module::Linear::Options{k, n}.bias(false).device(device).dtype(
+              dtype)};
+  fc->forward(tp, y, x);
+  auto yGrad = dllm::Tensor::create();
+  {
+    auto task = dllm::compute::Utils::randn_like(yGrad, y);
+    tp.submit(std::move(task));
+  }
+  fc->backward(tp, dx, yGrad);
+  dx->wait();
+  fc->state()->forward.grad_weight->wait();
+  torch::Tensor xRef;
+  {
+    auto task = dllm::memory::toTorch(xRef, x);
+    stream.submit(std::move(task));
+    x->wait();
+    xRef.requires_grad_(true);
+  }
+  torch::Tensor wRef;
+  {
+    auto task = dllm::memory::toTorch(wRef, fc->state()->forward.weight);
+    stream.submit(std::move(task));
+    fc->state()->forward.weight->wait();
+    wRef.requires_grad_(true);
+  }
+  auto fcTorch = torch::nn::Linear{torch::nn::LinearOptions{k, n}.bias(false)};
+  fcTorch->to(device, dtype);
+  fcTorch->weight.data().copy_(wRef);
+  torch::optim::AdamW optimTorch{fcTorch->parameters(),
+                                 torch::optim::AdamWOptions{}
+                                     .lr(lr)
+                                     .betas({beta1, beta2})
+                                     .eps(eps)
+                                     .weight_decay(weight_decay)};
+  auto yRef = fcTorch->forward(xRef);
+  torch::Tensor yGradRef;
+  {
+    auto task = dllm::memory::toTorch(yGradRef, yGrad);
+    stream.submit(std::move(task));
+    yGrad->wait();
+  }
+  optimTorch.zero_grad();
+  yRef.backward(yGradRef);
+
+  ASSERT_TRUE(torch::allclose(y, yRef));
+  ASSERT_TRUE(torch::allclose(dx, xRef.grad()));
+  ASSERT_TRUE(torch::allclose(fc->state()->forward.grad_weight,
+                              fcTorch->weight.grad()));
+
+  optimTorch.step();
+
+  dllm::optimizer::AdamW::init(tp, fc,
+                               dllm::optimizer::AdamW::Options{}
+                                   .lr(lr)
+                                   .beta1(beta1)
+                                   .beta2(beta2)
+                                   .eps(eps)
+                                   .weight_decay(weight_decay)
+                                   .t(t));
+  dllm::optimizer::AdamW::step(tp, fc);
+
+  ASSERT_TRUE(torch::allclose(fc->state()->forward.weight, fcTorch->weight));
+}
+
+TEST_F(TestDLLMAdamW, TestModuleF32_128) { TestModuleRoutine<float>(128); }
+
+TEST_F(TestDLLMAdamW, TestModuleF32_512) { TestModuleRoutine<float>(512); }
+
+TEST_F(TestDLLMAdamW, TestModuleF32_1024) { TestModuleRoutine<float>(1024); }

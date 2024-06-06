@@ -55,11 +55,14 @@ TaskCompute AdamW::init(std::shared_ptr<State> &state,
   m->sizes() = parameter->sizes();
   v->sizes() = parameter->sizes();
   TaskCompute task;
-  if (options.amsgrad) {
+  if (options.amsgrad()) {
     auto vMax = Tensor::create();
     vMax->sizes() = parameter->sizes();
-    state = std::make_shared<State>(State::Tensors{m, v, vMax},
-                                    State::Options{options});
+    state = std::make_shared<State>(
+        State::Tensors{m, v, vMax},
+        State::Options{options.lr(), options.beta1(), options.beta2(),
+                       options.eps(), options.weight_decay(), options.amsgrad(),
+                       options.t()});
     task = TaskCompute{[parameter = parameter, m = m, v = v, vMax = vMax,
                         parameterFuture = parameter->future()](
                            const ContextCompute *context) mutable {
@@ -79,8 +82,11 @@ TaskCompute AdamW::init(std::shared_ptr<State> &state,
     v->resetFuture(future);
     vMax->resetFuture(future);
   } else {
-    state =
-        std::make_shared<State>(State::Tensors{m, v}, State::Options{options});
+    state = std::make_shared<State>(
+        State::Tensors{m, v},
+        State::Options{options.lr(), options.beta1(), options.beta2(),
+                       options.eps(), options.weight_decay(), options.amsgrad(),
+                       options.t()});
     task = TaskCompute{[parameter = parameter, m = m, v = v,
                         parameterFuture = parameter->future()](
                            const ContextCompute *context) mutable {
@@ -120,7 +126,11 @@ TaskCompute AdamW::step(const std::shared_ptr<State> &state,
           util::FutureGuard vGuard{vFuture};
           util::FutureGuard vMaxGuard{vMaxFuture};
           util::FutureGuard dwGuard{dwFuture};
-          stepKernelAmsgrad(context->cudaStream, options, w, m, v, vMax, dw);
+          if (DLLM_EXTRACT_TENSOR(dw).defined()) {
+            stepKernelAmsgrad(context->cudaStream, options, w, m, v, vMax, dw);
+          } else {
+            DLLM_WARN_TRUE(false, "got non-defined gradient, skip the update");
+          }
           CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
           m.reset();
           v.reset();
@@ -146,7 +156,11 @@ TaskCompute AdamW::step(const std::shared_ptr<State> &state,
           util::FutureGuard mGuard{mFuture};
           util::FutureGuard vGuard{vFuture};
           util::FutureGuard dwGuard{dwFuture};
-          stepKernel(context->cudaStream, options, w, m, v, dw);
+          if (DLLM_EXTRACT_TENSOR(dw).defined()) {
+            stepKernel(context->cudaStream, options, w, m, v, dw);
+          } else {
+            DLLM_WARN_TRUE(false, "got non-defined gradient, skip the update");
+          }
           CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
           m.reset();
           v.reset();
