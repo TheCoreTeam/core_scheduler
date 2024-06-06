@@ -1,4 +1,5 @@
 cmake_minimum_required(VERSION 3.25)
+cmake_policy(SET CMP0146 OLD)
 project(dllm LANGUAGES C CXX CUDA)
 
 option(DLLM_ENABLE_TESTS "" ON)
@@ -34,6 +35,7 @@ set(CMAKE_CUDA_ARCHITECTURES "80;86;90a")
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_CURRENT_SOURCE_DIR}/cmake/)
 
 find_package(CUDAToolkit REQUIRED)
+find_package(CUDA REQUIRED)
 find_package(OpenMP REQUIRED)
 find_package(Torch REQUIRED)
 find_package(CUDNN REQUIRED)
