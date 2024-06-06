@@ -56,36 +56,41 @@ TaskCompute Embedding::init(std::shared_ptr<State> &state,
 TaskCompute Embedding::forward(
     const std::shared_ptr<State> &state, const std::shared_ptr<Tensor> &output,
     const std::shared_ptr<const ReadOnlyTensor> &indices) {
-  auto task = TaskCompute{[padding_idx = state->args.padding_idx,
-                           scale_grad_by_freq = state->args.scale_grad_by_freq,
-                           sparse = state->args.sparse,
-                           weight = state->forward.weight, output = output,
-                           indices = indices, outputFuture = output->future(),
-                           weightFuture = indices->future(),
-                           indicesFuture = state->forward.weight->future()](
-                              const ContextCompute *context) mutable {
-    DLLM_NVTX_RANGE_FN("dllm::compute::Embedding::forward");
-    {
-      util::FutureGuard outputrGuard{outputFuture};
-      util::FutureGuard weightGuard{weightFuture};
-      util::FutureGuard indicesGuard{indicesFuture};
-      DLLM_EXTRACT_TENSOR(output) = torch::embedding(
-          DLLM_EXTRACT_TENSOR(weight), DLLM_EXTRACT_TENSOR(indices),
-          padding_idx, scale_grad_by_freq, sparse);
-      weight.reset();
-      output.reset();
-      indices.reset();
-    }
-    CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
-  }};
+  auto task = TaskCompute{
+      [padding_idx = state->args.padding_idx,
+       scale_grad_by_freq = state->args.scale_grad_by_freq,
+       sparse = state->args.sparse, weight = state->forward.weight,
+       output = output, indices = indices, outputFuture = output->future(),
+       weightFuture = state->forward.weight->future(),
+       indicesFuture =
+           indices->future()](const ContextCompute *context) mutable {
+        DLLM_NVTX_RANGE_FN("dllm::compute::Embedding::forward");
+        {
+          util::FutureGuard outputrGuard{outputFuture};
+          util::FutureGuard weightGuard{weightFuture};
+          util::FutureGuard indicesGuard{indicesFuture};
+          DLLM_EXTRACT_TENSOR(output) =
+              torch::embedding(DLLM_EXTRACT_TENSOR(weight),
+                               DLLM_EXTRACT_TENSOR(indices).view(
+                                   {-1, DLLM_EXTRACT_TENSOR(indices).size(-1)}),
+                               padding_idx, scale_grad_by_freq, sparse);
+          weight.reset();
+          output.reset();
+          indices.reset();
+        }
+        CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
+      }};
   const TaskFuture future = task.get_future();
   state->forward.weight->resetFuture(future);
   indices->resetFuture(future);
   output->resetFuture(future);
   state->backward.indices = indices;
   // size
-  output->sizes() =
-      IntArray{indices->sizes()[0], state->forward.weight->sizes()[1]};
+  output->sizes() = [&]() {
+    auto sizes = indices->sizes();
+    sizes.push_back(state->forward.weight->size(1));
+    return sizes;
+  }();
   return task;
 }
 
