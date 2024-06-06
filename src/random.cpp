@@ -1,10 +1,12 @@
-#include "random/random.h"
+#include "random.h"
+
+#include <mpi.h>
 
 #include "logger.h"
-#include "mpi.h"
-#include "random/random_internal.h"
 
 namespace dllm::random {
+RandomState &getRandomState();
+
 void manual_seed(const uint64_t seed) {
   auto &[_seed, offset] = getRandomState();
   _seed = seed;
@@ -13,7 +15,7 @@ void manual_seed(const uint64_t seed) {
 
 RandomState &getRandomState() {
   static RandomState randomState{
-      [] {
+      []() {
         int init = false;
         CHECK_MPI(MPI_Initialized(&init));
         int worldRank = 0;
