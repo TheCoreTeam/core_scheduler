@@ -165,21 +165,21 @@ TaskCompute ScaledDotProductFlashAttention::backward(
           DLLM_EXTRACT_TENSOR(grad_query) = grad_query_.transpose(1, 2);
           DLLM_EXTRACT_TENSOR(grad_key) = grad_key_.transpose(1, 2);
           DLLM_EXTRACT_TENSOR(grad_value) = grad_value_.transpose(1, 2);
-          grad_query.reset();
-          grad_key.reset();
-          grad_value.reset();
-          grad_out.reset();
-          query.reset();
-          key.reset();
-          value.reset();
-          out.reset();
-          logsumexp.reset();
-          cum_seq_q.reset();
-          cum_seq_k.reset();
-          philox_seed.reset();
-          philox_offset.reset();
         }
         CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
+        grad_query.reset();
+        grad_key.reset();
+        grad_value.reset();
+        grad_out.reset();
+        query.reset();
+        key.reset();
+        value.reset();
+        out.reset();
+        logsumexp.reset();
+        cum_seq_q.reset();
+        cum_seq_k.reset();
+        philox_seed.reset();
+        philox_offset.reset();
       }};
 
   const TaskFuture future = task.get_future();

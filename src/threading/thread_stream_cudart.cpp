@@ -9,6 +9,25 @@
 #include "logger.h"
 
 namespace dllm {
+struct ThreadStreamCudart::Impl {
+  explicit Impl(int deviceRank, std::optional<const int> bindingMap);
+
+  ~Impl();
+
+  void submit(TaskCudart &&task);
+
+  void submit(const TaskCudart &task) = delete;
+
+ private:
+  std::latch latch_;
+  std::queue<TaskCudart> taskQueue{};
+  std::mutex queueMutex{};
+  std::condition_variable cv{};
+  std::mutex cvMutex{};
+  std::atomic<bool> shutDown{false};
+  std::jthread thread{};
+};
+
 namespace {
 void setThreadAffinity(std::jthread &th, const int coreId) {
   cpu_set_t cpuset;
@@ -63,7 +82,17 @@ void threadTask(const int deviceRank, std::queue<TaskCudart> *taskQueue,
 }
 }  // namespace
 
-ThreadStreamCudart::~ThreadStreamCudart() {
+ThreadStreamCudart::Impl::Impl(const int deviceRank,
+                               const std::optional<const int> bindingMap)
+    : latch_{2}, thread{threadTask, deviceRank, &taskQueue, &queueMutex,
+                        &cv,        &cvMutex,   &shutDown,  &latch_} {
+  if (bindingMap.has_value()) {
+    setThreadAffinity(thread, bindingMap.value());
+  }
+  latch_.arrive_and_wait();
+}
+
+ThreadStreamCudart::Impl::~Impl() {
   shutDown = true;
   cv.notify_one();
   while (!thread.joinable()) {
@@ -72,20 +101,18 @@ ThreadStreamCudart::~ThreadStreamCudart() {
   thread.join();
 }
 
-void ThreadStreamCudart::submit(TaskCudart &&task) {
+void ThreadStreamCudart::Impl::submit(TaskCudart &&task) {
   std::unique_lock lock{queueMutex};
   taskQueue.push(std::move(task));
   lock.unlock();
   cv.notify_one();
 }
 
+void ThreadStreamCudart::submit(TaskCudart &&task) const {
+  impl_->submit(std::move(task));
+}
+
 ThreadStreamCudart::ThreadStreamCudart(
     const int deviceRank, const std::optional<const int> bindingMap)
-    : latch_{2}, thread{threadTask, deviceRank, &taskQueue, &queueMutex,
-                        &cv,        &cvMutex,   &shutDown,  &latch_} {
-  if (bindingMap.has_value()) {
-    setThreadAffinity(thread, bindingMap.value());
-  }
-  latch_.arrive_and_wait();
-}
+    : impl_{std::make_shared<Impl>(deviceRank, bindingMap)} {}
 }  // namespace dllm

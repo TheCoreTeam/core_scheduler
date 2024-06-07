@@ -7,6 +7,25 @@
 #include "logger.h"
 
 namespace dllm {
+struct ThreadPoolCudart::Impl {
+  Impl(int localRank, int threadNum, const std::vector<int> &bindingMap);
+
+  ~Impl();
+
+  void submit(TaskCudart &&task);
+
+  void submit(const TaskCudart &task) = delete;
+
+ private:
+  std::latch latch_;
+  std::vector<std::jthread> threadVector{};
+  std::queue<TaskCudart> taskQueue{};
+  std::mutex queueMutex{};
+  std::condition_variable cv{};
+  std::mutex cvMutex{};
+  std::atomic<bool> shutDown{false};
+};
+
 namespace {
 void setThreadAffinity(std::jthread &th, const int coreId) {
   cpu_set_t cpuset;
@@ -55,26 +74,8 @@ void threadTask(const int localRank, std::queue<TaskCudart> *taskQueue,
 }
 }  // namespace
 
-ThreadPoolCudart::~ThreadPoolCudart() {
-  shutDown = true;
-  cv.notify_all();
-  for (auto &t : threadVector) {
-    while (!t.joinable()) {
-      cv.notify_all();
-    }
-    t.join();
-  }
-}
-
-void ThreadPoolCudart::submit(TaskCudart &&task) {
-  std::unique_lock lock{queueMutex};
-  taskQueue.push(std::move(task));
-  lock.unlock();
-  cv.notify_one();
-}
-
-ThreadPoolCudart::ThreadPoolCudart(const int localRank, const int threadNum,
-                                   const std::vector<int> &bindingMap)
+ThreadPoolCudart::Impl::Impl(const int localRank, const int threadNum,
+                             const std::vector<int> &bindingMap)
     : latch_{threadNum + 1} {
   DLLM_ASSERT_TRUE(threadNum > 0, "Wrong thread num");
   DLLM_ASSERT_TRUE(bindingMap.empty() ||
@@ -92,4 +93,30 @@ ThreadPoolCudart::ThreadPoolCudart(const int localRank, const int threadNum,
   }
   latch_.arrive_and_wait();
 }
+
+ThreadPoolCudart::Impl::~Impl() {
+  shutDown = true;
+  cv.notify_all();
+  for (auto &t : threadVector) {
+    while (!t.joinable()) {
+      cv.notify_all();
+    }
+    t.join();
+  }
+}
+
+void ThreadPoolCudart::Impl::submit(TaskCudart &&task) {
+  std::unique_lock lock{queueMutex};
+  taskQueue.push(std::move(task));
+  lock.unlock();
+  cv.notify_one();
+}
+
+void ThreadPoolCudart::submit(TaskCudart &&task) const {
+  impl_->submit(std::move(task));
+}
+
+ThreadPoolCudart::ThreadPoolCudart(const int localRank, const int threadNum,
+                                   const std::vector<int> &bindingMap)
+    : impl_{std::make_shared<Impl>(localRank, threadNum, bindingMap)} {}
 }  // namespace dllm

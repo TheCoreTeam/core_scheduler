@@ -10,6 +10,25 @@
 #include "logger.h"
 
 namespace dllm {
+struct ThreadPoolCompute::Impl {
+  Impl(int localRank, int threadNum, const std::vector<int> &bindingMap);
+
+  ~Impl();
+
+  void submit(TaskCompute &&task);
+
+  void submit(const TaskCompute &task) = delete;
+
+ private:
+  std::latch latch_;
+  std::vector<std::jthread> threadVector{};
+  std::queue<TaskCompute> taskQueue{};
+  std::mutex queueMutex{};
+  std::condition_variable cv{};
+  std::mutex cvMutex{};
+  std::atomic<bool> shutDown{false};
+};
+
 namespace {
 void setThreadAffinity(std::jthread &th, const int coreId) {
   cpu_set_t cpuset;
@@ -80,26 +99,8 @@ void threadTask(const int localRank, std::queue<TaskCompute> *taskQueue,
 }
 }  // namespace
 
-ThreadPoolCompute::~ThreadPoolCompute() {
-  shutDown = true;
-  cv.notify_all();
-  for (auto &t : threadVector) {
-    while (!t.joinable()) {
-      cv.notify_all();
-    }
-    t.join();
-  }
-}
-
-void ThreadPoolCompute::submit(TaskCompute &&task) {
-  std::unique_lock lock{queueMutex};
-  taskQueue.push(std::move(task));
-  lock.unlock();
-  cv.notify_one();
-}
-
-ThreadPoolCompute::ThreadPoolCompute(const int localRank, const int threadNum,
-                                     const std::vector<int> &bindingMap)
+ThreadPoolCompute::Impl::Impl(int localRank, int threadNum,
+                              const std::vector<int> &bindingMap)
     : latch_{threadNum + 1} {
   DLLM_ASSERT_TRUE(threadNum > 0, "Wrong thread num");
   DLLM_ASSERT_TRUE(bindingMap.empty() ||
@@ -117,4 +118,30 @@ ThreadPoolCompute::ThreadPoolCompute(const int localRank, const int threadNum,
   }
   latch_.arrive_and_wait();
 }
+
+ThreadPoolCompute::Impl::~Impl() {
+  shutDown = true;
+  cv.notify_all();
+  for (auto &t : threadVector) {
+    while (!t.joinable()) {
+      cv.notify_all();
+    }
+    t.join();
+  }
+}
+
+void ThreadPoolCompute::Impl::submit(TaskCompute &&task) {
+  std::unique_lock lock{queueMutex};
+  taskQueue.push(std::move(task));
+  lock.unlock();
+  cv.notify_one();
+}
+
+void ThreadPoolCompute::submit(TaskCompute &&task) const {
+  impl_->submit(std::move(task));
+}
+
+ThreadPoolCompute::ThreadPoolCompute(const int localRank, const int threadNum,
+                                     const std::vector<int> &bindingMap)
+    : impl_{std::make_shared<Impl>(localRank, threadNum, bindingMap)} {}
 }  // namespace dllm

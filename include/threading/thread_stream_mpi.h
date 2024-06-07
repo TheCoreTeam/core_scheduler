@@ -19,24 +19,16 @@ struct ThreadStreamMpi {
   explicit ThreadStreamMpi(const ContextMpi &context,
                            std::optional<const int> bindingMap = {});
 
-  ~ThreadStreamMpi();
+  void submit(TaskMpi &&task) const;
 
-  void submit(TaskMpi &&task);
-
-  void submit(const TaskMpi &task) = delete;
+  void submit(const TaskMpi &task) const = delete;
 
   [[nodiscard]] int64_t commSize() const;
 
   [[nodiscard]] int64_t rank() const;
 
  private:
-  const ContextMpi context_;
-  std::latch latch_;
-  std::queue<TaskMpi> taskQueue{};
-  std::mutex queueMutex{};
-  std::condition_variable cv{};
-  std::mutex cvMutex{};
-  std::atomic<bool> shutDown{false};
-  std::jthread thread{};
+  struct Impl;
+  std::shared_ptr<Impl> impl_;
 };
 }  // namespace dllm
