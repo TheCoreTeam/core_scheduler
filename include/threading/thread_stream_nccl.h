@@ -1,21 +1,15 @@
 #pragma once
 
-#include <atomic>
-#include <condition_variable>
-#include <future>
-#include <latch>
-#include <mutex>
 #include <optional>
-#include <queue>
-#include <thread>
 
 #include "threading/context_nccl.h"
+#include "threading/scheduler.h"
 // ReSharper disable once CppUnusedIncludeDirective
 #include "threading/submit_task_macro.h"
 #include "threading/task_nccl.h"
 
 namespace dllm {
-struct ThreadStreamNccl {
+struct ThreadStreamNccl : Scheduler {
   ThreadStreamNccl(MPI_Comm mpiComm, int deviceRank,
                    std::optional<const int> bindingMap = {});
 
@@ -26,9 +20,5 @@ struct ThreadStreamNccl {
   [[nodiscard]] int64_t commSize() const;
 
   [[nodiscard]] int64_t rank() const;
-
- private:
-  struct Impl;
-  std::shared_ptr<Impl> impl_;
 };
 }  // namespace dllm

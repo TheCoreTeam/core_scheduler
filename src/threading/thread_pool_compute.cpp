@@ -7,15 +7,20 @@
 #include <pthread.h>
 #include <sched.h>
 
+#include <latch>
+#include <queue>
+
 #include "logger.h"
+#include "threading/scheduler_impl.h"
 
 namespace dllm {
-struct ThreadPoolCompute::Impl {
-  Impl(int localRank, int threadNum, const std::vector<int> &bindingMap);
+namespace {
+struct Impl_ final : Scheduler::Impl {
+  Impl_(int localRank, int threadNum, const std::vector<int> &bindingMap);
 
-  ~Impl();
+  ~Impl_() override;
 
-  void submit(TaskCompute &&task);
+  void submit(TaskCompute &&task) override;
 
   void submit(const TaskCompute &task) = delete;
 
@@ -29,7 +34,6 @@ struct ThreadPoolCompute::Impl {
   std::atomic<bool> shutDown{false};
 };
 
-namespace {
 void setThreadAffinity(std::jthread &th, const int coreId) {
   cpu_set_t cpuset;
   CPU_ZERO(&cpuset);
@@ -99,8 +103,7 @@ void threadTask(const int localRank, std::queue<TaskCompute> *taskQueue,
 }
 }  // namespace
 
-ThreadPoolCompute::Impl::Impl(int localRank, int threadNum,
-                              const std::vector<int> &bindingMap)
+Impl_::Impl_(int localRank, int threadNum, const std::vector<int> &bindingMap)
     : latch_{threadNum + 1} {
   DLLM_ASSERT_TRUE(threadNum > 0, "Wrong thread num");
   DLLM_ASSERT_TRUE(bindingMap.empty() ||
@@ -119,7 +122,7 @@ ThreadPoolCompute::Impl::Impl(int localRank, int threadNum,
   latch_.arrive_and_wait();
 }
 
-ThreadPoolCompute::Impl::~Impl() {
+Impl_::~Impl_() {
   shutDown = true;
   cv.notify_all();
   for (auto &t : threadVector) {
@@ -130,7 +133,7 @@ ThreadPoolCompute::Impl::~Impl() {
   }
 }
 
-void ThreadPoolCompute::Impl::submit(TaskCompute &&task) {
+void Impl_::submit(TaskCompute &&task) {
   std::unique_lock lock{queueMutex};
   taskQueue.push(std::move(task));
   lock.unlock();
@@ -142,6 +145,7 @@ void ThreadPoolCompute::submit(TaskCompute &&task) const {
 }
 
 ThreadPoolCompute::ThreadPoolCompute(const int localRank, const int threadNum,
-                                     const std::vector<int> &bindingMap)
-    : impl_{std::make_shared<Impl>(localRank, threadNum, bindingMap)} {}
+                                     const std::vector<int> &bindingMap) {
+  impl_ = std::make_shared<Impl_>(localRank, threadNum, bindingMap);
+}
 }  // namespace dllm

@@ -4,15 +4,21 @@
 #include <pthread.h>
 #include <sched.h>
 
+#include <latch>
+#include <queue>
+
 #include "logger.h"
+#include "threading/scheduler_impl.h"
 
 namespace dllm {
-struct ThreadStreamMpi::Impl {
-  explicit Impl(const ContextMpi &context, std::optional<const int> bindingMap);
+namespace {
+struct Impl_ final : Scheduler::Impl {
+  explicit Impl_(const ContextMpi &context,
+                 std::optional<const int> bindingMap);
 
-  ~Impl();
+  ~Impl_() override;
 
-  void submit(TaskMpi &&task);
+  void submit(TaskMpi &&task) override;
 
   void submit(const TaskMpi &task) = delete;
 
@@ -31,7 +37,6 @@ struct ThreadStreamMpi::Impl {
   std::jthread thread{};
 };
 
-namespace {
 void setThreadAffinity(std::jthread &th, const int coreId) {
   cpu_set_t cpuset;
   CPU_ZERO(&cpuset);
@@ -73,8 +78,8 @@ void threadTask(const ContextMpi *context, std::queue<TaskMpi> *taskQueue,
 }
 }  // namespace
 
-ThreadStreamMpi::Impl::Impl(const ContextMpi &context,
-                            const std::optional<const int> bindingMap)
+Impl_::Impl_(const ContextMpi &context,
+             const std::optional<const int> bindingMap)
     : context_{context}, latch_{2}, thread{threadTask,  &context_, &taskQueue,
                                            &queueMutex, &cv,       &cvMutex,
                                            &shutDown,   &latch_} {
@@ -84,7 +89,7 @@ ThreadStreamMpi::Impl::Impl(const ContextMpi &context,
   latch_.arrive_and_wait();
 }
 
-ThreadStreamMpi::Impl::~Impl() {
+Impl_::~Impl_() {
   shutDown = true;
   cv.notify_one();
   while (!thread.joinable()) {
@@ -93,26 +98,31 @@ ThreadStreamMpi::Impl::~Impl() {
   thread.join();
 }
 
-void ThreadStreamMpi::Impl::submit(TaskMpi &&task) {
+void Impl_::submit(TaskMpi &&task) {
   std::unique_lock lock{queueMutex};
   taskQueue.push(std::move(task));
   lock.unlock();
   cv.notify_one();
 }
 
-int64_t ThreadStreamMpi::Impl::commSize() const { return context_.commSize; }
+int64_t Impl_::commSize() const { return context_.commSize; }
 
-int64_t ThreadStreamMpi::Impl::rank() const { return context_.mpiRank; }
+int64_t Impl_::rank() const { return context_.mpiRank; }
 
 void ThreadStreamMpi::submit(TaskMpi &&task) const {
   impl_->submit(std::move(task));
 }
 
-int64_t ThreadStreamMpi::commSize() const { return impl_->commSize(); }
+int64_t ThreadStreamMpi::commSize() const {
+  return std::dynamic_pointer_cast<Impl_>(impl_)->commSize();
+}
 
-int64_t ThreadStreamMpi::rank() const { return impl_->rank(); }
+int64_t ThreadStreamMpi::rank() const {
+  return std::dynamic_pointer_cast<Impl_>(impl_)->rank();
+}
 
 ThreadStreamMpi::ThreadStreamMpi(const ContextMpi &context,
-                                 const std::optional<const int> bindingMap)
-    : impl_{std::make_shared<Impl>(context, bindingMap)} {}
+                                 const std::optional<const int> bindingMap) {
+  impl_ = std::make_shared<Impl_>(context, bindingMap);
+}
 }  // namespace dllm
