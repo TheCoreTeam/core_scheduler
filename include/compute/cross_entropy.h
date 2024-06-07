@@ -9,13 +9,13 @@ namespace dllm::compute {
 struct CrossEntropy {
   struct State {
     struct Forward {
-      std::shared_ptr<const ReadOnlyTensor> weight = Tensor::create();
+      ReadOnlyTensor weight;
     } forward;
     struct Backward {
-      std::shared_ptr<const ReadOnlyTensor> total_weight = nullptr;
-      std::shared_ptr<const ReadOnlyTensor> log_probs = nullptr;
-      std::shared_ptr<const ReadOnlyTensor> target = nullptr;
-      std::shared_ptr<const ReadOnlyTensor> loss = nullptr;
+      ReadOnlyTensor total_weight;
+      ReadOnlyTensor log_probs;
+      ReadOnlyTensor target;
+      ReadOnlyTensor loss;
     } backward;
     struct Args {
       int64_t reduction;
@@ -35,13 +35,11 @@ struct CrossEntropy {
                    const Options &options = {});
 
   static void forward(const Scheduler &scheduler,
-                      const std::shared_ptr<State> &state,
-                      const std::shared_ptr<Tensor> &loss,
-                      const std::shared_ptr<const ReadOnlyTensor> &input,
-                      const std::shared_ptr<const ReadOnlyTensor> &target);
+                      const std::shared_ptr<State> &state, Tensor &loss,
+                      const ReadOnlyTensor &input,
+                      const ReadOnlyTensor &target);
 
   static void backward(const Scheduler &scheduler,
-                       const std::shared_ptr<State> &state,
-                       const std::shared_ptr<Tensor> &dinput);
+                       const std::shared_ptr<State> &state, Tensor &dinput);
 };
 }  // namespace dllm::compute

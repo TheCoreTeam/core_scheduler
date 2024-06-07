@@ -109,10 +109,6 @@ int64_t Impl_::commSize() const { return context_.commSize; }
 
 int64_t Impl_::rank() const { return context_.mpiRank; }
 
-void ThreadStreamMpi::submit(TaskMpi &&task) const {
-  impl_->submit(std::move(task));
-}
-
 int64_t ThreadStreamMpi::commSize() const {
   return std::dynamic_pointer_cast<Impl_>(impl_)->commSize();
 }

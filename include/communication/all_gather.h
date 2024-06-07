@@ -9,9 +9,8 @@ struct AllGather;
 
 template <>
 struct AllGather<NCCL> {
-  static void run(
-      const Scheduler &scheduler,
-      const std::vector<std::vector<std::shared_ptr<Tensor>>> &tensorReceive,
-      const std::vector<std::shared_ptr<const ReadOnlyTensor>> &tensorSend);
+  static void run(const Scheduler &scheduler,
+                  const std::vector<std::vector<Tensor>> &tensorReceive,
+                  const std::vector<ReadOnlyTensor> &tensorSend);
 };
 }  // namespace dllm::communication

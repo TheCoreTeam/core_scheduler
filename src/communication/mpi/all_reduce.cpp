@@ -43,8 +43,8 @@ TaskMpi AllReduce<MPI>::run(
        futureSend = tensorSend->future()](const ContextMpi *context) mutable {
         DLLM_NVTX_RANGE_FN("dllm::communication::AllReduce<MPI>::run");
         {
-          util::FutureGuard guardSend{futureSend};
-          util::FutureGuard guardReceive{futureReceive};
+          utils::FutureGuard guardSend{futureSend};
+          utils::FutureGuard guardReceive{futureReceive};
           if (!DLLM_EXTRACT_TENSOR(tensorReceive).defined()) {
             DLLM_EXTRACT_TENSOR(tensorReceive) =
                 torch::empty_like(DLLM_EXTRACT_TENSOR(tensorSend));
@@ -79,23 +79,22 @@ TaskMpi AllReduce<MPI>::run(
 
 TaskMpi AllReduce<MPI>::runInplace(const std::shared_ptr<Tensor> &tensor,
                                    Operation operation) {
-  auto task =
-      TaskMpi{[tensor = tensor, operation = operation,
-               future = tensor->future()](const ContextMpi *context) mutable {
+  auto task = TaskMpi{
+      [tensor = tensor, operation = operation,
+       future = utils::future(tensor)](const ContextMpi *context) mutable {
         DLLM_NVTX_RANGE_FN("dllm::communication::AllReduce<MPI>::runInplace");
-        util::FutureGuard guard{future};
-        const int64_t count = DLLM_EXTRACT_TENSOR(tensor).numel();
+        utils::FutureGuard guard{future};
+        const int64_t count = tensor.impl()->tensor().numel();
         DLLM_ASSERT_TRUE(count <= std::numeric_limits<int>::max(),
                          "Do not support very large message");
-        if (!DLLM_EXTRACT_TENSOR(tensor).is_contiguous()) {
-          DLLM_EXTRACT_TENSOR(tensor) =
-              DLLM_EXTRACT_TENSOR(tensor).contiguous();
+        if (!tensor.impl()->tensor().is_contiguous()) {
+          tensor.impl()->tensor() = tensor.impl()->tensor().contiguous();
         }
-        DLLM_WARN_TRUE(DLLM_EXTRACT_TENSOR(tensor).is_cpu(),
+        DLLM_WARN_TRUE(tensor.impl()->tensor().is_cpu(),
                        "MPI non CPU version is very slow");
         CHECK_MPI(MPI_Allreduce(
-            MPI_IN_PLACE, DLLM_EXTRACT_TENSOR(tensor).data_ptr(), count,
-            toMPIDataType(DLLM_EXTRACT_TENSOR(tensor).scalar_type()),
+            MPI_IN_PLACE, tensor.impl()->tensor().data_ptr(), count,
+            toMPIDataType(tensor.impl()->tensor().scalar_type()),
             toMPIOp(operation), context->mpiComm));
         tensor.reset();
       }};

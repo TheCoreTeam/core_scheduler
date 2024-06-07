@@ -8,7 +8,7 @@ struct GeLU {
     struct Forward {
     } forward;
     struct Backward {
-      std::shared_ptr<const ReadOnlyTensor> input = nullptr;
+      ReadOnlyTensor input;
     } backward;
     struct Args {
     } args;
@@ -17,13 +17,11 @@ struct GeLU {
   static void init(const Scheduler &scheduler, std::shared_ptr<State> &state);
 
   static void forward(const Scheduler &scheduler,
-                      const std::shared_ptr<State> &state,
-                      const std::shared_ptr<Tensor> &output,
-                      const std::shared_ptr<const ReadOnlyTensor> &input);
+                      const std::shared_ptr<State> &state, Tensor &output,
+                      const ReadOnlyTensor &input);
 
   static void backward(const Scheduler &scheduler,
-                       const std::shared_ptr<State> &state,
-                       const std::shared_ptr<Tensor> &dinput,
-                       const std::shared_ptr<const ReadOnlyTensor> &doutput);
+                       const std::shared_ptr<State> &state, Tensor &dinput,
+                       const ReadOnlyTensor &doutput);
 };
 }  // namespace dllm::compute

@@ -111,10 +111,6 @@ void Impl_::submit(TaskCudart &&task) {
   cv.notify_one();
 }
 
-void ThreadStreamCudart::submit(TaskCudart &&task) const {
-  impl_->submit(std::move(task));
-}
-
 ThreadStreamCudart::ThreadStreamCudart(
     const int deviceRank, const std::optional<const int> bindingMap) {
   impl_ = std::make_shared<Impl_>(deviceRank, bindingMap);

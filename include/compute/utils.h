@@ -3,81 +3,73 @@
 #include "threading/scheduler.h"
 
 namespace dllm::compute::Utils {
-void sum(const Scheduler &scheduler, const std::shared_ptr<Tensor> &output,
-         const std::shared_ptr<const ReadOnlyTensor> &input,
-         const IntArray &dim, bool keep_dim = false,
+void sum(const Scheduler &scheduler, Tensor &output,
+         const ReadOnlyTensor &input, const IntArray &dim,
+         bool keep_dim = false,
          c10::optional<at::ScalarType> dtype = c10::nullopt);
 
-inline void sum(const Scheduler &scheduler,
-                const std::shared_ptr<Tensor> &output,
-                const std::shared_ptr<const ReadOnlyTensor> &input,
-                const int64_t dim, const bool keep_dim = false,
+inline void sum(const Scheduler &scheduler, Tensor &output,
+                const ReadOnlyTensor &input, const int64_t dim,
+                const bool keep_dim = false,
                 const c10::optional<at::ScalarType> dtype = c10::nullopt) {
   return sum(scheduler, output, input, IntArray{dim}, keep_dim, dtype);
 }
 
-void range(const Scheduler &scheduler, const std::shared_ptr<Tensor> &tensor,
-           const at::Scalar &start, const at::Scalar &end,
-           at::TensorOptions options = {});
+void range(const Scheduler &scheduler, Tensor &tensor, const at::Scalar &start,
+           const at::Scalar &end, at::TensorOptions options = {});
 
-void arange(const Scheduler &scheduler, const std::shared_ptr<Tensor> &tensor,
-            const at::Scalar &start, const at::Scalar &end,
+void arange(const Scheduler &scheduler, Tensor &tensor, const at::Scalar &start,
+            const at::Scalar &end, at::TensorOptions options = {});
+
+void arange(const Scheduler &scheduler, Tensor &tensor, const at::Scalar &start,
+            const at::Scalar &end, const at::Scalar &step,
             at::TensorOptions options = {});
 
-void arange(const Scheduler &scheduler, const std::shared_ptr<Tensor> &tensor,
-            const at::Scalar &start, const at::Scalar &end,
-            const at::Scalar &step, at::TensorOptions options = {});
-
-void randint(const Scheduler &scheduler, const std::shared_ptr<Tensor> &tensor,
-             int64_t low, int64_t high, const IntArrayRef &size,
+void randint(const Scheduler &scheduler, Tensor &tensor, int64_t low,
+             int64_t high, const IntArrayRef &size,
              at::TensorOptions options = at::kLong);
 
-void empty(const Scheduler &scheduler, const std::shared_ptr<Tensor> &tensor,
-           const IntArrayRef &size, at::TensorOptions options = {});
+void empty(const Scheduler &scheduler, Tensor &tensor, const IntArrayRef &size,
+           at::TensorOptions options = {});
 
-void empty_like(const Scheduler &scheduler, const std::shared_ptr<Tensor> &dst,
-                const std::shared_ptr<const ReadOnlyTensor> &src);
+void empty_like(const Scheduler &scheduler, Tensor &dst,
+                const ReadOnlyTensor &src);
 
-void ones(const Scheduler &scheduler, const std::shared_ptr<Tensor> &tensor,
-          const IntArrayRef &size, at::TensorOptions options = {});
+void ones(const Scheduler &scheduler, Tensor &tensor, const IntArrayRef &size,
+          at::TensorOptions options = {});
 
-void ones_like(const Scheduler &scheduler, const std::shared_ptr<Tensor> &dst,
-               const std::shared_ptr<const ReadOnlyTensor> &src);
+void ones_like(const Scheduler &scheduler, Tensor &dst,
+               const ReadOnlyTensor &src);
 
-void zeros(const Scheduler &scheduler, const std::shared_ptr<Tensor> &tensor,
-           const IntArrayRef &size, at::TensorOptions options = {});
+void zeros(const Scheduler &scheduler, Tensor &tensor, const IntArrayRef &size,
+           at::TensorOptions options = {});
 
-void zeros_like(const Scheduler &scheduler, const std::shared_ptr<Tensor> &dst,
-                const std::shared_ptr<const ReadOnlyTensor> &src);
+void zeros_like(const Scheduler &scheduler, Tensor &dst,
+                const ReadOnlyTensor &src);
 
-void rand(const Scheduler &scheduler, const std::shared_ptr<Tensor> &tensor,
-          const IntArrayRef &size, at::TensorOptions options = {});
+void rand(const Scheduler &scheduler, Tensor &tensor, const IntArrayRef &size,
+          at::TensorOptions options = {});
 
-void rand_like(const Scheduler &scheduler, const std::shared_ptr<Tensor> &dst,
-               const std::shared_ptr<const ReadOnlyTensor> &src);
+void rand_like(const Scheduler &scheduler, Tensor &dst,
+               const ReadOnlyTensor &src);
 
-void randn(const Scheduler &scheduler, const std::shared_ptr<Tensor> &tensor,
-           const IntArrayRef &size, at::TensorOptions options = {});
+void randn(const Scheduler &scheduler, Tensor &tensor, const IntArrayRef &size,
+           at::TensorOptions options = {});
 
-void randn_like(const Scheduler &scheduler, const std::shared_ptr<Tensor> &dst,
-                const std::shared_ptr<const ReadOnlyTensor> &src);
+void randn_like(const Scheduler &scheduler, Tensor &dst,
+                const ReadOnlyTensor &src);
 
 // split output tensors should be read-only!
-void split(const Scheduler &scheduler,
-           std::vector<std::shared_ptr<const ReadOnlyTensor>> &output,
-           const std::shared_ptr<const ReadOnlyTensor> &src,
-           const int64_t &split_size, const int64_t &dim);
+void split(const Scheduler &scheduler, std::vector<ReadOnlyTensor> &output,
+           const ReadOnlyTensor &src, const int64_t &split_size,
+           const int64_t &dim);
 
-void view(const Scheduler &scheduler, const std::shared_ptr<Tensor> &output,
-          const std::shared_ptr<const ReadOnlyTensor> &input,
-          const IntArrayRef &size);
+void view(const Scheduler &scheduler, Tensor &output,
+          const ReadOnlyTensor &input, const IntArrayRef &size);
 
-void broadcast_to(const Scheduler &scheduler,
-                  const std::shared_ptr<Tensor> &output,
-                  const std::shared_ptr<const ReadOnlyTensor> &input,
-                  const IntArrayRef &size);
+void broadcast_to(const Scheduler &scheduler, Tensor &output,
+                  const ReadOnlyTensor &input, const IntArrayRef &size);
 
-void cat(const Scheduler &scheduler, const std::shared_ptr<Tensor> &output,
-         const std::vector<std::shared_ptr<const ReadOnlyTensor>> &input,
-         int64_t dim);
+void cat(const Scheduler &scheduler, Tensor &output,
+         const std::vector<ReadOnlyTensor> &input, int64_t dim);
 }  // namespace dllm::compute::Utils

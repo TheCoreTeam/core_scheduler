@@ -140,10 +140,6 @@ void Impl_::submit(TaskCompute &&task) {
   cv.notify_one();
 }
 
-void ThreadPoolCompute::submit(TaskCompute &&task) const {
-  impl_->submit(std::move(task));
-}
-
 ThreadPoolCompute::ThreadPoolCompute(const int localRank, const int threadNum,
                                      const std::vector<int> &bindingMap) {
   impl_ = std::make_shared<Impl_>(localRank, threadNum, bindingMap);

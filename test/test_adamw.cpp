@@ -55,7 +55,7 @@ void TestDLLMAdamW::TestFunctionalRoutine(const int size) {
   const torch::Dtype dtype = TypeToTorch<Element>::type;
   const auto option = torch::TensorOptions().dtype(dtype).device(device);
   torch::manual_seed(1);
-  auto x = dllm::Tensor::create();
+  dllm::Tensor x;
   dllm::compute::Utils::rand(tp, x, {size}, option);
   std::shared_ptr<dllm::optimizer::AdamW::State> state;
   dllm::optimizer::AdamW::init(tp, state, x,
@@ -66,15 +66,15 @@ void TestDLLMAdamW::TestFunctionalRoutine(const int size) {
                                    .eps(eps)
                                    .weight_decay(weight_decay)
                                    .t(t));
-  auto dx = dllm::Tensor::create();
+  dllm::Tensor dx;
   dllm::compute::Utils::rand(tp, dx, {size}, option);
   dllm::optimizer::AdamW::step(tp, state, x, dx);
   ;
   at::Tensor x_torch, dx_torch;
   dllm::memory::toTorch(stream, x_torch, x);
-  x->wait();
+  x.wait();
   dllm::memory::toTorch(stream, dx_torch, dx);
-  dx->wait();
+  dx.wait();
   torch::manual_seed(1);
   x_torch = torch::rand_like(x_torch);
   auto m_torch = torch::zeros_like(x_torch);
@@ -117,31 +117,27 @@ void TestDLLMAdamW::TestModuleRoutine(const int size) {
   const torch::Device device = torch::kCUDA;
   const torch::Dtype dtype = TypeToTorch<Element>::type;
   const auto option = torch::TensorOptions().dtype(dtype).device(device);
-  auto y = dllm::Tensor::create();
-  auto dx = dllm::Tensor::create();
-  auto x = dllm::Tensor::create();
+  dllm::Tensor y;
+  dllm::Tensor dx;
+  dllm::Tensor x;
   dllm::compute::Utils::randn(tp, x, {m, s, k}, option);
   dllm::module::Linear fc{
       tp, dllm::module::Linear::Options{k, n}.bias(false).device(device).dtype(
               dtype)};
   fc->forward(tp, y, x);
-  auto yGrad = dllm::Tensor::create();
+  dllm::Tensor yGrad;
   dllm::compute::Utils::randn_like(tp, yGrad, y);
   fc->backward(tp, dx, yGrad);
-  dx->wait();
-  fc->state()->forward.grad_weight->wait();
+  dx.wait();
+  fc->state()->forward.grad_weight.wait();
   torch::Tensor xRef;
-  {
-    dllm::memory::toTorch(stream, xRef, x);
-    x->wait();
-    xRef.requires_grad_(true);
-  }
+  dllm::memory::toTorch(stream, xRef, x);
+  x.wait();
+  xRef.requires_grad_(true);
   torch::Tensor wRef;
-  {
-    dllm::memory::toTorch(stream, wRef, fc->state()->forward.weight);
-    fc->state()->forward.weight->wait();
-    wRef.requires_grad_(true);
-  }
+  dllm::memory::toTorch(stream, wRef, fc->state()->forward.weight);
+  fc->state()->forward.weight.wait();
+  wRef.requires_grad_(true);
   auto fcTorch = torch::nn::Linear{torch::nn::LinearOptions{k, n}.bias(false)};
   fcTorch->to(device, dtype);
   fcTorch->weight.data().copy_(wRef);
@@ -153,10 +149,8 @@ void TestDLLMAdamW::TestModuleRoutine(const int size) {
                                      .weight_decay(weight_decay)};
   auto yRef = fcTorch->forward(xRef);
   torch::Tensor yGradRef;
-  {
-    dllm::memory::toTorch(stream, yGradRef, yGrad);
-    yGrad->wait();
-  }
+  dllm::memory::toTorch(stream, yGradRef, yGrad);
+  yGrad.wait();
   optimTorch.zero_grad();
   yRef.backward(yGradRef);
 

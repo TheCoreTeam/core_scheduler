@@ -13,9 +13,5 @@ namespace dllm {
 struct ThreadPoolCompute : Scheduler {
   ThreadPoolCompute(int localRank, int threadNum,
                     const std::vector<int> &bindingMap = {});
-
-  void submit(TaskCompute &&task) const;
-
-  void submit(const TaskCompute &task) const = delete;
 };
 }  // namespace dllm

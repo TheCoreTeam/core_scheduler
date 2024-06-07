@@ -5,7 +5,7 @@
 #include "internal_utils.h"
 #include "logger.h"
 #include "nvtx_helper.h"
-#include "tensor_friend.h"
+#include "tensor_impl.h"
 #include "threading/scheduler_impl.h"
 
 namespace dllm::compute {
@@ -15,59 +15,57 @@ void GeLU::init(const Scheduler &scheduler, std::shared_ptr<State> &state) {
 }
 
 void GeLU::forward(const Scheduler &scheduler,
-                   const std::shared_ptr<State> &state,
-                   const std::shared_ptr<Tensor> &output,
-                   const std::shared_ptr<const ReadOnlyTensor> &input) {
+                   const std::shared_ptr<State> &state, Tensor &output,
+                   const ReadOnlyTensor &input) {
+  output = Tensor{};
   auto task = TaskCompute{
-      [output = output, input = input, outputfuture = output->future(),
-       inputFuture = input->future()](const ContextCompute *context) mutable {
+      [output = output, input = input, inputFuture = utils::future(input)](
+          const ContextCompute *context) mutable {
         DLLM_NVTX_RANGE_FN("dllm::compute::GeLU::forward");
         {
-          util::FutureGuard outputGuard{outputfuture};
-          util::FutureGuard inputGuard{inputFuture};
-          DLLM_EXTRACT_TENSOR(output) = torch::gelu(DLLM_EXTRACT_TENSOR(input));
+          utils::FutureGuard inputGuard{inputFuture};
+          output.impl()->tensor() = torch::gelu(input.impl()->tensor());
           output.reset();
           input.reset();
         }
         CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
       }};
   const TaskFuture future = task.get_future();
-  input->resetFuture(future);
-  output->resetFuture(future);
+  utils::resetFuture(input, future);
+  utils::resetFuture(output, future);
   state->backward.input = input;
   // size
-  output->sizes() = input->sizes();
+  output.sizes() = input.sizes();
   scheduler.impl()->submit(std::move(task));
 }
 
 void GeLU::backward(const Scheduler &scheduler,
-                    const std::shared_ptr<State> &state,
-                    const std::shared_ptr<Tensor> &dinput,
-                    const std::shared_ptr<const ReadOnlyTensor> &doutput) {
-  auto task = TaskCompute{[doutput = doutput, input = state->backward.input,
-                           dinput = dinput, dinputFuture = dinput->future(),
-                           doutputFuture = doutput->future(),
-                           inputFuture = state->backward.input->future()](
-                              const ContextCompute *context) mutable {
-    DLLM_NVTX_RANGE_FN("dllm::compute::GeLU::backward");
-    {
-      util::FutureGuard dinputGuard{dinputFuture};
-      util::FutureGuard doutGuard{doutputFuture};
-      util::FutureGuard inputGuard{inputFuture};
-      DLLM_EXTRACT_TENSOR(dinput) = torch::gelu_backward(
-          DLLM_EXTRACT_TENSOR(doutput), DLLM_EXTRACT_TENSOR(input));
-      dinput.reset();
-      input.reset();
-      doutput.reset();
-    }
-    CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
-  }};
+                    const std::shared_ptr<State> &state, Tensor &dinput,
+                    const ReadOnlyTensor &doutput) {
+  dinput = Tensor{};
+  auto task =
+      TaskCompute{[doutput = doutput, input = state->backward.input,
+                   dinput = dinput, doutputFuture = utils::future(doutput),
+                   inputFuture = utils::future(state->backward.input)](
+                      const ContextCompute *context) mutable {
+        DLLM_NVTX_RANGE_FN("dllm::compute::GeLU::backward");
+        {
+          utils::FutureGuard doutGuard{doutputFuture};
+          utils::FutureGuard inputGuard{inputFuture};
+          dinput.impl()->tensor() = torch::gelu_backward(
+              doutput.impl()->tensor(), input.impl()->tensor());
+          dinput.reset();
+          input.reset();
+          doutput.reset();
+        }
+        CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
+      }};
   const TaskFuture future = task.get_future();
-  dinput->resetFuture(future);
-  doutput->resetFuture(future);
-  state->backward.input->resetFuture(future);
+  utils::resetFuture(dinput, future);
+  utils::resetFuture(doutput, future);
+  utils::resetFuture(state->backward.input, future);
   // size
-  dinput->sizes() = doutput->sizes();
+  dinput.sizes() = doutput.sizes();
   // decrease counter
   state->backward.input.reset();
   scheduler.impl()->submit(std::move(task));

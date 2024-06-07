@@ -9,7 +9,7 @@
 #include "internal_utils.h"
 #include "logger.h"
 #include "random.h"
-#include "tensor_friend.h"
+#include "tensor_impl.h"
 #include "threading/task_cudart.h"
 
 namespace arrow {
@@ -190,43 +190,42 @@ LlmDataLoader::LlmDataLoader(const std::shared_ptr<const LlmDataset> &dataset,
     : impl_{std::make_unique<Impl>(dataset, localRank, batch_size, num_workers,
                                    shuffle, bindingMap)} {}
 
-void LlmDataLoader::fill(const std::shared_ptr<Tensor> &x,
-                         const std::shared_ptr<Tensor> &y) const {
-  auto task = Impl::TaskLoader{[x = x, y = y, xFuture = x->future(),
-                                yFuture = y->future()](
+void LlmDataLoader::fill(const Tensor &x, const Tensor &y) const {
+  auto task = Impl::TaskLoader{[x = x, y = y, xFuture = utils::future(x),
+                                yFuture = utils::future(y)](
                                    const ContextCudart *context,
                                    const Impl::HostBuffer *xBuffer,
                                    const Impl::HostBuffer *yBuffer) mutable {
-    DLLM_ASSERT_TRUE(x->numel() == static_cast<int64_t>(xBuffer->validDataSize),
+    DLLM_ASSERT_TRUE(x.numel() == static_cast<int64_t>(xBuffer->validDataSize),
                      "Tensor size mismatch with buffer size");
-    DLLM_ASSERT_TRUE(y->numel() == static_cast<int64_t>(yBuffer->validDataSize),
+    DLLM_ASSERT_TRUE(y.numel() == static_cast<int64_t>(yBuffer->validDataSize),
                      "Tensor size mismatch with buffer size");
     AT_DISPATCH_FLOATING_TYPES_AND2(
         at::ScalarType::Half, at::ScalarType::BFloat16,
-        DLLM_EXTRACT_TENSOR(x).scalar_type(), "memcpy", [&] {
+        x.impl()->tensor().scalar_type(), "memcpy", [&] {
           using T = scalar_t;
-          util::FutureGuard xGuard{xFuture};
+          utils::FutureGuard xGuard{xFuture};
           CHECK_CUDART(
-              cudaMemcpyAsync(DLLM_EXTRACT_TENSOR(x).data_ptr(), xBuffer->ptr,
-                              sizeof(T) * DLLM_EXTRACT_TENSOR(x).numel(),
+              cudaMemcpyAsync(x.impl()->tensor().data_ptr(), xBuffer->ptr,
+                              sizeof(T) * x.impl()->tensor().numel(),
                               cudaMemcpyHostToDevice, context->cudaStream));
         });
     AT_DISPATCH_FLOATING_TYPES_AND2(
         at::ScalarType::Half, at::ScalarType::BFloat16,
-        DLLM_EXTRACT_TENSOR(y).scalar_type(), "memcpy", [&] {
+        y.impl()->tensor().scalar_type(), "memcpy", [&] {
           using T = scalar_t;
-          util::FutureGuard xGuard{xFuture};
+          utils::FutureGuard xGuard{xFuture};
           CHECK_CUDART(
-              cudaMemcpyAsync(DLLM_EXTRACT_TENSOR(y).data_ptr(), xBuffer->ptr,
-                              sizeof(T) * DLLM_EXTRACT_TENSOR(y).numel(),
+              cudaMemcpyAsync(y.impl()->tensor().data_ptr(), xBuffer->ptr,
+                              sizeof(T) * y.impl()->tensor().numel(),
                               cudaMemcpyHostToDevice, context->cudaStream));
         });
     CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
   }};
 
   const TaskFuture future = task.get_future();
-  x->resetFuture(future);
-  y->resetFuture(future);
+  utils::resetFuture(x, future);
+  utils::resetFuture(y, future);
   impl_->submit(std::move(task));
 }
 

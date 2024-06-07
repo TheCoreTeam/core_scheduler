@@ -15,9 +15,9 @@ TaskCompute step(const std::shared_ptr<Tensor1D> &w,
   auto task = TaskCompute{
       [w = w, dw = dw, lr = lr, dFuture = *w->future,
        dwFuture = dw->future->wFuture](const ContextCompute *context) mutable {
-        util::FutureGuard dRGuard{dFuture.rFuture};
-        util::FutureGuard dWGuard{dFuture.wFuture};
-        util::FutureGuard dwGuard{dwFuture};
+        utils::FutureGuard dRGuard{dFuture.rFuture};
+        utils::FutureGuard dWGuard{dFuture.wFuture};
+        utils::FutureGuard dwGuard{dwFuture};
         stepKernel(context->cudaStream, *w, *dw, lr);
         CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
         w.reset();

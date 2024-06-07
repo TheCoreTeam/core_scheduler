@@ -169,10 +169,6 @@ int64_t Impl_::commSize() const { return commSize_; }
 
 int64_t Impl_::rank() const { return rank_; }
 
-void ThreadStreamNccl::submit(TaskNccl &&task) const {
-  impl_->submit(std::move(task));
-}
-
 int64_t ThreadStreamNccl::commSize() const {
   return std::dynamic_pointer_cast<Impl_>(impl_)->commSize();
 }

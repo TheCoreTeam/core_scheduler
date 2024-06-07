@@ -9,20 +9,20 @@ struct ScaledDotProductFlashAttention {
     struct Forward {
     } forward;
     struct Backward {
-      std::shared_ptr<const ReadOnlyTensor> query = nullptr;
-      std::shared_ptr<const ReadOnlyTensor> key = nullptr;
-      std::shared_ptr<const ReadOnlyTensor> value = nullptr;
-      std::shared_ptr<const ReadOnlyTensor> out = nullptr;
-      std::shared_ptr<const ReadOnlyTensor> logsumexp = nullptr;
-      std::shared_ptr<const ReadOnlyTensor> cum_seq_q = nullptr;
-      std::shared_ptr<const ReadOnlyTensor> cum_seq_k = nullptr;
+      ReadOnlyTensor query{};
+      ReadOnlyTensor key{};
+      ReadOnlyTensor value{};
+      ReadOnlyTensor out{};
+      ReadOnlyTensor logsumexp{};
+      ReadOnlyTensor cum_seq_q{};
+      ReadOnlyTensor cum_seq_k{};
       struct Max {
         int64_t max_q;
         int64_t max_k;
       };
       std::shared_ptr<Max> max = std::make_shared<Max>();
-      std::shared_ptr<const ReadOnlyTensor> philox_seed = nullptr;
-      std::shared_ptr<const ReadOnlyTensor> philox_offset = nullptr;
+      ReadOnlyTensor philox_seed{};
+      ReadOnlyTensor philox_offset{};
     } backward;
     struct Args {
       const double dropout_p = 0;
@@ -44,17 +44,13 @@ struct ScaledDotProductFlashAttention {
                    const Options &options = {});
 
   static void forward(const Scheduler &scheduler,
-                      const std::shared_ptr<State> &state,
-                      const std::shared_ptr<Tensor> &output,
-                      const std::shared_ptr<const ReadOnlyTensor> &query,
-                      const std::shared_ptr<const ReadOnlyTensor> &key,
-                      const std::shared_ptr<const ReadOnlyTensor> &value);
+                      const std::shared_ptr<State> &state, Tensor &output,
+                      const ReadOnlyTensor &query, const ReadOnlyTensor &key,
+                      const ReadOnlyTensor &value);
 
   static void backward(const Scheduler &scheduler,
-                       const std::shared_ptr<State> &state,
-                       const std::shared_ptr<Tensor> &grad_query,
-                       const std::shared_ptr<Tensor> &grad_key,
-                       const std::shared_ptr<Tensor> &grad_value,
-                       const std::shared_ptr<const ReadOnlyTensor> &grad_out);
+                       const std::shared_ptr<State> &state, Tensor &grad_query,
+                       Tensor &grad_key, Tensor &grad_value,
+                       const ReadOnlyTensor &grad_out);
 };
 }  // namespace dllm::compute

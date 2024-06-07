@@ -10,7 +10,7 @@ struct AllReduce;
 template <>
 struct AllReduce<NCCL> {
   static void runInplace(const Scheduler& scheduler,
-                         const std::vector<std::shared_ptr<Tensor>>& tensors,
+                         const std::vector<Tensor>& tensors,
                          Operation operation);
 };
 }  // namespace dllm::communication

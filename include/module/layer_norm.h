@@ -13,13 +13,11 @@ struct DLLM_API LayerNormImpl : Module {
 
   explicit LayerNormImpl(const Scheduler &scheduler, const Options &options);
 
-  void forward(const Scheduler &scheduler,
-               const std::shared_ptr<Tensor> &output,
-               const std::shared_ptr<const ReadOnlyTensor> &input) const;
+  void forward(const Scheduler &scheduler, Tensor &output,
+               const ReadOnlyTensor &input) const;
 
-  void backward(const Scheduler &scheduler,
-                const std::shared_ptr<Tensor> &grad_input,
-                const std::shared_ptr<const ReadOnlyTensor> &grad_output) const;
+  void backward(const Scheduler &scheduler, Tensor &grad_input,
+                const ReadOnlyTensor &grad_output) const;
 
   std::shared_ptr<compute::LayerNorm::State> state() const;
 

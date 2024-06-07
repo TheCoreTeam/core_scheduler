@@ -7,11 +7,11 @@ namespace dllm::compute {
 struct Embedding {
   struct State {
     struct Forward {
-      std::shared_ptr<Tensor> weight;
-      std::shared_ptr<Tensor> grad_weight = Tensor::create();
+      Tensor weight;
+      Tensor grad_weight{};
     } forward;
     struct Backward {
-      std::shared_ptr<const ReadOnlyTensor> indices = nullptr;
+      ReadOnlyTensor indices;
     } backward;
     struct Args {
       int64_t num_weights;
@@ -41,13 +41,12 @@ struct Embedding {
                    const Options &options);
 
   static void forward(const Scheduler &scheduler,
-                      const std::shared_ptr<State> &state,
-                      const std::shared_ptr<Tensor> &output,
-                      const std::shared_ptr<const ReadOnlyTensor> &indices);
+                      const std::shared_ptr<State> &state, Tensor &output,
+                      const ReadOnlyTensor &indices);
 
-  static void backward(
-      const Scheduler &scheduler, const std::shared_ptr<State> &state,
-      const std::shared_ptr<const ReadOnlyTensor> &grad_output);
+  static void backward(const Scheduler &scheduler,
+                       const std::shared_ptr<State> &state,
+                       const ReadOnlyTensor &grad_output);
 };
 
 }  // namespace dllm::compute

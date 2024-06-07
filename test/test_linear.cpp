@@ -43,9 +43,9 @@ void TestBackwardT(dllm::ThreadPoolCompute &tp) {
   const torch::Device device = torch::kCUDA;
   const torch::Dtype dtype = TypeToTorch<Element>::type;
   const auto option = torch::TensorOptions().dtype(dtype).device(device);
-  auto y = dllm::Tensor::create();
-  auto dx = dllm::Tensor::create();
-  auto x = dllm::Tensor::create();
+  dllm::Tensor y;
+  dllm::Tensor dx;
+  dllm::Tensor x;
   dllm::compute::Utils::randn(tp, x, {m, s, k}, option);
   std::shared_ptr<dllm::compute::Linear::State> state;
   dllm::compute::Linear::init(
@@ -53,24 +53,24 @@ void TestBackwardT(dllm::ThreadPoolCompute &tp) {
       dllm::compute::Linear::Options{k, n}.bias(false).device(device).dtype(
           dtype));
   dllm::compute::Linear::forward(tp, state, y, x);
-  auto yGrad = dllm::Tensor::create();
+  dllm::Tensor yGrad;
   dllm::compute::Utils::randn_like(tp, yGrad, y);
   dllm::compute::Linear::backwardInput(tp, state, dx, yGrad);
   dllm::compute::Linear::backwardParameter(tp, state, yGrad);
-  dx->wait();
-  state->forward.grad_weight->wait();
+  dx.wait();
+  state->forward.grad_weight.wait();
   torch::Tensor xRef;
   dllm::memory::toTorch(stream, xRef, x);
-  x->wait();
+  x.wait();
   xRef.requires_grad_(true);
   torch::Tensor wRef;
   dllm::memory::toTorch(stream, wRef, state->forward.weight);
-  state->forward.weight->wait();
+  state->forward.weight.wait();
   wRef.requires_grad_(true);
   auto yRef = torch::linear(xRef, wRef);
   torch::Tensor yGradRef;
   dllm::memory::toTorch(stream, yGradRef, yGrad);
-  yGrad->wait();
+  yGrad.wait();
   yRef.backward(yGradRef);
 
   ASSERT_TRUE(torch::allclose(y, yRef));
@@ -95,31 +95,31 @@ void TestModuleT(dllm::ThreadPoolCompute &tp) {
   const torch::Device device = torch::kCUDA;
   const torch::Dtype dtype = TypeToTorch<Element>::type;
   const auto option = torch::TensorOptions().dtype(dtype).device(device);
-  auto y = dllm::Tensor::create();
-  auto dx = dllm::Tensor::create();
-  auto x = dllm::Tensor::create();
+  dllm::Tensor y;
+  dllm::Tensor dx;
+  dllm::Tensor x;
   dllm::compute::Utils::randn(tp, x, {m, s, k}, option);
   dllm::module::Linear fc{
       tp, dllm::module::Linear::Options{k, n}.bias(false).device(device).dtype(
               dtype)};
   fc->forward(tp, y, x);
-  auto yGrad = dllm::Tensor::create();
+  dllm::Tensor yGrad;
   dllm::compute::Utils::randn_like(tp, yGrad, y);
   fc->backward(tp, dx, yGrad);
-  dx->wait();
-  fc->state()->forward.grad_weight->wait();
+  dx.wait();
+  fc->state()->forward.grad_weight.wait();
   torch::Tensor xRef;
   dllm::memory::toTorch(stream, xRef, x);
-  x->wait();
+  x.wait();
   xRef.requires_grad_(true);
   torch::Tensor wRef;
   dllm::memory::toTorch(stream, wRef, fc->state()->forward.weight);
-  fc->state()->forward.weight->wait();
+  fc->state()->forward.weight.wait();
   wRef.requires_grad_(true);
   auto yRef = torch::linear(xRef, wRef);
   torch::Tensor yGradRef;
   dllm::memory::toTorch(stream, yGradRef, yGrad);
-  yGrad->wait();
+  yGrad.wait();
   yRef.backward(yGradRef);
 
   ASSERT_TRUE(torch::allclose(y, yRef));

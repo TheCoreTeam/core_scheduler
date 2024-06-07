@@ -11,15 +11,13 @@ LayerNormImpl::LayerNormImpl(const Scheduler& scheduler,
   state_ = state;
 }
 
-void LayerNormImpl::forward(
-    const Scheduler& scheduler, const std::shared_ptr<Tensor>& output,
-    const std::shared_ptr<const ReadOnlyTensor>& input) const {
+void LayerNormImpl::forward(const Scheduler& scheduler, Tensor& output,
+                            const ReadOnlyTensor& input) const {
   compute::LayerNorm::forward(scheduler, state(), output, input);
 }
 
-void LayerNormImpl::backward(
-    const Scheduler& scheduler, const std::shared_ptr<Tensor>& grad_input,
-    const std::shared_ptr<const ReadOnlyTensor>& grad_output) const {
+void LayerNormImpl::backward(const Scheduler& scheduler, Tensor& grad_input,
+                             const ReadOnlyTensor& grad_output) const {
   compute::LayerNorm::backward(scheduler, state(), grad_input, grad_output);
 }
 

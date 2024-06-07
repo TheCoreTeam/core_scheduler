@@ -11,9 +11,5 @@ namespace dllm {
 struct ThreadStreamCudart : Scheduler {
   explicit ThreadStreamCudart(int deviceRank,
                               std::optional<const int> bindingMap = {});
-
-  void submit(TaskCudart &&task) const;
-
-  void submit(const TaskCudart &task) const = delete;
 };
 }  // namespace dllm

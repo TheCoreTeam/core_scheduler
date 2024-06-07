@@ -116,10 +116,6 @@ void Impl_::submit(TaskCudart &&task) {
   cv.notify_one();
 }
 
-void ThreadPoolCudart::submit(TaskCudart &&task) const {
-  impl_->submit(std::move(task));
-}
-
 ThreadPoolCudart::ThreadPoolCudart(const int localRank, const int threadNum,
                                    const std::vector<int> &bindingMap) {
   impl_ = std::make_shared<Impl_>(localRank, threadNum, bindingMap);

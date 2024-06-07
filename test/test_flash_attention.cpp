@@ -51,15 +51,15 @@ void TestT(dllm::ThreadPoolCompute& tp) {
   const auto option = torch::TensorOptions().dtype(dtype).device(device);
   torch::manual_seed(1);
   int B = 15, T = 7, n_head = 8, n_embd = n_head * 8;
-  auto qkv = dllm::Tensor::create();
+  dllm::Tensor qkv;
   dllm::compute::Utils::rand(tp, qkv, {B, T, n_embd * 3}, option);
-  std::vector<std::shared_ptr<const dllm::ReadOnlyTensor>> qkvSplit;
+  std::vector<dllm::ReadOnlyTensor> qkvSplit;
   dllm::compute::Utils::split(tp, qkvSplit, qkv, n_embd, -1);
   auto& q = qkvSplit[0];
   auto& k = qkvSplit[1];
   auto& v = qkvSplit[2];
 
-  auto scale = 1.0 / std::sqrt(k->size(-1));
+  auto scale = 1.0 / std::sqrt(k.size(-1));
   auto state =
       std::make_shared<dllm::compute::ScaledDotProductFlashAttention::State>();
   dllm::compute::ScaledDotProductFlashAttention::init(
@@ -67,35 +67,35 @@ void TestT(dllm::ThreadPoolCompute& tp) {
       dllm::compute::ScaledDotProductFlashAttention::Options{}
           .is_causal(true)
           .scale(scale));
-  auto qview = dllm::Tensor::create();
+  dllm::Tensor qview;
   dllm::compute::Utils::view(tp, qview, q, {B, T, n_head, n_embd / n_head});
-  qview->wait();
-  auto kview = dllm::Tensor::create();
+  qview.wait();
+  dllm::Tensor kview;
   dllm::compute::Utils::view(tp, kview, k, {B, T, n_head, n_embd / n_head});
-  kview->wait();
-  auto vview = dllm::Tensor::create();
+  kview.wait();
+  dllm::Tensor vview;
   dllm::compute::Utils::view(tp, vview, v, {B, T, n_head, n_embd / n_head});
-  vview->wait();
-  auto output = dllm::Tensor::create();
+  vview.wait();
+  dllm::Tensor output;
   dllm::compute::ScaledDotProductFlashAttention::forward(tp, state, output,
                                                          qview, kview, vview);
-  output->wait();
-  auto dout = dllm::Tensor::create();
-  auto dq = dllm::Tensor::create();
-  auto dk = dllm::Tensor::create();
-  auto dv = dllm::Tensor::create();
+  output.wait();
+  dllm::Tensor dout;
+  dllm::Tensor dq;
+  dllm::Tensor dk;
+  dllm::Tensor dv;
   dllm::compute::Utils::rand_like(tp, dout, output);
-  output->wait();
+  output.wait();
   dllm::compute::ScaledDotProductFlashAttention::backward(tp, state, dq, dk, dv,
                                                           dout);
-  dq->wait();
+  dq.wait();
 
   torch::Tensor qkv_torch;
   dllm::memory::toTorch(stream, qkv_torch, qkv);
-  qkv->wait();
+  qkv.wait();
   torch::Tensor dout_torch;
   dllm::memory::toTorch(stream, dout_torch, dout);
-  dout->wait();
+  dout.wait();
 
   auto qkv_torch_v = qkv_torch.split(n_embd, -1);
   auto q_torch = qkv_torch_v[0]

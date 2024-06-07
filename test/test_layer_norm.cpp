@@ -53,10 +53,10 @@ void TestLayerNormFixture::TestFunctional(const int size) {
   const auto option = at::TensorOptions().dtype(dtype).device(device);
 
   std::shared_ptr<dllm::compute::LayerNorm::State> state;
-  auto x = dllm::Tensor::create();
-  auto dx = dllm::Tensor::create();
-  auto y = dllm::Tensor::create();
-  auto dy = dllm::Tensor::create();
+  dllm::Tensor x;
+  dllm::Tensor dx;
+  dllm::Tensor y;
+  dllm::Tensor dy;
   dllm::compute::LayerNorm::init(
       tp, state,
       dllm::compute::LayerNorm::Options{{3 * size}}.device(device).dtype(
@@ -68,11 +68,11 @@ void TestLayerNormFixture::TestFunctional(const int size) {
 
   at::Tensor x_torch, dx_torch, y_ref_torch, dy_torch;
   dllm::memory::toTorch(stream, x_torch, x);
-  x->wait();
+  x.wait();
   dllm::memory::toTorch(stream, y_ref_torch, y);
-  y->wait();
+  y.wait();
   dllm::memory::toTorch(stream, dy_torch, dy);
-  dy->wait();
+  dy.wait();
   x_torch.set_requires_grad(true);
   torch::nn::LayerNorm ln{torch::nn::LayerNormOptions({3 * size})};
   ln->to(device, dtype);
@@ -94,10 +94,10 @@ void TestLayerNormFixture::TestModule(const int size) {
   const at::ScalarType dtype = TypeToTorch<T>::type;
   const auto option = at::TensorOptions().dtype(dtype).device(device);
 
-  auto x = dllm::Tensor::create();
-  auto dx = dllm::Tensor::create();
-  auto y = dllm::Tensor::create();
-  auto dy = dllm::Tensor::create();
+  dllm::Tensor x;
+  dllm::Tensor dx;
+  dllm::Tensor y;
+  dllm::Tensor dy;
   dllm::module::LayerNorm lnOurs{
       tp,
       dllm::module::LayerNorm::Options{{3 * size}}.device(device).dtype(dtype)};
@@ -108,11 +108,11 @@ void TestLayerNormFixture::TestModule(const int size) {
 
   at::Tensor x_torch, dx_torch, y_ref_torch, dy_torch;
   dllm::memory::toTorch(stream, x_torch, x);
-  x->wait();
+  x.wait();
   dllm::memory::toTorch(stream, y_ref_torch, y);
-  y->wait();
+  y.wait();
   dllm::memory::toTorch(stream, dy_torch, dy);
-  dy->wait();
+  dy.wait();
   x_torch.set_requires_grad(true);
   torch::nn::LayerNorm ln{torch::nn::LayerNormOptions({3 * size})};
   ln->to(device, dtype);

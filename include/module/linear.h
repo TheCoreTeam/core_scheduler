@@ -9,21 +9,17 @@ struct DLLM_API LinearImpl : Module {
 
   explicit LinearImpl(const Scheduler &scheduler, const Options &options);
 
-  void forward(const Scheduler &scheduler,
-               const std::shared_ptr<Tensor> &output,
-               const std::shared_ptr<const ReadOnlyTensor> &input) const;
+  void forward(const Scheduler &scheduler, Tensor &output,
+               const ReadOnlyTensor &input) const;
 
-  void backward(const Scheduler &scheduler,
-                const std::shared_ptr<Tensor> &grad_input,
-                const std::shared_ptr<const ReadOnlyTensor> &grad_output) const;
+  void backward(const Scheduler &scheduler, Tensor &grad_input,
+                const ReadOnlyTensor &grad_output) const;
 
-  void backwardParameter(
-      const Scheduler &scheduler,
-      const std::shared_ptr<const ReadOnlyTensor> &grad_output) const;
+  void backwardParameter(const Scheduler &scheduler,
+                         const ReadOnlyTensor &grad_output) const;
 
-  void backwardInput(
-      const Scheduler &scheduler, const std::shared_ptr<Tensor> &grad_input,
-      const std::shared_ptr<const ReadOnlyTensor> &grad_output) const;
+  void backwardInput(const Scheduler &scheduler, Tensor &grad_input,
+                     const ReadOnlyTensor &grad_output) const;
 
   std::shared_ptr<compute::Linear::State> state() const;
 

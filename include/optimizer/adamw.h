@@ -20,9 +20,9 @@ struct AdamW {
 
   struct State final : module::OptimizerState {
     struct Tensors {
-      std::shared_ptr<Tensor> m;
-      std::shared_ptr<Tensor> v;
-      std::shared_ptr<Tensor> vMax = nullptr;
+      Tensor m;
+      Tensor v;
+      Tensor vMax{};
     } tensors;
     struct Options {
       const double lr = 1e-3;
@@ -67,12 +67,10 @@ struct AdamW {
   }
 
   static void init(const Scheduler &scheduler, std::shared_ptr<State> &state,
-                   const std::shared_ptr<const ReadOnlyTensor> &parameter,
-                   const Options &options);
+                   const ReadOnlyTensor &parameter, const Options &options);
 
   static void step(const Scheduler &scheduler,
-                   const std::shared_ptr<State> &state,
-                   const std::shared_ptr<Tensor> &w,
-                   const std::shared_ptr<const ReadOnlyTensor> &dw);
+                   const std::shared_ptr<State> &state, Tensor &w,
+                   const ReadOnlyTensor &dw);
 };
 }  // namespace dllm::optimizer

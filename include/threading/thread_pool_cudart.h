@@ -10,9 +10,5 @@ namespace dllm {
 struct ThreadPoolCudart final : Scheduler {
   ThreadPoolCudart(int localRank, int threadNum,
                    const std::vector<int> &bindingMap = {});
-
-  void submit(TaskCudart &&task) const;
-
-  void submit(const TaskCudart &task) const = delete;
 };
 }  // namespace dllm

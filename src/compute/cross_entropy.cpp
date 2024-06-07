@@ -6,7 +6,7 @@
 #include "internal_utils.h"
 #include "logger.h"
 #include "nvtx_helper.h"
-#include "tensor_friend.h"
+#include "tensor_impl.h"
 #include "threading/scheduler_impl.h"
 
 namespace dllm::compute {
@@ -20,104 +20,100 @@ void CrossEntropy::init(const Scheduler &scheduler,
                   options.label_smoothing()});
 }
 
-void CrossEntropy::forward(
-    const Scheduler &scheduler, const std::shared_ptr<State> &state,
-    const std::shared_ptr<Tensor> &loss,
-    const std::shared_ptr<const ReadOnlyTensor> &input,
-    const std::shared_ptr<const ReadOnlyTensor> &target) {
-  auto log_probs = Tensor::create();
-  auto total_weight = Tensor::create();
-  auto task = TaskCompute{
-      [weight = state->forward.weight, reduction = state->args.reduction,
-       ignore_index = state->args.ignore_index,
-       label_smoothing = state->args.label_smoothing, loss = loss,
-       input = input, target = target, log_probs = log_probs,
-       total_weight = total_weight, lossfuture = loss->future(),
-       weightFuture = state->forward.weight->future(),
-       inputFuture = input->future(),
-       targetFuture = target->future()](const ContextCompute *context) mutable {
-        DLLM_NVTX_RANGE_FN("dllm::compute::CrossEntropy::forward");
-        {
-          util::FutureGuard lossGuard{lossfuture};
-          util::FutureGuard inputGuard{inputFuture};
-          util::FutureGuard weightGuard{weightFuture};
-          util::FutureGuard targetGuard{targetFuture};
-          const c10::optional weight_{
-              !DLLM_EXTRACT_TENSOR(weight).defined()
-                  ? c10::optional<at::Tensor>{}
-                  : c10::optional{DLLM_EXTRACT_TENSOR(weight)}};
-          DLLM_EXTRACT_TENSOR(log_probs) =
-              at::log_softmax(DLLM_EXTRACT_TENSOR(input), 1);
-          std::make_tuple(std::ref(DLLM_EXTRACT_TENSOR(loss)),
-                          std::ref(DLLM_EXTRACT_TENSOR(total_weight))) =
-              at::nll_loss_forward(DLLM_EXTRACT_TENSOR(log_probs),
-                                   DLLM_EXTRACT_TENSOR(target), weight_,
-                                   reduction, ignore_index);
+void CrossEntropy::forward(const Scheduler &scheduler,
+                           const std::shared_ptr<State> &state, Tensor &loss,
+                           const ReadOnlyTensor &input,
+                           const ReadOnlyTensor &target) {
+  loss = Tensor{};
+  Tensor log_probs;
+  Tensor total_weight;
+  auto task = TaskCompute{[weight = state->forward.weight,
+                           reduction = state->args.reduction,
+                           ignore_index = state->args.ignore_index,
+                           label_smoothing = state->args.label_smoothing,
+                           loss = loss, input = input, target = target,
+                           log_probs = log_probs, total_weight = total_weight,
+                           weightFuture = utils::future(state->forward.weight),
+                           inputFuture = utils::future(input),
+                           targetFuture = utils::future(target)](
+                              const ContextCompute *context) mutable {
+    DLLM_NVTX_RANGE_FN("dllm::compute::CrossEntropy::forward");
+    {
+      utils::FutureGuard inputGuard{inputFuture};
+      utils::FutureGuard weightGuard{weightFuture};
+      utils::FutureGuard targetGuard{targetFuture};
+      const c10::optional weight_{!weight.impl()->tensor().defined()
+                                      ? c10::optional<at::Tensor>{}
+                                      : c10::optional{weight.impl()->tensor()}};
+      log_probs.impl()->tensor() = at::log_softmax(input.impl()->tensor(), 1);
+      std::make_tuple(std::ref(loss.impl()->tensor()),
+                      std::ref(total_weight.impl()->tensor())) =
+          at::nll_loss_forward(log_probs.impl()->tensor(),
+                               target.impl()->tensor(), weight_, reduction,
+                               ignore_index);
 
-          loss.reset();
-          log_probs.reset();
-          total_weight.reset();
-          input.reset();
-          weight.reset();
-          target.reset();
-        }
-        CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
-      }};
+      loss.reset();
+      log_probs.reset();
+      total_weight.reset();
+      input.reset();
+      weight.reset();
+      target.reset();
+    }
+    CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
+  }};
   const TaskFuture future = task.get_future();
-  loss->resetFuture(future);
-  input->resetFuture(future);
-  target->resetFuture(future);
-  log_probs->resetFuture(future);
-  total_weight->resetFuture(future);
-  state->forward.weight->resetFuture(future);
+  utils::resetFuture(loss, future);
+  utils::resetFuture(input, future);
+  utils::resetFuture(target, future);
+  utils::resetFuture(log_probs, future);
+  utils::resetFuture(total_weight, future);
+  utils::resetFuture(state->forward.weight, future);
   state->backward.log_probs = log_probs;
   state->backward.total_weight = std::move(total_weight);
   state->backward.target = target;
   state->backward.loss = loss;
   // size
-  log_probs->sizes() = input->sizes();
-  loss->sizes() = IntArray{1};
+  log_probs.sizes() = input.sizes();
+  loss.sizes() = IntArray{1};
   scheduler.impl()->submit(std::move(task));
 }
 
 void CrossEntropy::backward(const Scheduler &scheduler,
                             const std::shared_ptr<State> &state,
-                            const std::shared_ptr<Tensor> &dinput) {
+                            Tensor &dinput) {
+  dinput = Tensor{};
   auto task = TaskCompute{
       [weight = state->forward.weight, log_probs = state->backward.log_probs,
        total_weight = state->backward.total_weight,
        target = state->backward.target, loss = state->backward.loss,
        reduction = state->args.reduction,
        ignore_index = state->args.ignore_index, dinput = dinput,
-       dinputFuture = dinput->future(),
-       weightFuture = state->forward.weight->future(),
-       log_probsFuture = state->backward.log_probs->future(),
-       total_weightFuture = state->backward.total_weight->future(),
-       targetFuture = state->backward.target->future(),
-       lossFuture = state->backward.loss->future()](
+       weightFuture = utils::future(state->forward.weight),
+       log_probsFuture = utils::future(state->backward.log_probs),
+       total_weightFuture = utils::future(state->backward.total_weight),
+       targetFuture = utils::future(state->backward.target),
+       lossFuture = utils::future(state->backward.loss)](
           const ContextCompute *context) mutable {
         DLLM_NVTX_RANGE_FN("dllm::compute::CrossEntropy::backward");
         {
-          util::FutureGuard dinputGuard{dinputFuture};
-          util::FutureGuard log_probsGuard{log_probsFuture};
-          util::FutureGuard total_weightGuard{total_weightFuture};
-          util::FutureGuard targetGuard{targetFuture};
-          util::FutureGuard lossGuard{lossFuture};
-          util::FutureGuard weightGuard{weightFuture};
+          utils::FutureGuard log_probsGuard{log_probsFuture};
+          utils::FutureGuard total_weightGuard{total_weightFuture};
+          utils::FutureGuard targetGuard{targetFuture};
+          utils::FutureGuard lossGuard{lossFuture};
+          utils::FutureGuard weightGuard{weightFuture};
 
           const c10::optional weight_{
-              !DLLM_EXTRACT_TENSOR(weight).defined()
+              !weight.impl()->tensor().defined()
                   ? c10::optional<at::Tensor>{}
-                  : c10::optional{DLLM_EXTRACT_TENSOR(weight)}};
+                  : c10::optional{weight.impl()->tensor()}};
 
           const auto dnll = at::nll_loss_backward(
-              at::ones_like(DLLM_EXTRACT_TENSOR(loss)),
-              DLLM_EXTRACT_TENSOR(log_probs), DLLM_EXTRACT_TENSOR(target),
-              weight_, reduction, ignore_index,
-              DLLM_EXTRACT_TENSOR(total_weight));
-          DLLM_EXTRACT_TENSOR(dinput) = at::_log_softmax_backward_data(
-              dnll, DLLM_EXTRACT_TENSOR(log_probs), 1,
-              DLLM_EXTRACT_TENSOR(log_probs).scalar_type());
+              at::ones_like(loss.impl()->tensor()), log_probs.impl()->tensor(),
+              target.impl()->tensor(), weight_, reduction, ignore_index,
+              total_weight.impl()->tensor());
+          dinput.impl()->tensor() = at::_log_softmax_backward_data(
+              dnll, log_probs.impl()->tensor(), 1,
+              log_probs.impl()->tensor().scalar_type());
 
           dinput.reset();
           log_probs.reset();
@@ -129,14 +125,14 @@ void CrossEntropy::backward(const Scheduler &scheduler,
         CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
       }};
   const TaskFuture future = task.get_future();
-  dinput->resetFuture(future);
-  state->forward.weight->resetFuture(future);
-  state->backward.log_probs->resetFuture(future);
-  state->backward.total_weight->resetFuture(future);
-  state->backward.target->resetFuture(future);
-  state->backward.loss->resetFuture(future);
+  utils::resetFuture(dinput, future);
+  utils::resetFuture(state->forward.weight, future);
+  utils::resetFuture(state->backward.log_probs, future);
+  utils::resetFuture(state->backward.total_weight, future);
+  utils::resetFuture(state->backward.target, future);
+  utils::resetFuture(state->backward.loss, future);
   // size
-  dinput->sizes() = state->backward.log_probs->sizes();
+  dinput.sizes() = state->backward.log_probs.sizes();
   // decrease counter
   state->backward.log_probs.reset();
   state->backward.total_weight.reset();

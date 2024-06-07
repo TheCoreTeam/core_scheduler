@@ -48,10 +48,10 @@ void TestDLLMGelu::TestRoutine(const int T, const double tol_forward,
   const torch::Dtype dtype = TypeToTorch<Element>::type;
   const auto option = torch::TensorOptions().dtype(dtype).device(device);
 
-  const auto input2 = dllm::Tensor::create();
-  const auto tensorGradInput = dllm::Tensor::create();
-  const auto tensorOutput = dllm::Tensor::create();
-  const auto GradOutput_ = dllm::Tensor::create();
+  dllm::Tensor input2;
+  dllm::Tensor tensorGradInput;
+  dllm::Tensor tensorOutput;
+  dllm::Tensor GradOutput_;
   std::shared_ptr<dllm::compute::GeLU::State> state;
   dllm::compute::Utils::randn(tp, input2, {B, T}, option);
   dllm::compute::GeLU::init(tp, state);
@@ -62,9 +62,9 @@ void TestDLLMGelu::TestRoutine(const int T, const double tol_forward,
   torch::Tensor input;
   torch::Tensor GradOutput;
   dllm::memory::toTorch(stream, input, input2);
-  input2->wait();
+  input2.wait();
   dllm::memory::toTorch(stream, GradOutput, GradOutput_);
-  GradOutput_->wait();
+  GradOutput_.wait();
 
   auto input1 = input.detach().clone().set_requires_grad(true);
 
