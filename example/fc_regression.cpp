@@ -209,12 +209,12 @@ int main() {
         threadPool.submit(std::move(task));
       }
       {
-        dllm::util::FutureGuard{tensorW2->future->rFuture};
-        dllm::util::FutureGuard{tensorW2->future->wFuture};
+        dllm::utils::FutureGuard{tensorW2->future->rFuture};
+        dllm::utils::FutureGuard{tensorW2->future->wFuture};
       }
       {
-        dllm::util::FutureGuard{tensorW1->future->rFuture};
-        dllm::util::FutureGuard{tensorW1->future->wFuture};
+        dllm::utils::FutureGuard{tensorW1->future->rFuture};
+        dllm::utils::FutureGuard{tensorW1->future->wFuture};
       }
     }
   }
@@ -241,8 +241,8 @@ int main() {
     threadPool.submit(std::move(task));
   }
   {
-    dllm::util::FutureGuard{tensorW2Out->future->rFuture};
-    dllm::util::FutureGuard{tensorW2Out->future->wFuture};
+    dllm::utils::FutureGuard{tensorW2Out->future->rFuture};
+    dllm::utils::FutureGuard{tensorW2Out->future->wFuture};
   }
 
   CHECK_CUDART(cudaMemcpy(yTestRef.data(), tensorW2Out->data(),

@@ -47,26 +47,23 @@ void TestUtilsFixture::TestCat(const int size) {
   const at::Device device(at::kCUDA, 0);
   const at::ScalarType dtype = TypeToTorch<T>::type;
   const auto option = at::TensorOptions().dtype(dtype).device(device);
-  auto x1 = dllm::Tensor::create();
-  auto x2 = dllm::Tensor::create();
-  auto x3 = dllm::Tensor::create();
-  auto y = dllm::Tensor::create();
-  DLLM_SUBMIT_TASK(tp,
-                   dllm::compute::Utils::rand(x1, {size, size, size}, option));
-  DLLM_SUBMIT_TASK(tp,
-                   dllm::compute::Utils::rand(x2, {size, size, size}, option));
-  DLLM_SUBMIT_TASK(tp,
-                   dllm::compute::Utils::rand(x3, {size, size, size}, option));
-  DLLM_SUBMIT_TASK(tp, dllm::compute::Utils::cat(y, {x1, x2, x3}, -1));
+  dllm::Tensor x1;
+  dllm::Tensor x2;
+  dllm::Tensor x3;
+  dllm::Tensor y;
+  dllm::compute::Utils::rand(tp, x1, {size, size, size}, option);
+  dllm::compute::Utils::rand(tp, x2, {size, size, size}, option);
+  dllm::compute::Utils::rand(tp, x3, {size, size, size}, option);
+  dllm::compute::Utils::cat(tp, y, {x1, x2, x3}, -1);
   at::Tensor x1_torch, x2_torch, x3_torch, y_torch;
-  DLLM_SUBMIT_TASK(stream, dllm::memory::toTorch(x1_torch, x1));
-  x1->wait();
-  DLLM_SUBMIT_TASK(stream, dllm::memory::toTorch(x2_torch, x2));
-  x2->wait();
-  DLLM_SUBMIT_TASK(stream, dllm::memory::toTorch(x3_torch, x3));
-  x3->wait();
-  DLLM_SUBMIT_TASK(stream, dllm::memory::toTorch(y_torch, y));
-  y->wait();
+  dllm::memory::toTorch(stream, x1_torch, x1);
+  x1.wait();
+  dllm::memory::toTorch(stream, x2_torch, x2);
+  x2.wait();
+  dllm::memory::toTorch(stream, x3_torch, x3);
+  x3.wait();
+  dllm::memory::toTorch(stream, y_torch, y);
+  y.wait();
   ASSERT_TRUE(at::allclose(y, at::cat({x1_torch, x2_torch, x3_torch}, -1)));
 }
 
@@ -79,16 +76,15 @@ void TestUtilsFixture::TestSum(const int size) {
   const at::Device device(at::kCUDA, 0);
   const at::ScalarType dtype = TypeToTorch<T>::type;
   const auto option = at::TensorOptions().dtype(dtype).device(device);
-  auto x = dllm::Tensor::create();
-  auto y = dllm::Tensor::create();
-  DLLM_SUBMIT_TASK(tp,
-                   dllm::compute::Utils::rand(x, {size, size, size}, option));
-  DLLM_SUBMIT_TASK(tp, dllm::compute::Utils::sum(y, x, 0));
+  dllm::Tensor x;
+  dllm::Tensor y;
+  dllm::compute::Utils::rand(tp, x, {size, size, size}, option);
+  dllm::compute::Utils::sum(tp, y, x, 0);
   at::Tensor x_torch, y_torch;
-  DLLM_SUBMIT_TASK(stream, dllm::memory::toTorch(x_torch, x));
-  x->wait();
-  DLLM_SUBMIT_TASK(stream, dllm::memory::toTorch(y_torch, y));
-  y->wait();
+  dllm::memory::toTorch(stream, x_torch, x);
+  x.wait();
+  dllm::memory::toTorch(stream, y_torch, y);
+  y.wait();
   ASSERT_TRUE(at::allclose(y, at::sum(x_torch, 0)));
 }
 

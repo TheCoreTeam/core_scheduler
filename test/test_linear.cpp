@@ -37,67 +37,40 @@ class LinearTestFixture : public ::testing::Test {
 
 namespace {
 template <typename Element>
-void TestBackwardT(dllm::ThreadPoolCompute &threadPool) {
+void TestBackwardT(dllm::ThreadPoolCompute &tp) {
   dllm::ThreadStreamCudart stream{0};
   const int m = 32, n = 16, k = 4, s = 3;
   const torch::Device device = torch::kCUDA;
   const torch::Dtype dtype = TypeToTorch<Element>::type;
   const auto option = torch::TensorOptions().dtype(dtype).device(device);
-  auto y = dllm::Tensor::create();
-  auto dx = dllm::Tensor::create();
-  auto x = dllm::Tensor::create();
-  {
-    auto task = dllm::compute::Utils::randn(x, {m, s, k}, option);
-    threadPool.submit(std::move(task));
-  }
+  dllm::Tensor y;
+  dllm::Tensor dx;
+  dllm::Tensor x;
+  dllm::compute::Utils::randn(tp, x, {m, s, k}, option);
   std::shared_ptr<dllm::compute::Linear::State> state;
-  {
-    auto task = dllm::compute::Linear::init(
-        state,
-        dllm::compute::Linear::Options{k, n}.bias(false).device(device).dtype(
-            dtype));
-    threadPool.submit(std::move(task));
-  }
-  {
-    auto task = dllm::compute::Linear::forward(state, y, x);
-    threadPool.submit(std::move(task));
-  }
-  auto yGrad = dllm::Tensor::create();
-  {
-    auto task = dllm::compute::Utils::randn_like(yGrad, y);
-    threadPool.submit(std::move(task));
-  }
-  {
-    auto task = dllm::compute::Linear::backwardInput(state, dx, yGrad);
-    threadPool.submit(std::move(task));
-  }
-  {
-    auto task = dllm::compute::Linear::backwardParameter(state, yGrad);
-    threadPool.submit(std::move(task));
-  }
-  dx->wait();
-  state->forward.grad_weight->wait();
+  dllm::compute::Linear::init(
+      tp, state,
+      dllm::compute::Linear::Options{k, n}.bias(false).device(device).dtype(
+          dtype));
+  dllm::compute::Linear::forward(tp, state, y, x);
+  dllm::Tensor yGrad;
+  dllm::compute::Utils::randn_like(tp, yGrad, y);
+  dllm::compute::Linear::backwardInput(tp, state, dx, yGrad);
+  dllm::compute::Linear::backwardParameter(tp, state, yGrad);
+  dx.wait();
+  state->forward.grad_weight.wait();
   torch::Tensor xRef;
-  {
-    auto task = dllm::memory::toTorch(xRef, x);
-    stream.submit(std::move(task));
-    x->wait();
-    xRef.requires_grad_(true);
-  }
+  dllm::memory::toTorch(stream, xRef, x);
+  x.wait();
+  xRef.requires_grad_(true);
   torch::Tensor wRef;
-  {
-    auto task = dllm::memory::toTorch(wRef, state->forward.weight);
-    stream.submit(std::move(task));
-    state->forward.weight->wait();
-    wRef.requires_grad_(true);
-  }
+  dllm::memory::toTorch(stream, wRef, state->forward.weight);
+  state->forward.weight.wait();
+  wRef.requires_grad_(true);
   auto yRef = torch::linear(xRef, wRef);
   torch::Tensor yGradRef;
-  {
-    auto task = dllm::memory::toTorch(yGradRef, yGrad);
-    stream.submit(std::move(task));
-    yGrad->wait();
-  }
+  dllm::memory::toTorch(stream, yGradRef, yGrad);
+  yGrad.wait();
   yRef.backward(yGradRef);
 
   ASSERT_TRUE(torch::allclose(y, yRef));
@@ -116,53 +89,37 @@ TEST_F(LinearTestFixture, TestBackwardF64) {
 
 namespace {
 template <typename Element>
-void TestModuleT(dllm::ThreadPoolCompute &threadPool) {
+void TestModuleT(dllm::ThreadPoolCompute &tp) {
   dllm::ThreadStreamCudart stream{0};
   const int m = 32, n = 16, k = 4, s = 3;
   const torch::Device device = torch::kCUDA;
   const torch::Dtype dtype = TypeToTorch<Element>::type;
   const auto option = torch::TensorOptions().dtype(dtype).device(device);
-  auto y = dllm::Tensor::create();
-  auto dx = dllm::Tensor::create();
-  auto x = dllm::Tensor::create();
-  {
-    auto task = dllm::compute::Utils::randn(x, {m, s, k}, option);
-    threadPool.submit(std::move(task));
-  }
+  dllm::Tensor y;
+  dllm::Tensor dx;
+  dllm::Tensor x;
+  dllm::compute::Utils::randn(tp, x, {m, s, k}, option);
   dllm::module::Linear fc{
-      threadPool,
-      dllm::module::Linear::Options{k, n}.bias(false).device(device).dtype(
-          dtype)};
-  fc->forward(threadPool, y, x);
-  auto yGrad = dllm::Tensor::create();
-  {
-    auto task = dllm::compute::Utils::randn_like(yGrad, y);
-    threadPool.submit(std::move(task));
-  }
-  fc->backward(threadPool, dx, yGrad);
-  dx->wait();
-  fc->state()->forward.grad_weight->wait();
+      tp, dllm::module::Linear::Options{k, n}.bias(false).device(device).dtype(
+              dtype)};
+  fc->forward(tp, y, x);
+  dllm::Tensor yGrad;
+  dllm::compute::Utils::randn_like(tp, yGrad, y);
+  fc->backward(tp, dx, yGrad);
+  dx.wait();
+  fc->state()->forward.grad_weight.wait();
   torch::Tensor xRef;
-  {
-    auto task = dllm::memory::toTorch(xRef, x);
-    stream.submit(std::move(task));
-    x->wait();
-    xRef.requires_grad_(true);
-  }
+  dllm::memory::toTorch(stream, xRef, x);
+  x.wait();
+  xRef.requires_grad_(true);
   torch::Tensor wRef;
-  {
-    auto task = dllm::memory::toTorch(wRef, fc->state()->forward.weight);
-    stream.submit(std::move(task));
-    fc->state()->forward.weight->wait();
-    wRef.requires_grad_(true);
-  }
+  dllm::memory::toTorch(stream, wRef, fc->state()->forward.weight);
+  fc->state()->forward.weight.wait();
+  wRef.requires_grad_(true);
   auto yRef = torch::linear(xRef, wRef);
   torch::Tensor yGradRef;
-  {
-    auto task = dllm::memory::toTorch(yGradRef, yGrad);
-    stream.submit(std::move(task));
-    yGrad->wait();
-  }
+  dllm::memory::toTorch(stream, yGradRef, yGrad);
+  yGrad.wait();
   yRef.backward(yGradRef);
 
   ASSERT_TRUE(torch::allclose(y, yRef));

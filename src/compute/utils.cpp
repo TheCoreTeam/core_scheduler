@@ -5,35 +5,36 @@
 #include "internal_utils.h"
 #include "logger.h"
 #include "nvtx_helper.h"
-#include "tensor_friend.h"
+#include "tensor_impl.h"
+#include "threading/scheduler_impl.h"
+#include "threading/task_compute.h"
 
 namespace dllm::compute::Utils {
-TaskCompute sum(const std::shared_ptr<Tensor> &output,
-                const std::shared_ptr<const ReadOnlyTensor> &input,
-                const IntArray &dim, const bool keep_dim,
-                c10::optional<at::ScalarType> dtype) {
+void sum(const Scheduler &scheduler, Tensor &output,
+         const ReadOnlyTensor &input, const IntArray &dim, const bool keep_dim,
+         c10::optional<at::ScalarType> dtype) {
+  Tensor output_{};
   DLLM_ASSERT_TRUE(!dim.empty(), "dim should not be empty");
-  auto task = TaskCompute{
-      [output = output, input = input, dim = dim, keep_dim = keep_dim,
-       dtype = dtype, outputFuture = output->future(),
-       inputFuture = input->future()](const ContextCompute *context) mutable {
-        DLLM_NVTX_RANGE_FN("dllm::compute::Utils::range");
-        {
-          util::FutureGuard outputGuard{outputFuture};
-          util::FutureGuard inputGuard{inputFuture};
-          DLLM_EXTRACT_TENSOR(output) =
-              at::sum(DLLM_EXTRACT_TENSOR(input), dim, keep_dim, dtype);
-          output.reset();
-          input.reset();
-        }
-        CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
-      }};
+  auto task = TaskCompute{[output = output_, input = input, dim = dim,
+                           keep_dim = keep_dim, dtype = dtype,
+                           inputFuture = utils::future(input)](
+                              const ContextCompute *context) mutable {
+    DLLM_NVTX_RANGE_FN("dllm::compute::Utils::range");
+    {
+      utils::FutureGuard inputGuard{inputFuture};
+      output.impl()->tensor() =
+          at::sum(input.impl()->tensor(), dim, keep_dim, dtype);
+      output.reset();
+      input.reset();
+    }
+    CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
+  }};
   const TaskFuture future = task.get_future();
-  input->resetFuture(future);
-  output->resetFuture(future);
+  utils::resetFuture(input, future);
+  utils::resetFuture(output_, future);
   // size
-  output->sizes() = [&, dim = dim]() mutable {
-    auto size = input->sizes();
+  output_.sizes() = [&, dim = dim]() mutable {
+    auto size = input.sizes();
     const auto len = size.size();
     for (auto &d : dim) {
       if (d < 0) {
@@ -58,384 +59,380 @@ TaskCompute sum(const std::shared_ptr<Tensor> &output,
     }
     return size;
   }();
-  return task;
+  output = output_;
+  scheduler.impl()->submit(std::move(task));
 }
 
-TaskCompute range(const std::shared_ptr<Tensor> &tensor,
-                  const at::Scalar &start, const at::Scalar &end,
-                  const at::TensorOptions options) {
-  auto task = TaskCompute{
-      [tensor = tensor, start = start, end = end, options = options,
-       future = tensor->future()](const ContextCompute *context) mutable {
+void range(const Scheduler &scheduler, Tensor &tensor, const at::Scalar &start,
+           const at::Scalar &end, const at::TensorOptions options) {
+  tensor = Tensor{};
+  auto task =
+      TaskCompute{[tensor = tensor, start = start, end = end,
+                   options = options](const ContextCompute *context) mutable {
         DLLM_NVTX_RANGE_FN("dllm::compute::Utils::range");
         {
-          util::FutureGuard guard{future};
-          DLLM_EXTRACT_TENSOR(tensor) = torch::range(start, end, options);
+          tensor.impl()->tensor() = torch::range(start, end, options);
           tensor.reset();
         }
         CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
       }};
   const TaskFuture future = task.get_future();
-  tensor->resetFuture(future);
+  utils::resetFuture(tensor, future);
   // size
-  tensor->sizes() = IntArray{end.toLong() - start.toLong()};
-  return task;
+  tensor.sizes() = IntArray{end.toLong() - start.toLong()};
+  scheduler.impl()->submit(std::move(task));
 }
 
-TaskCompute arange(const std::shared_ptr<Tensor> &tensor,
-                   const at::Scalar &start, const at::Scalar &end,
-                   const at::TensorOptions options) {
-  auto task = TaskCompute{
-      [tensor = tensor, start = start, end = end, options = options,
-       future = tensor->future()](const ContextCompute *context) mutable {
+void arange(const Scheduler &scheduler, Tensor &tensor, const at::Scalar &start,
+            const at::Scalar &end, const at::TensorOptions options) {
+  tensor = Tensor{};
+  auto task =
+      TaskCompute{[tensor = tensor, start = start, end = end,
+                   options = options](const ContextCompute *context) mutable {
         DLLM_NVTX_RANGE_FN("dllm::compute::Utils::range");
         {
-          util::FutureGuard guard{future};
-          DLLM_EXTRACT_TENSOR(tensor) = torch::arange(start, end, options);
+          tensor.impl()->tensor() = torch::arange(start, end, options);
           tensor.reset();
         }
         CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
       }};
   const TaskFuture future = task.get_future();
-  tensor->resetFuture(future);
+  utils::resetFuture(tensor, future);
   // size
-  tensor->sizes() = IntArray{(end.toLong() - start.toLong())};
-  tensor->options() = options;
-  return task;
+  tensor.sizes() = IntArray{(end.toLong() - start.toLong())};
+  tensor.options() = options;
+  scheduler.impl()->submit(std::move(task));
 }
 
-TaskCompute arange(const std::shared_ptr<Tensor> &tensor,
-                   const at::Scalar &start, const at::Scalar &end,
-                   const at::Scalar &step, const at::TensorOptions options) {
-  auto task = TaskCompute{[tensor = tensor, start = start, end = end,
-                           step = step, options = options,
-                           future = tensor->future()](
+void arange(const Scheduler &scheduler, Tensor &tensor, const at::Scalar &start,
+            const at::Scalar &end, const at::Scalar &step,
+            const at::TensorOptions options) {
+  tensor = Tensor{};
+  auto task =
+      TaskCompute{[tensor = tensor, start = start, end = end, step = step,
+                   options = options](const ContextCompute *context) mutable {
+        DLLM_NVTX_RANGE_FN("dllm::compute::Utils::range");
+        {
+          tensor.impl()->tensor() = torch::arange(start, end, step, options);
+          tensor.reset();
+        }
+        CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
+      }};
+  const TaskFuture future = task.get_future();
+  utils::resetFuture(tensor, future);
+  // size
+  tensor.sizes() = IntArray{(end.toLong() - start.toLong()) / step.toLong()};
+  tensor.options() = options;
+  scheduler.impl()->submit(std::move(task));
+}
+
+void randint(const Scheduler &scheduler, Tensor &tensor, const int64_t low,
+             const int64_t high, const IntArrayRef &size,
+             const at::TensorOptions options) {
+  tensor = Tensor{};
+  auto task =
+      TaskCompute{[tensor = tensor, high = high, low = low,
+                   options = options](const ContextCompute *context) mutable {
+        DLLM_NVTX_RANGE_FN("dllm::compute::Utils::randint");
+        {
+          tensor.impl()->tensor() =
+              torch::randint(low, high, tensor.sizes(), options);
+          tensor.reset();
+        }
+        CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
+      }};
+  const TaskFuture future = task.get_future();
+  utils::resetFuture(tensor, future);
+  // size
+  tensor.sizes() = size;
+  tensor.options() = options;
+  scheduler.impl()->submit(std::move(task));
+}
+
+void empty(const Scheduler &scheduler, Tensor &tensor, const IntArrayRef &size,
+           at::TensorOptions options) {
+  tensor = Tensor{};
+  auto task = TaskCompute{[tensor = tensor, options = options](
                               const ContextCompute *context) mutable {
-    DLLM_NVTX_RANGE_FN("dllm::compute::Utils::range");
+    DLLM_NVTX_RANGE_FN("dllm::compute::Utils::empty");
     {
-      util::FutureGuard guard{future};
-      DLLM_EXTRACT_TENSOR(tensor) = torch::arange(start, end, step, options);
+      tensor.impl()->tensor() = torch::empty(tensor.sizes(), options);
       tensor.reset();
     }
     CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
   }};
   const TaskFuture future = task.get_future();
-  tensor->resetFuture(future);
+  utils::resetFuture(tensor, future);
   // size
-  tensor->sizes() = IntArray{(end.toLong() - start.toLong()) / step.toLong()};
-  tensor->options() = options;
-  return task;
+  tensor.sizes() = size;
+  tensor.options() = options;
+  scheduler.impl()->submit(std::move(task));
 }
 
-TaskCompute randint(const std::shared_ptr<Tensor> &tensor, const int64_t low,
-                    const int64_t high, const IntArrayRef &size,
-                    const at::TensorOptions options) {
-  auto task = TaskCompute{
-      [tensor = tensor, high = high, low = low, options = options,
-       future = tensor->future()](const ContextCompute *context) mutable {
-        DLLM_NVTX_RANGE_FN("dllm::compute::Utils::randint");
+void empty_like(const Scheduler &scheduler, Tensor &dst,
+                const ReadOnlyTensor &src) {
+  Tensor dst_{};
+  auto task =
+      TaskCompute{[dst = dst_, src = src, srcFuture = utils::future(src)](
+                      const ContextCompute *context) mutable {
+        DLLM_NVTX_RANGE_FN("dllm::compute::Utils::empty_like");
         {
-          util::FutureGuard guard{future};
-          DLLM_EXTRACT_TENSOR(tensor) =
-              torch::randint(low, high, tensor->sizes(), options);
-          tensor.reset();
+          utils::FutureGuard srcGuard{srcFuture};
+          dst.impl()->tensor() = torch::empty_like(src.impl()->tensor());
+          src.reset();
+          dst.reset();
         }
         CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
       }};
   const TaskFuture future = task.get_future();
-  tensor->resetFuture(future);
+  utils::resetFuture(dst_, future);
+  utils::resetFuture(src, future);
   // size
-  tensor->sizes() = size;
-  tensor->options() = options;
-  return task;
+  dst_.sizes() = src.sizes();
+  dst_.options() = src.options();
+  dst = dst_;
+  scheduler.impl()->submit(std::move(task));
 }
 
-TaskCompute empty(const std::shared_ptr<Tensor> &tensor,
-                  const IntArrayRef &size, at::TensorOptions options) {
-  auto task = TaskCompute{
-      [tensor = tensor, options = options,
-       future = tensor->future()](const ContextCompute *context) mutable {
-        DLLM_NVTX_RANGE_FN("dllm::compute::Utils::empty");
-        {
-          util::FutureGuard guard{future};
-          DLLM_EXTRACT_TENSOR(tensor) = torch::empty(tensor->sizes(), options);
-          tensor.reset();
-        }
-        CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
-      }};
-  const TaskFuture future = task.get_future();
-  tensor->resetFuture(future);
-  // size
-  tensor->sizes() = size;
-  tensor->options() = options;
-  return task;
-}
-
-TaskCompute empty_like(const std::shared_ptr<Tensor> &dst,
-                       const std::shared_ptr<const ReadOnlyTensor> &src) {
-  auto task = TaskCompute{[dst = dst, src = src, dstFuture = dst->future(),
-                           srcFuture = src->future()](
+void ones(const Scheduler &scheduler, Tensor &tensor, const IntArrayRef &size,
+          at::TensorOptions options) {
+  tensor = Tensor{};
+  auto task = TaskCompute{[tensor = tensor, options = options](
                               const ContextCompute *context) mutable {
-    DLLM_NVTX_RANGE_FN("dllm::compute::Utils::empty_like");
+    DLLM_NVTX_RANGE_FN("dllm::compute::Utils::ones");
     {
-      util::FutureGuard srcGuard{srcFuture};
-      util::FutureGuard dstGuard{dstFuture};
-      DLLM_EXTRACT_TENSOR(dst) = torch::empty_like(DLLM_EXTRACT_TENSOR(src));
-      src.reset();
-      dst.reset();
+      tensor.impl()->tensor() = torch::ones(tensor.sizes(), options);
+      tensor.reset();
     }
     CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
   }};
   const TaskFuture future = task.get_future();
-  dst->resetFuture(future);
-  src->resetFuture(future);
-  // size
-  dst->sizes() = src->sizes();
-  dst->options() = src->options();
-  return task;
+  utils::resetFuture(tensor, future);
+  tensor.sizes() = size;
+  tensor.options() = options;
+  scheduler.impl()->submit(std::move(task));
 }
 
-TaskCompute ones(const std::shared_ptr<Tensor> &tensor, const IntArrayRef &size,
-                 at::TensorOptions options) {
-  auto task = TaskCompute{
-      [tensor = tensor, options = options,
-       future = tensor->future()](const ContextCompute *context) mutable {
-        DLLM_NVTX_RANGE_FN("dllm::compute::Utils::ones");
-        {
-          util::FutureGuard guard{future};
-          DLLM_EXTRACT_TENSOR(tensor) = torch::ones(tensor->sizes(), options);
-          tensor.reset();
-        }
-        CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
-      }};
-  const TaskFuture future = task.get_future();
-  tensor->resetFuture(future);
-  tensor->sizes() = size;
-  tensor->options() = options;
-  return task;
-}
-
-TaskCompute ones_like(const std::shared_ptr<Tensor> &dst,
-                      const std::shared_ptr<const ReadOnlyTensor> &src) {
-  auto task = TaskCompute{
-      [dst = dst, src = src, dstFuture = dst->future(),
-       srcFuture = src->future()](const ContextCompute *context) mutable {
+void ones_like(const Scheduler &scheduler, Tensor &dst,
+               const ReadOnlyTensor &src) {
+  Tensor dst_{};
+  auto task =
+      TaskCompute{[dst = dst_, src = src, srcFuture = utils::future(src)](
+                      const ContextCompute *context) mutable {
         DLLM_NVTX_RANGE_FN("dllm::compute::Utils::ones_like");
         {
-          util::FutureGuard srcGuard{srcFuture};
-          util::FutureGuard dstGuard{dstFuture};
-          DLLM_EXTRACT_TENSOR(dst) = torch::ones_like(DLLM_EXTRACT_TENSOR(src));
+          utils::FutureGuard srcGuard{srcFuture};
+          dst.impl()->tensor() = torch::ones_like(src.impl()->tensor());
           src.reset();
           dst.reset();
         }
         CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
       }};
   const TaskFuture future = task.get_future();
-  dst->resetFuture(future);
-  src->resetFuture(future);
+  utils::resetFuture(dst_, future);
+  utils::resetFuture(src, future);
   // size
-  dst->sizes() = src->sizes();
-  dst->options() = src->options();
-  return task;
+  dst_.sizes() = src.sizes();
+  dst_.options() = src.options();
+  dst = dst_;
+  scheduler.impl()->submit(std::move(task));
 }
 
-TaskCompute zeros(const std::shared_ptr<Tensor> &tensor,
-                  const IntArrayRef &size, at::TensorOptions options) {
-  auto task = TaskCompute{
-      [tensor = tensor, options = options,
-       future = tensor->future()](const ContextCompute *context) mutable {
-        DLLM_NVTX_RANGE_FN("dllm::compute::Utils::zeros");
-        {
-          util::FutureGuard guard{future};
-          DLLM_EXTRACT_TENSOR(tensor) = torch::zeros(tensor->sizes(), options);
-          tensor.reset();
-        }
-        CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
-      }};
-  const TaskFuture future = task.get_future();
-  tensor->resetFuture(future);
-  // size
-  tensor->sizes() = size;
-  tensor->options() = options;
-  return task;
-}
-
-TaskCompute zeros_like(const std::shared_ptr<Tensor> &dst,
-                       const std::shared_ptr<const ReadOnlyTensor> &src) {
-  auto task = TaskCompute{[dst = dst, src = src, dstFuture = dst->future(),
-                           srcFuture = src->future()](
+void zeros(const Scheduler &scheduler, Tensor &tensor, const IntArrayRef &size,
+           at::TensorOptions options) {
+  tensor = Tensor{};
+  auto task = TaskCompute{[tensor = tensor, options = options](
                               const ContextCompute *context) mutable {
-    DLLM_NVTX_RANGE_FN("dllm::compute::Utils::zeros_like");
+    DLLM_NVTX_RANGE_FN("dllm::compute::Utils::zeros");
     {
-      util::FutureGuard srcGuard{srcFuture};
-      util::FutureGuard dstGuard{dstFuture};
-      DLLM_EXTRACT_TENSOR(dst) = torch::zeros_like(DLLM_EXTRACT_TENSOR(src));
-      src.reset();
-      dst.reset();
+      tensor.impl()->tensor() = torch::zeros(tensor.sizes(), options);
+      tensor.reset();
     }
     CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
   }};
   const TaskFuture future = task.get_future();
-  dst->resetFuture(future);
-  src->resetFuture(future);
+  utils::resetFuture(tensor, future);
   // size
-  dst->sizes() = src->sizes();
-  dst->options() = src->options();
-  return task;
+  tensor.sizes() = size;
+  tensor.options() = options;
+  scheduler.impl()->submit(std::move(task));
 }
 
-TaskCompute rand(const std::shared_ptr<Tensor> &tensor, const IntArrayRef &size,
-                 at::TensorOptions options) {
-  auto task = TaskCompute{
-      [tensor = tensor, options = options,
-       future = tensor->future()](const ContextCompute *context) mutable {
-        DLLM_NVTX_RANGE_FN("dllm::compute::Utils::rand");
+void zeros_like(const Scheduler &scheduler, Tensor &dst,
+                const ReadOnlyTensor &src) {
+  Tensor dst_{};
+  auto task =
+      TaskCompute{[dst = dst_, src = src, srcFuture = utils::future(src)](
+                      const ContextCompute *context) mutable {
+        DLLM_NVTX_RANGE_FN("dllm::compute::Utils::zeros_like");
         {
-          util::FutureGuard guard{future};
-          DLLM_EXTRACT_TENSOR(tensor) = torch::rand(tensor->sizes(), options);
-          tensor.reset();
+          utils::FutureGuard srcGuard{srcFuture};
+          dst.impl()->tensor() = torch::zeros_like(src.impl()->tensor());
+          src.reset();
+          dst.reset();
         }
         CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
       }};
   const TaskFuture future = task.get_future();
-  tensor->resetFuture(future);
+  utils::resetFuture(dst_, future);
+  utils::resetFuture(src, future);
   // size
-  tensor->sizes() = size;
-  tensor->options() = options;
-  return task;
+  dst_.sizes() = src.sizes();
+  dst_.options() = src.options();
+  dst = dst_;
+  scheduler.impl()->submit(std::move(task));
 }
 
-TaskCompute rand_like(const std::shared_ptr<Tensor> &dst,
-                      const std::shared_ptr<const ReadOnlyTensor> &src) {
-  auto task = TaskCompute{
-      [dst = dst, src = src, dstFuture = dst->future(),
-       srcFuture = src->future()](const ContextCompute *context) mutable {
+void rand(const Scheduler &scheduler, Tensor &tensor, const IntArrayRef &size,
+          at::TensorOptions options) {
+  tensor = Tensor{};
+  auto task = TaskCompute{[tensor = tensor, options = options](
+                              const ContextCompute *context) mutable {
+    DLLM_NVTX_RANGE_FN("dllm::compute::Utils::rand");
+    {
+      tensor.impl()->tensor() = torch::rand(tensor.sizes(), options);
+      tensor.reset();
+    }
+    CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
+  }};
+  const TaskFuture future = task.get_future();
+  utils::resetFuture(tensor, future);
+  // size
+  tensor.sizes() = size;
+  tensor.options() = options;
+  scheduler.impl()->submit(std::move(task));
+}
+
+void rand_like(const Scheduler &scheduler, Tensor &dst,
+               const ReadOnlyTensor &src) {
+  Tensor dst_{};
+  auto task =
+      TaskCompute{[dst = dst_, src = src, srcFuture = utils::future(src)](
+                      const ContextCompute *context) mutable {
         DLLM_NVTX_RANGE_FN("dllm::compute::Utils::rand_like");
         {
-          util::FutureGuard srcGuard{srcFuture};
-          util::FutureGuard dstGuard{dstFuture};
-          DLLM_EXTRACT_TENSOR(dst) = torch::rand_like(DLLM_EXTRACT_TENSOR(src));
+          utils::FutureGuard srcGuard{srcFuture};
+          dst.impl()->tensor() = torch::rand_like(src.impl()->tensor());
           src.reset();
           dst.reset();
         }
         CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
       }};
   const TaskFuture future = task.get_future();
-  dst->resetFuture(future);
-  src->resetFuture(future);
+  utils::resetFuture(dst_, future);
+  utils::resetFuture(src, future);
   // size
-  dst->sizes() = src->sizes();
-  dst->options() = src->options();
-  return task;
+  dst_.sizes() = src.sizes();
+  dst_.options() = src.options();
+  dst = dst_;
+  scheduler.impl()->submit(std::move(task));
 }
 
-TaskCompute randn(const std::shared_ptr<Tensor> &tensor,
-                  const IntArrayRef &size, at::TensorOptions options) {
-  auto task = TaskCompute{
-      [tensor = tensor, options = options,
-       future = tensor->future()](const ContextCompute *context) mutable {
-        DLLM_NVTX_RANGE_FN("dllm::compute::Utils::randn");
-        {
-          util::FutureGuard guard{future};
-          DLLM_EXTRACT_TENSOR(tensor) = torch::randn(tensor->sizes(), options);
-          tensor.reset();
-        }
-        CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
-      }};
-  const TaskFuture future = task.get_future();
-  tensor->resetFuture(future);
-  // size
-  tensor->sizes() = size;
-  tensor->options() = options;
-  return task;
-}
-
-TaskCompute randn_like(const std::shared_ptr<Tensor> &dst,
-                       const std::shared_ptr<const ReadOnlyTensor> &src) {
-  auto task = TaskCompute{[dst = dst, src = src, dstFuture = dst->future(),
-                           srcFuture = src->future()](
+void randn(const Scheduler &scheduler, Tensor &tensor, const IntArrayRef &size,
+           at::TensorOptions options) {
+  tensor = Tensor{};
+  auto task = TaskCompute{[tensor = tensor, options = options](
                               const ContextCompute *context) mutable {
-    DLLM_NVTX_RANGE_FN("dllm::compute::Utils::randn_like");
+    DLLM_NVTX_RANGE_FN("dllm::compute::Utils::randn");
     {
-      util::FutureGuard srcGuard{srcFuture};
-      util::FutureGuard dstGuard{dstFuture};
-      DLLM_EXTRACT_TENSOR(dst) = torch::randn_like(DLLM_EXTRACT_TENSOR(src));
-      src.reset();
-      dst.reset();
+      tensor.impl()->tensor() = torch::randn(tensor.sizes(), options);
+      tensor.reset();
     }
     CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
   }};
   const TaskFuture future = task.get_future();
-  dst->resetFuture(future);
-  src->resetFuture(future);
+  utils::resetFuture(tensor, future);
   // size
-  dst->sizes() = src->sizes();
-  dst->options() = src->options();
-  return task;
+  tensor.sizes() = size;
+  tensor.options() = options;
+  scheduler.impl()->submit(std::move(task));
 }
 
-TaskCompute split(std::vector<std::shared_ptr<const ReadOnlyTensor>> &output,
-                  const std::shared_ptr<const ReadOnlyTensor> &src,
-                  const int64_t &split_size, const int64_t &dim) {
-  auto input_size = src->sizes();
+void randn_like(const Scheduler &scheduler, Tensor &dst,
+                const ReadOnlyTensor &src) {
+  Tensor dst_{};
+  auto task =
+      TaskCompute{[dst = dst_, src = src, srcFuture = utils::future(src)](
+                      const ContextCompute *context) mutable {
+        DLLM_NVTX_RANGE_FN("dllm::compute::Utils::randn_like");
+        {
+          utils::FutureGuard srcGuard{srcFuture};
+          dst.impl()->tensor() = torch::randn_like(src.impl()->tensor());
+          src.reset();
+          dst.reset();
+        }
+        CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
+      }};
+  const TaskFuture future = task.get_future();
+  utils::resetFuture(dst_, future);
+  utils::resetFuture(src, future);
+  // size
+  dst_.sizes() = src.sizes();
+  dst_.options() = src.options();
+  dst = dst_;
+  scheduler.impl()->submit(std::move(task));
+}
+
+void split(const Scheduler &scheduler, std::vector<ReadOnlyTensor> &output,
+           const ReadOnlyTensor &src, const int64_t &split_size,
+           const int64_t &dim) {
+  auto input_size = src.sizes();
   const auto split_num =
       input_size[dim > 0 ? dim : input_size.size() + dim] / split_size;
   input_size[dim > 0 ? dim : input_size.size() + dim] = split_size;
   output.resize(split_num);
-  at::SmallVector<std::shared_ptr<Tensor>> outputNew;
+  at::SmallVector<Tensor> outputNew;
   outputNew.reserve(split_size);
-  auto futurePtr = TensorFriend::extract_future_ptr(src);
+  const auto futurePtr = src.impl()->futurePtr();
   for (auto &p : output) {
-    auto pNew = TensorFriend::create(futurePtr);
+    Tensor pNew;
+    pNew.impl()->futurePtr() = futurePtr;
     // size
-    pNew->sizes() = input_size;
-    pNew->options() = src->options();
+    pNew.sizes() = input_size;
+    pNew.options() = src.options();
     outputNew.push_back(pNew);
     p = std::move(pNew);
   }
   const auto p0 = outputNew[0];
-  auto task = TaskCompute{[output = std::move(outputNew), src = src,
-                           srcFuture = src->future(), split_size = split_size,
-                           dim = dim](const ContextCompute *context) mutable {
-    DLLM_NVTX_RANGE_FN("dllm::compute::Utils::split");
-    {
-      util::FutureGuard guard{srcFuture};
-      const auto v = DLLM_EXTRACT_TENSOR(src).split(split_size, dim);
-      for (std::size_t i = 0; i < v.size(); ++i) {
-        DLLM_EXTRACT_TENSOR(output[i]) = v[i];
-        output[i].reset();
-      }
-      src.reset();
-    }
-    CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
-  }};
+  auto task =
+      TaskCompute{[output = std::move(outputNew), src = src,
+                   srcFuture = utils::future(src), split_size = split_size,
+                   dim = dim](const ContextCompute *context) mutable {
+        DLLM_NVTX_RANGE_FN("dllm::compute::Utils::split");
+        {
+          utils::FutureGuard guard{srcFuture};
+          const auto v = src.impl()->tensor().split(split_size, dim);
+          for (std::size_t i = 0; i < v.size(); ++i) {
+            output[i].impl()->tensor() = v[i];
+            output[i].reset();
+          }
+          src.reset();
+        }
+        CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
+      }};
 
-  p0->resetFuture(task.get_future());
-  return task;
+  utils::resetFuture(p0, task.get_future());
+  scheduler.impl()->submit(std::move(task));
 }
 
-TaskCompute view(const std::shared_ptr<Tensor> &output,
-                 const std::shared_ptr<const ReadOnlyTensor> &input,
-                 const IntArrayRef &size) {
-  TensorFriend::extract_future_ptr(output) =
-      TensorFriend::extract_future_ptr(input);
+void view(const Scheduler &scheduler, Tensor &output,
+          const ReadOnlyTensor &input, const IntArrayRef &size) {
+  Tensor output_{};
   auto task = TaskCompute{
-      [output = output, input = input, inputFuture = input->future(),
-       outputFuture = output->future()](const ContextCompute *context) mutable {
+      [output = output_, input = input, inputFuture = utils::future(input)](
+          const ContextCompute *context) mutable {
         DLLM_NVTX_RANGE_FN("dllm::compute::Utils::view");
         {
-          util::FutureGuard inputGuard{inputFuture};
-          util::FutureGuard outputGuard{outputFuture};
-          DLLM_EXTRACT_TENSOR(output) =
-              DLLM_EXTRACT_TENSOR(input).view(output->sizes());
+          utils::FutureGuard inputGuard{inputFuture};
+          output.impl()->tensor() = input.impl()->tensor().view(output.sizes());
           input.reset();
           output.reset();
         }
         CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
       }};
   const TaskFuture future = task.get_future();
-  input->resetFuture(future);
-  output->resetFuture(future);
+  utils::resetFuture(input, future);
+  utils::resetFuture(output_, future);
   // size
   auto toNewShape = [&](const auto &originalShape, const auto &newShape) {
     const int64_t totalElements =
@@ -472,85 +469,84 @@ TaskCompute view(const std::shared_ptr<Tensor> &output,
 
     return resolvedShape;
   };
-  output->sizes() = toNewShape(input->sizes(), size);
-  output->options() = input->options();
-  return task;
+  output_.sizes() = toNewShape(input.sizes(), size);
+  output_.options() = input.options();
+  output_.impl()->futurePtr() = input.impl()->futurePtr();
+  output = output_;
+  scheduler.impl()->submit(std::move(task));
 }
 
-TaskCompute broadcast_to(const std::shared_ptr<Tensor> &output,
-                         const std::shared_ptr<const ReadOnlyTensor> &input,
-                         const IntArrayRef &size) {
-  TensorFriend::extract_future_ptr(output) =
-      TensorFriend::extract_future_ptr(input);
+void broadcast_to(const Scheduler &scheduler, Tensor &output,
+                  const ReadOnlyTensor &input, const IntArrayRef &size) {
+  Tensor output_{};
   auto task = TaskCompute{
-      [output = output, input = input, inputFuture = input->future(),
-       outputFuture = output->future()](const ContextCompute *context) mutable {
+      [output = output_, input = input, inputFuture = utils::future(input)](
+          const ContextCompute *context) mutable {
         DLLM_NVTX_RANGE_FN("dllm::compute::Utils::broadcast_to");
         {
-          util::FutureGuard inputGuard{inputFuture};
-          util::FutureGuard outputGuard{outputFuture};
-          DLLM_EXTRACT_TENSOR(output) =
-              DLLM_EXTRACT_TENSOR(input).broadcast_to(output->sizes());
+          utils::FutureGuard inputGuard{inputFuture};
+          output.impl()->tensor() =
+              input.impl()->tensor().broadcast_to(output.sizes());
           input.reset();
           output.reset();
         }
         CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
       }};
   const TaskFuture future = task.get_future();
-  input->resetFuture(future);
-  output->resetFuture(future);
+  utils::resetFuture(input, future);
+  utils::resetFuture(output, future);
   // size
-  output->sizes() = size;
-  output->options() = input->options();
-  return task;
+  output_.sizes() = size;
+  output_.options() = input.options();
+  output_.impl()->futurePtr() = input.impl()->futurePtr();
+  output = output_;
+  scheduler.impl()->submit(std::move(task));
 }
 
-TaskCompute cat(const std::shared_ptr<Tensor> &output,
-                const std::vector<std::shared_ptr<const ReadOnlyTensor>> &input,
-                const int64_t dim) {
+void cat(const Scheduler &scheduler, Tensor &output,
+         const std::vector<ReadOnlyTensor> &input, const int64_t dim) {
+  output = Tensor{};
   std::vector<TaskFuture> inputFuture;
   inputFuture.reserve(input.size());
   for (const auto &t : input) {
-    inputFuture.push_back(t->future());
+    inputFuture.push_back(utils::future(t));
   }
   auto task = TaskCompute{[dim = dim, output = output, input = input,
-                           outputFuture = output->future(),
                            inputFuture = std::move(inputFuture)](
                               const ContextCompute *context) mutable {
     DLLM_NVTX_RANGE_FN("dllm::compute::Utils::cat");
     {
       for (auto &f : inputFuture) {
-        util::FutureGuard{f};
+        utils::FutureGuard{f};
       }
-      util::FutureGuard dstGuard{outputFuture};
       std::vector<at::Tensor> vInput;
       vInput.reserve(input.size());
       for (const auto &t : input) {
-        vInput.push_back(DLLM_EXTRACT_TENSOR(t));
+        vInput.push_back(t.impl()->tensor());
       }
-      DLLM_EXTRACT_TENSOR(output) = at::cat(vInput, dim);
+      output.impl()->tensor() = at::cat(vInput, dim);
       output.reset();
       input.clear();
     }
     CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
   }};
   const TaskFuture future = task.get_future();
-  output->resetFuture(future);
+  utils::resetFuture(output, future);
   for (const auto &t : input) {
-    t->resetFuture(future);
+    utils::resetFuture(t, future);
   }
   // size
-  output->sizes() = [&] {
-    auto size = input[0]->sizes();
+  output.sizes() = [&] {
+    auto size = input[0].sizes();
     const auto positiveDim =
         dim < 0 ? static_cast<int64_t>(size.size()) + dim : dim;
     size[positiveDim] = 0;
     for (const auto &t : input) {
-      size[positiveDim] += t->size(positiveDim);
+      size[positiveDim] += t.size(positiveDim);
     }
     return size;
   }();
-  output->options() = input[0]->options();
-  return task;
+  output.options() = input[0].options();
+  scheduler.impl()->submit(std::move(task));
 }
 }  // namespace dllm::compute::Utils

@@ -5,11 +5,13 @@
 #include "internal_utils.h"
 #include "logger.h"
 #include "nvtx_helper.h"
-#include "tensor_friend.h"
+#include "tensor_impl.h"
+#include "threading/scheduler_impl.h"
+#include "threading/task_compute.h"
 
 namespace dllm::compute {
-TaskCompute Embedding::init(std::shared_ptr<State> &state,
-                            const Options &options) {
+void Embedding::init(const Scheduler &scheduler, std::shared_ptr<State> &state,
+                     const Options &options) {
   int64_t padding_idx = -1;
   if (options.padding_idx() != c10::nullopt) {
     if (*options.padding_idx() > 0) {
@@ -24,7 +26,7 @@ TaskCompute Embedding::init(std::shared_ptr<State> &state,
 
   TORCH_CHECK(options.max_norm() == c10::nullopt)
 
-  auto weight = Tensor::create();
+  Tensor weight;
 
   auto task =
       TaskCompute{[=, weight = weight](const ContextCompute *context) mutable {
@@ -32,7 +34,7 @@ TaskCompute Embedding::init(std::shared_ptr<State> &state,
         const auto weight_ = at::normal(
             0, 1, {options.num_embeddings(), options.embedding_dim()}, {},
             options.dtype(), {}, options.device(), {});
-        DLLM_EXTRACT_TENSOR(weight) = weight_;
+        weight.impl()->tensor() = weight_;
         // if (max_norm != c10::nullopt) {
         //   input_ = input_.contiguous();
         //   _no_grad_embedding_renorm_(weight, input_, *max_norm, norm_type);
@@ -42,37 +44,37 @@ TaskCompute Embedding::init(std::shared_ptr<State> &state,
       }};
 
   const TaskFuture future = task.get_future();
-  weight->resetFuture(future);
-  weight->sizes() = IntArray{options.num_embeddings(), options.embedding_dim()};
+  utils::resetFuture(weight, future);
+  weight.sizes() = IntArray{options.num_embeddings(), options.embedding_dim()};
 
   state = std::make_shared<State>(
       State::Forward{std::move(weight)}, State::Backward{},
       State::Args{options.num_embeddings(), padding_idx, options.max_norm(),
                   options.norm_type(), options.scale_grad_by_freq(),
                   options.sparse()});
-  return task;
+  scheduler.impl()->submit(std::move(task));
 }
 
-TaskCompute Embedding::forward(
-    const std::shared_ptr<State> &state, const std::shared_ptr<Tensor> &output,
-    const std::shared_ptr<const ReadOnlyTensor> &indices) {
-  auto task = TaskCompute{
-      [padding_idx = state->args.padding_idx,
-       scale_grad_by_freq = state->args.scale_grad_by_freq,
-       sparse = state->args.sparse, weight = state->forward.weight,
-       output = output, indices = indices, outputFuture = output->future(),
-       weightFuture = state->forward.weight->future(),
-       indicesFuture =
-           indices->future()](const ContextCompute *context) mutable {
+void Embedding::forward(const Scheduler &scheduler,
+                        const std::shared_ptr<State> &state, Tensor &output,
+                        const ReadOnlyTensor &indices) {
+  output = Tensor{};
+  auto task =
+      TaskCompute{[padding_idx = state->args.padding_idx,
+                   scale_grad_by_freq = state->args.scale_grad_by_freq,
+                   sparse = state->args.sparse, weight = state->forward.weight,
+                   output = output, indices = indices,
+                   weightFuture = utils::future(state->forward.weight),
+                   indicesFuture = utils::future(indices)](
+                      const ContextCompute *context) mutable {
         DLLM_NVTX_RANGE_FN("dllm::compute::Embedding::forward");
         {
-          util::FutureGuard outputrGuard{outputFuture};
-          util::FutureGuard weightGuard{weightFuture};
-          util::FutureGuard indicesGuard{indicesFuture};
-          DLLM_EXTRACT_TENSOR(output) =
-              torch::embedding(DLLM_EXTRACT_TENSOR(weight),
-                               DLLM_EXTRACT_TENSOR(indices).view(
-                                   {-1, DLLM_EXTRACT_TENSOR(indices).size(-1)}),
+          utils::FutureGuard weightGuard{weightFuture};
+          utils::FutureGuard indicesGuard{indicesFuture};
+          output.impl()->tensor() =
+              torch::embedding(weight.impl()->tensor(),
+                               indices.impl()->tensor().view(
+                                   {-1, indices.impl()->tensor().size(-1)}),
                                padding_idx, scale_grad_by_freq, sparse);
           weight.reset();
           output.reset();
@@ -81,46 +83,46 @@ TaskCompute Embedding::forward(
         CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
       }};
   const TaskFuture future = task.get_future();
-  state->forward.weight->resetFuture(future);
-  indices->resetFuture(future);
-  output->resetFuture(future);
+  utils::resetFuture(state->forward.weight, future);
+  utils::resetFuture(indices, future);
+  utils::resetFuture(output, future);
   state->backward.indices = indices;
   // size
-  output->sizes() = [&]() {
-    auto sizes = indices->sizes();
-    sizes.push_back(state->forward.weight->size(1));
+  output.sizes() = [&]() {
+    auto sizes = indices.sizes();
+    sizes.push_back(state->forward.weight.size(1));
     return sizes;
   }();
-  return task;
+  scheduler.impl()->submit(std::move(task));
 }
 
-TaskCompute Embedding::backward(
-    const std::shared_ptr<State> &state,
-    const std::shared_ptr<const ReadOnlyTensor> &grad_output) {
+void Embedding::backward(const Scheduler &scheduler,
+                         const std::shared_ptr<State> &state,
+                         const ReadOnlyTensor &grad_output) {
   auto task = TaskCompute{
       [num_weights = state->args.num_weights,
        padding_idx = state->args.padding_idx,
        scale_grad_by_freq = state->args.scale_grad_by_freq,
        sparse = state->args.sparse, grad_weight = state->forward.grad_weight,
        grad_output = grad_output, indices = state->backward.indices,
-       grad_weight_future = state->forward.grad_weight->future(),
-       grad_output_future = grad_output->future(),
-       indicesFuture = state->backward.indices->future(),
-       weightFuture = state->forward.weight->future()](
+       grad_weight_future = utils::future(state->forward.grad_weight),
+       grad_output_future = utils::future(grad_output),
+       indicesFuture = utils::future(state->backward.indices),
+       weightFuture = utils::future(state->forward.weight)](
           const ContextCompute *context) mutable {
         DLLM_NVTX_RANGE_FN("dllm::compute::Embedding::backward");
         {
-          util::FutureGuard grad_weightGuard{grad_weight_future};
-          util::FutureGuard grad_output_Guard{grad_output_future};
-          util::FutureGuard indicesGuard{indicesFuture};
-          util::FutureGuard weighGuard{weightFuture};
-          if (DLLM_EXTRACT_TENSOR(grad_weight).defined()) {
-            DLLM_EXTRACT_TENSOR(grad_weight) += torch::embedding_backward(
-                DLLM_EXTRACT_TENSOR(grad_output), DLLM_EXTRACT_TENSOR(indices),
+          utils::FutureGuard grad_weightGuard{grad_weight_future};
+          utils::FutureGuard grad_output_Guard{grad_output_future};
+          utils::FutureGuard indicesGuard{indicesFuture};
+          utils::FutureGuard weighGuard{weightFuture};
+          if (grad_weight.impl()->tensor().defined()) {
+            grad_weight.impl()->tensor() += torch::embedding_backward(
+                grad_output.impl()->tensor(), indices.impl()->tensor(),
                 num_weights, padding_idx, scale_grad_by_freq, sparse);
           } else /* accumulate grad */ {
-            DLLM_EXTRACT_TENSOR(grad_weight) = torch::embedding_backward(
-                DLLM_EXTRACT_TENSOR(grad_output), DLLM_EXTRACT_TENSOR(indices),
+            grad_weight.impl()->tensor() = torch::embedding_backward(
+                grad_output.impl()->tensor(), indices.impl()->tensor(),
                 num_weights, padding_idx, scale_grad_by_freq, sparse);
           }
           grad_weight.reset();
@@ -130,14 +132,14 @@ TaskCompute Embedding::backward(
         CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
       }};
   const TaskFuture future = task.get_future();
-  state->forward.grad_weight->resetFuture(future);
-  state->forward.grad_weight->resetFuture(future);
-  state->forward.grad_weight->sizes() = state->forward.weight->sizes();
-  grad_output->resetFuture(future);
-  state->backward.indices->resetFuture(future);
-  state->forward.weight->resetFuture(future);
+  utils::resetFuture(state->forward.grad_weight, future);
+  utils::resetFuture(state->forward.grad_weight, future);
+  state->forward.grad_weight.sizes() = state->forward.weight.sizes();
+  utils::resetFuture(grad_output, future);
+  utils::resetFuture(state->backward.indices, future);
+  utils::resetFuture(state->forward.weight, future);
   // decrease counter
   state->backward.indices.reset();
-  return task;
+  scheduler.impl()->submit(std::move(task));
 }
 }  // namespace dllm::compute

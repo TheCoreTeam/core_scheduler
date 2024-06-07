@@ -3,26 +3,23 @@
 #include "module/module.h"
 #include "module/pimpl.h"
 
-namespace dllm {
-struct ThreadPoolCompute;
-}
-
 namespace dllm::module {
 struct DLLM_API LinearImpl : Module {
   using Options = compute::Linear::Options;
 
-  explicit LinearImpl(ThreadPoolCompute &tp, const Options &options);
+  explicit LinearImpl(const Scheduler &scheduler, const Options &options);
 
-  void forward(ThreadPoolCompute &tp, const std::shared_ptr<Tensor> &output,
-               const std::shared_ptr<const ReadOnlyTensor> &input) const;
+  void forward(const Scheduler &scheduler, Tensor &output,
+               const ReadOnlyTensor &input) const;
 
-  void backward(ThreadPoolCompute &tp,
-                const std::shared_ptr<Tensor> &grad_input,
-                const std::shared_ptr<const ReadOnlyTensor> &grad_output) const;
+  void backward(const Scheduler &scheduler, Tensor &grad_input,
+                const ReadOnlyTensor &grad_output) const;
 
-  void backwardInputOnly(
-      ThreadPoolCompute &tp, const std::shared_ptr<Tensor> &grad_input,
-      const std::shared_ptr<const ReadOnlyTensor> &grad_output) const;
+  void backwardParameter(const Scheduler &scheduler,
+                         const ReadOnlyTensor &grad_output) const;
+
+  void backwardInput(const Scheduler &scheduler, Tensor &grad_input,
+                     const ReadOnlyTensor &grad_output) const;
 
   std::shared_ptr<compute::Linear::State> state() const;
 

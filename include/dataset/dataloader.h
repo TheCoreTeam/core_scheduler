@@ -12,8 +12,7 @@ namespace dllm::dataset {
 struct LlmDataLoader {
   // fill will set the future, so you do not have to sync with x and y's future
   // handles explicitly
-  void fill(const std::shared_ptr<Tensor> &x,
-            const std::shared_ptr<Tensor> &y) const;
+  void fill(const Tensor &x, const Tensor &y) const;
 
   LlmDataLoader(const std::shared_ptr<const LlmDataset> &dataset, int localRank,
                 int batch_size, int num_workers, bool shuffle,

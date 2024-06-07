@@ -22,8 +22,8 @@ TaskMpi AllToAll<MPI>::run(
                           const ContextMpi *context) mutable {
     DLLM_NVTX_RANGE_FN("dllm::communication::AllToAll<MPI>::run");
     {
-      util::FutureGuard sendGuard{futureSend};
-      util::FutureGuard receiveGuard{futureReceive};
+      utils::FutureGuard sendGuard{futureSend};
+      utils::FutureGuard receiveGuard{futureReceive};
       int64_t byteScaleSend, byteScaleReceive;
       AT_DISPATCH_FLOATING_TYPES_AND2(
           at::ScalarType::Half, at::ScalarType::BFloat16,
@@ -72,27 +72,27 @@ TaskMpi AllToAll<MPI>::run(
 }
 
 TaskMpi AllToAll<MPI>::runInplace(const std::shared_ptr<Tensor> &tensor) {
-  auto task = TaskMpi{[tensor = tensor, future = tensor->future()](
+  auto task = TaskMpi{[tensor = tensor, future = utils::future(tensor)](
                           const ContextMpi *context) mutable {
     DLLM_NVTX_RANGE_FN("dllm::communication::AllToAll<MPI>::runInplace");
-    util::FutureGuard guard{future};
+    utils::FutureGuard guard{future};
     int64_t byteScale;
     AT_DISPATCH_FLOATING_TYPES_AND2(
         at::ScalarType::Half, at::ScalarType::BFloat16,
-        DLLM_EXTRACT_TENSOR(tensor).scalar_type(), "Find size in byte",
+        tensor.impl()->tensor().scalar_type(), "Find size in byte",
         [&] { byteScale = sizeof(scalar_t); });
     const int64_t count =
-        DLLM_EXTRACT_TENSOR(tensor).numel() * byteScale / context->commSize;
+        tensor.impl()->tensor().numel() * byteScale / context->commSize;
     DLLM_ASSERT_TRUE(count <= std::numeric_limits<int>::max(),
                      "Do not support very large message");
-    if (!DLLM_EXTRACT_TENSOR(tensor).is_contiguous()) {
-      DLLM_EXTRACT_TENSOR(tensor) = DLLM_EXTRACT_TENSOR(tensor).contiguous();
+    if (!tensor.impl()->tensor().is_contiguous()) {
+      tensor.impl()->tensor() = tensor.impl()->tensor().contiguous();
     }
-    DLLM_WARN_TRUE(DLLM_EXTRACT_TENSOR(tensor).is_cpu(),
+    DLLM_WARN_TRUE(tensor.impl()->tensor().is_cpu(),
                    "MPI non CPU version is very slow");
     CHECK_MPI(MPI_Alltoall(MPI_IN_PLACE, 0, MPI_DATATYPE_NULL,
-                           DLLM_EXTRACT_TENSOR(tensor).data_ptr(), count,
-                           MPI_BYTE, context->mpiComm));
+                           tensor.impl()->tensor().data_ptr(), count, MPI_BYTE,
+                           context->mpiComm));
     tensor.reset();
   }};
   tensor->resetFuture(task.get_future());

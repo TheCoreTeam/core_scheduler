@@ -1,9 +1,7 @@
 #pragma once
 #ifdef DLLM_ENABLE_INTERNAL_BUILD
 // This is an internal file, never use it unless you know what you are doing
-namespace dllm::util {
-struct TensorFriend {};
-
+namespace dllm::utils {
 template <typename TA, typename TB>
 constexpr __inline__ __attribute__((always_inline)) int ceil_div(TA a, TB b) {
   return (a + b - 1) / b;

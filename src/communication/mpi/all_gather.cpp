@@ -18,11 +18,11 @@ TaskMpi AllGather<MPI>::run(
                        futureSend = tensorSend->future()](
                           const ContextMpi *context) mutable {
     DLLM_NVTX_RANGE_FN("dllm::communication::AllGather<MPI>::run");
-    util::FutureGuard guardReceive{futureReceive};
-    util::FutureGuard guardSend{futureSend};
+    utils::FutureGuard guardReceive{futureReceive};
+    utils::FutureGuard guardSend{futureSend};
     if (!DLLM_EXTRACT_TENSOR(tensorReceive).defined()) {
       DLLM_EXTRACT_TENSOR(tensorReceive) = torch::empty(
-          {tensorReceive->numel()}, DLLM_EXTRACT_TENSOR(tensorSend).options());
+          {tensorReceive.numel()}, DLLM_EXTRACT_TENSOR(tensorSend).options());
     }
     int64_t byteScaleSend;
     AT_DISPATCH_FLOATING_TYPES_AND2(
@@ -62,30 +62,29 @@ TaskMpi AllGather<MPI>::run(
 }
 
 TaskMpi AllGather<MPI>::runInplace(const std::shared_ptr<Tensor> &tensor) {
-  auto task = TaskMpi{[tensor = tensor, future = tensor->future()](
+  auto task = TaskMpi{[tensor = tensor, future = utils::future(tensor)](
                           const ContextMpi *context) mutable {
     DLLM_NVTX_RANGE_FN("dllm::communication::AllGather<MPI>::runInplace");
-    util::FutureGuard guard{future};
+    utils::FutureGuard guard{future};
     int64_t byteScale;
     AT_DISPATCH_FLOATING_TYPES_AND2(
         at::ScalarType::Half, at::ScalarType::BFloat16,
-        DLLM_EXTRACT_TENSOR(tensor).scalar_type(), "Find size in byte",
+        tensor.impl()->tensor().scalar_type(), "Find size in byte",
         [&] { byteScale = sizeof(scalar_t); });
-    const int64_t byte = tensor->numel() * byteScale;
+    const int64_t byte = tensor.numel() * byteScale;
     DLLM_ASSERT_TRUE(byte <= std::numeric_limits<int>::max(),
                      "Do not support very large message");
     DLLM_ASSERT_TRUE(byte % context->commSize == 0,
                      "transfer volume {} is not dividable by commSize {}", byte,
                      context->commSize);
-    if (!DLLM_EXTRACT_TENSOR(tensor).is_contiguous()) {
-      DLLM_EXTRACT_TENSOR(tensor) = DLLM_EXTRACT_TENSOR(tensor).contiguous();
+    if (!tensor.impl()->tensor().is_contiguous()) {
+      tensor.impl()->tensor() = tensor.impl()->tensor().contiguous();
     }
-    DLLM_WARN_TRUE(DLLM_EXTRACT_TENSOR(tensor).is_cpu(),
+    DLLM_WARN_TRUE(tensor.impl()->tensor().is_cpu(),
                    "MPI non CPU version is very slow");
-    CHECK_MPI(MPI_Allgather(MPI_IN_PLACE, 0, MPI_DATATYPE_NULL,
-                            DLLM_EXTRACT_TENSOR(tensor).data_ptr(),
-                            byte / context->commSize, MPI_BYTE,
-                            context->mpiComm));
+    CHECK_MPI(MPI_Allgather(
+        MPI_IN_PLACE, 0, MPI_DATATYPE_NULL, tensor.impl()->tensor().data_ptr(),
+        byte / context->commSize, MPI_BYTE, context->mpiComm));
     tensor.reset();
   }};
   tensor->resetFuture(task.get_future());

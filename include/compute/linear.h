@@ -2,21 +2,21 @@
 #include "arg.h"
 #include "module/state.h"
 #include "tensor.h"
-#include "threading/task_compute.h"
+#include "threading/scheduler.h"
 
 namespace dllm::compute {
 struct Linear {
   struct State final : module::State {
     struct Forward {
-      std::shared_ptr<Tensor> weight;
-      std::shared_ptr<Tensor> bias = nullptr;
-      std::shared_ptr<Tensor> grad_weight = nullptr;
-      std::shared_ptr<Tensor> grad_bias = nullptr;
+      Tensor weight;
+      Tensor bias{};
+      Tensor grad_weight{};
+      Tensor grad_bias{};
       std::shared_ptr<module::OptimizerState> optimizer_weight = nullptr;
       std::shared_ptr<module::OptimizerState> optimizer_bias = nullptr;
     } forward;
     struct Backward {
-      std::shared_ptr<const ReadOnlyTensor> input = nullptr;
+      ReadOnlyTensor input;
     } backward;
     struct Args {
       const bool bias;
@@ -25,8 +25,7 @@ struct Linear {
     State(const Forward &forward, const Backward &backward, const Args &args)
         : forward{forward}, backward{backward}, args{args} {}
 
-    [[nodiscard]] OrderedDict<std::string, std::shared_ptr<Tensor>> parameters()
-        const override;
+    [[nodiscard]] OrderedDict<std::string, Tensor> parameters() const override;
 
     [[nodiscard]] OrderedDict<std::string, Increment> increments() override;
   };
@@ -41,21 +40,19 @@ struct Linear {
     DLLM_ARG(c10::optional<at::ScalarType>, dtype) = {};
   };
 
-  static TaskCompute init(std::shared_ptr<State> &state,
-                          const Options &options);
+  static void init(const Scheduler &scheduler, std::shared_ptr<State> &state,
+                   const Options &options);
 
-  static TaskCompute forward(
-      const std::shared_ptr<State> &state,
-      const std::shared_ptr<Tensor> &output,
-      const std::shared_ptr<const ReadOnlyTensor> &input);
+  static void forward(const Scheduler &scheduler,
+                      const std::shared_ptr<State> &state, Tensor &output,
+                      const ReadOnlyTensor &input);
 
-  static TaskCompute backwardInput(
-      const std::shared_ptr<State> &state,
-      const std::shared_ptr<Tensor> &dinput,
-      const std::shared_ptr<const ReadOnlyTensor> &grad_output);
+  static void backwardInput(const Scheduler &scheduler,
+                            const std::shared_ptr<State> &state, Tensor &dinput,
+                            const ReadOnlyTensor &grad_output);
 
-  static TaskCompute backwardParameter(
-      const std::shared_ptr<State> &state,
-      const std::shared_ptr<const ReadOnlyTensor> &grad_output);
+  static void backwardParameter(const Scheduler &scheduler,
+                                const std::shared_ptr<State> &state,
+                                const ReadOnlyTensor &grad_output);
 };
 }  // namespace dllm::compute

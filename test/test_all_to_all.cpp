@@ -66,7 +66,7 @@ struct TypeToTorch<double> {
 //   const auto option = at::TensorOptions().dtype(dtype).device(device);
 //   const int m = blockSize * stream.commSize();
 //   at::manual_seed(stream.rank() + 1);
-//   auto x = dllm::Tensor::create();
+//   auto x;
 //   {
 //     auto task = dllm::compute::Utils::rand(x, {m}, option);
 //     tp.submit(std::move(task));
@@ -126,34 +126,27 @@ void AllToAllNCCLTestFixture::TestlAllToAllT(const int blockSize) {
   const at::ScalarType dtype = TypeToTorch<T>::type;
   const auto option = at::TensorOptions().dtype(dtype).device(device);
   at::manual_seed(stream->rank() + 1);
-  std::vector<std::shared_ptr<const dllm::ReadOnlyTensor>> s;
+  std::vector<dllm::ReadOnlyTensor> s;
   s.reserve(stream->commSize());
   for (int i = 0; i < stream->commSize(); ++i) {
-    auto t = dllm::Tensor::create();
-    auto task = dllm::compute::Utils::rand(t, {blockSize}, option);
-    tp->submit(std::move(task));
+    dllm::Tensor t;
+    dllm::compute::Utils::rand(*tp, t, {blockSize}, option);
     s.push_back(t);
   }
-  std::vector<std::shared_ptr<dllm::Tensor>> r;
+  std::vector<dllm::Tensor> r;
   r.reserve(stream->commSize());
   for (int i = 0; i < stream->commSize(); ++i) {
-    auto t = dllm::Tensor::create();
-    auto task = dllm::compute::Utils::empty(t, {blockSize}, option);
-    tp->submit(std::move(task));
+    dllm::Tensor t;
+    dllm::compute::Utils::empty(*tp, t, {blockSize}, option);
     r.push_back(t);
   }
-  {
-    auto task =
-        dllm::communication::AllToAll<dllm::communication::NCCL>::run(r, s);
-    stream->submit(std::move(task));
-  }
+  dllm::communication::AllToAll<dllm::communication::NCCL>::run(*stream, r, s);
 
   std::vector<at::Tensor> r_torch;
   r_torch.resize(r.size());
   for (int i = 0; i < stream->commSize(); ++i) {
-    auto task = dllm::memory::toTorch(r_torch[i], r[i]);
-    copy->submit(std::move(task));
-    r[i]->wait();
+    dllm::memory::toTorch(*copy, r_torch[i], r[i]);
+    r[i].wait();
   }
 
   for (int i = 0; i < stream->commSize(); ++i) {

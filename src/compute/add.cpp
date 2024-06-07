@@ -5,26 +5,25 @@
 #include "internal_utils.h"
 #include "logger.h"
 #include "nvtx_helper.h"
-#include "tensor_friend.h"
+#include "tensor_impl.h"
+#include "threading/scheduler_impl.h"
+#include "threading/task_compute.h"
 
 namespace dllm::compute::Add {
-
-TaskCompute forward(const std::shared_ptr<Tensor>& output,
-                    const std::shared_ptr<const ReadOnlyTensor>& A,
-                    const std::shared_ptr<const ReadOnlyTensor>& B) {
-  DLLM_ASSERT_TRUE(A->sizes() == B->sizes(),
+void forward(const Scheduler& scheduler, Tensor& output,
+             const ReadOnlyTensor& A, const ReadOnlyTensor& B) {
+  DLLM_ASSERT_TRUE(A.sizes() == B.sizes(),
                    "We do not supprot implicit broadcast add now!");
-  auto task =
-      TaskCompute{[output = output, A = A, B = B, AFuture = A->future(),
-                   BFuture = B->future(), outputFuture = output->future()](
-                      const ContextCompute* context) mutable {
+  auto task = TaskCompute{
+      [output = output, A = A, B = B, AFuture = utils::future(A),
+       BFuture = utils::future(B), outputFuture = utils::future(output)](
+          const ContextCompute* context) mutable {
         DLLM_NVTX_RANGE_FN("dllm::compute::Add::forward");
         {
-          util::FutureGuard aGuard{AFuture};
-          util::FutureGuard bGuard{BFuture};
-          util::FutureGuard outputGuard{outputFuture};
-          DLLM_EXTRACT_TENSOR(output) =
-              TensorFriend::extract_tensor(A) + TensorFriend::extract_tensor(B);
+          utils::FutureGuard aGuard{AFuture};
+          utils::FutureGuard bGuard{BFuture};
+          utils::FutureGuard outputGuard{outputFuture};
+          output.impl()->tensor() = A.impl()->tensor() + B.impl()->tensor();
         }
         CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
         A.reset();
@@ -32,10 +31,10 @@ TaskCompute forward(const std::shared_ptr<Tensor>& output,
         output.reset();
       }};
   const TaskFuture future = task.get_future();
-  A->resetFuture(future);
-  B->resetFuture(future);
-  output->resetFuture(future);
-  output->sizes() = A->sizes();
-  return task;
+  utils::resetFuture(A, future);
+  utils::resetFuture(B, future);
+  utils::resetFuture(output, future);
+  output.sizes() = A.sizes();
+  scheduler.impl()->submit(std::move(task));
 }
 }  // namespace dllm::compute::Add

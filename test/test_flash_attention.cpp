@@ -51,86 +51,51 @@ void TestT(dllm::ThreadPoolCompute& tp) {
   const auto option = torch::TensorOptions().dtype(dtype).device(device);
   torch::manual_seed(1);
   int B = 15, T = 7, n_head = 8, n_embd = n_head * 8;
-  auto qkv = dllm::Tensor::create();
-  {
-    auto task = dllm::compute::Utils::rand(qkv, {B, T, n_embd * 3}, option);
-    tp.submit(std::move(task));
-  }
-  std::vector<std::shared_ptr<const dllm::ReadOnlyTensor>> qkvSplit;
-  {
-    auto task = dllm::compute::Utils::split(qkvSplit, qkv, n_embd, -1);
-    tp.submit(std::move(task));
-  }
+  dllm::Tensor qkv;
+  dllm::compute::Utils::rand(tp, qkv, {B, T, n_embd * 3}, option);
+  std::vector<dllm::ReadOnlyTensor> qkvSplit;
+  dllm::compute::Utils::split(tp, qkvSplit, qkv, n_embd, -1);
   auto& q = qkvSplit[0];
   auto& k = qkvSplit[1];
   auto& v = qkvSplit[2];
 
-  auto scale = 1.0 / std::sqrt(k->size(-1));
+  auto scale = 1.0 / std::sqrt(k.size(-1));
   auto state =
       std::make_shared<dllm::compute::ScaledDotProductFlashAttention::State>();
-  {
-    auto task = dllm::compute::ScaledDotProductFlashAttention::init(
-        state, dllm::compute::ScaledDotProductFlashAttention::Options{}
-                   .is_causal(true)
-                   .scale(scale));
-    tp.submit(std::move(task));
-  }
-  auto qview = dllm::Tensor::create();
-  {
-    auto task =
-        dllm::compute::Utils::view(qview, q, {B, T, n_head, n_embd / n_head});
-    tp.submit(std::move(task));
-    qview->wait();
-  }
-  auto kview = dllm::Tensor::create();
-  {
-    auto task =
-        dllm::compute::Utils::view(kview, k, {B, T, n_head, n_embd / n_head});
-    tp.submit(std::move(task));
-    kview->wait();
-  }
-  auto vview = dllm::Tensor::create();
-  {
-    auto task =
-        dllm::compute::Utils::view(vview, v, {B, T, n_head, n_embd / n_head});
-    tp.submit(std::move(task));
-    vview->wait();
-  }
-  auto output = dllm::Tensor::create();
-  {
-    auto task = dllm::compute::ScaledDotProductFlashAttention::forward(
-        state, output, qview, kview, vview);
-    tp.submit(std::move(task));
-    output->wait();
-  }
-  auto dout = dllm::Tensor::create();
-  auto dq = dllm::Tensor::create();
-  auto dk = dllm::Tensor::create();
-  auto dv = dllm::Tensor::create();
-  {
-    auto task = dllm::compute::Utils::rand_like(dout, output);
-    tp.submit(std::move(task));
-    output->wait();
-  }
-  {
-    auto task = dllm::compute::ScaledDotProductFlashAttention::backward(
-        state, dq, dk, dv, dout);
-    tp.submit(std::move(task));
-    dq->wait();
-  }
+  dllm::compute::ScaledDotProductFlashAttention::init(
+      tp, state,
+      dllm::compute::ScaledDotProductFlashAttention::Options{}
+          .is_causal(true)
+          .scale(scale));
+  dllm::Tensor qview;
+  dllm::compute::Utils::view(tp, qview, q, {B, T, n_head, n_embd / n_head});
+  qview.wait();
+  dllm::Tensor kview;
+  dllm::compute::Utils::view(tp, kview, k, {B, T, n_head, n_embd / n_head});
+  kview.wait();
+  dllm::Tensor vview;
+  dllm::compute::Utils::view(tp, vview, v, {B, T, n_head, n_embd / n_head});
+  vview.wait();
+  dllm::Tensor output;
+  dllm::compute::ScaledDotProductFlashAttention::forward(tp, state, output,
+                                                         qview, kview, vview);
+  output.wait();
+  dllm::Tensor dout;
+  dllm::Tensor dq;
+  dllm::Tensor dk;
+  dllm::Tensor dv;
+  dllm::compute::Utils::rand_like(tp, dout, output);
+  output.wait();
+  dllm::compute::ScaledDotProductFlashAttention::backward(tp, state, dq, dk, dv,
+                                                          dout);
+  dq.wait();
 
   torch::Tensor qkv_torch;
-  {
-    auto task = dllm::memory::toTorch(qkv_torch, qkv);
-    stream.submit(std::move(task));
-    qkv->wait();
-  }
+  dllm::memory::toTorch(stream, qkv_torch, qkv);
+  qkv.wait();
   torch::Tensor dout_torch;
-  {
-    auto task = dllm::memory::toTorch(dout_torch, dout);
-    stream.submit(std::move(task));
-    dout->wait();
-  }
+  dllm::memory::toTorch(stream, dout_torch, dout);
+  dout.wait();
 
   auto qkv_torch_v = qkv_torch.split(n_embd, -1);
   auto q_torch = qkv_torch_v[0]

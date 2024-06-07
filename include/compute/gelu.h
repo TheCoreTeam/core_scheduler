@@ -1,6 +1,6 @@
 #pragma once
 #include "tensor.h"
-#include "threading/task_compute.h"
+#include "threading/scheduler.h"
 
 namespace dllm::compute {
 struct GeLU {
@@ -8,22 +8,20 @@ struct GeLU {
     struct Forward {
     } forward;
     struct Backward {
-      std::shared_ptr<const ReadOnlyTensor> input = nullptr;
+      ReadOnlyTensor input;
     } backward;
     struct Args {
     } args;
   };
 
-  static TaskCompute init(std::shared_ptr<State> &state);
+  static void init(const Scheduler &scheduler, std::shared_ptr<State> &state);
 
-  static TaskCompute forward(
-      const std::shared_ptr<State> &state,
-      const std::shared_ptr<Tensor> &output,
-      const std::shared_ptr<const ReadOnlyTensor> &input);
+  static void forward(const Scheduler &scheduler,
+                      const std::shared_ptr<State> &state, Tensor &output,
+                      const ReadOnlyTensor &input);
 
-  static TaskCompute backward(
-      const std::shared_ptr<State> &state,
-      const std::shared_ptr<Tensor> &dinput,
-      const std::shared_ptr<const ReadOnlyTensor> &doutput);
+  static void backward(const Scheduler &scheduler,
+                       const std::shared_ptr<State> &state, Tensor &dinput,
+                       const ReadOnlyTensor &doutput);
 };
 }  // namespace dllm::compute

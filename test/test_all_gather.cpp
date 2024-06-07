@@ -65,7 +65,7 @@ struct TypeToTorch<double> {
 //   const auto option = at::TensorOptions().dtype(dtype).device(device);
 //   const int m = blockSize * stream.commSize();
 //   at::manual_seed(stream.rank() + 1);
-//   auto x = dllm::Tensor::create();
+//   auto x;
 //   {
 //     auto task = dllm::compute::Utils::rand(x, {m}, option);
 //     tp.submit(std::move(task));
@@ -128,30 +128,22 @@ void AllGatherNCCLTestFixture::TestlAllToAllT(const int blockSize) {
   const at::ScalarType dtype = TypeToTorch<T>::type;
   const auto option = at::TensorOptions().dtype(dtype).device(device);
   at::manual_seed(stream->rank() + 1);
-  auto x = dllm::Tensor::create();
-  {
-    auto task = dllm::compute::Utils::rand(x, {blockSize}, option);
-    tp->submit(std::move(task));
-  }
-  std::vector<std::shared_ptr<dllm::Tensor>> r;
+  dllm::Tensor x;
+  dllm::compute::Utils::rand(*tp, x, {blockSize}, option);
+  std::vector<dllm::Tensor> r;
   r.reserve(stream->commSize());
   for (int i = 0; i < stream->commSize(); ++i) {
-    auto t = dllm::Tensor::create();
-    auto task = dllm::compute::Utils::empty(t, {blockSize}, option);
-    tp->submit(std::move(task));
+    dllm::Tensor t;
+    dllm::compute::Utils::empty(*tp, t, {blockSize}, option);
     r.push_back(t);
   }
-  {
-    auto task = dllm::communication::AllGather<dllm::communication::NCCL>::run(
-        {r}, {x});
-    stream->submit(std::move(task));
-  }
+  dllm::communication::AllGather<dllm::communication::NCCL>::run(*stream, {r},
+                                                                 {x});
   std::vector<at::Tensor> r_torch;
   r_torch.resize(r.size());
   for (int i = 0; i < r.size(); ++i) {
-    auto task = dllm::memory::toTorch(r_torch[i], r[i]);
-    copy->submit(std::move(task));
-    r[i]->wait();
+    dllm::memory::toTorch(*copy, r_torch[i], r[i]);
+    r[i].wait();
   }
 
   for (int i = 0; i < stream->commSize(); ++i) {

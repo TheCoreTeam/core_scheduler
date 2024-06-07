@@ -17,16 +17,17 @@ struct OptimizerState {
 
 struct State {
   struct Increment {
-    std::shared_ptr<Tensor> &parameter;
-    std::shared_ptr<Tensor> &gradient;
+    Tensor &parameter;
+    Tensor &gradient;
     std::shared_ptr<OptimizerState> &optimizerState;
   };
 
   virtual ~State() = default;
 
-  [[nodiscard]] virtual OrderedDict<std::string, std::shared_ptr<Tensor>>
+  [[nodiscard]] virtual OrderedDict<std::string, Tensor>
+
   parameters() const {
-    return OrderedDict<std::string, std::shared_ptr<Tensor>>{};
+    return OrderedDict<std::string, Tensor>{};
   }
 
   [[nodiscard]] virtual OrderedDict<std::string, Increment> increments() {

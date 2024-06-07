@@ -126,24 +126,14 @@ void AllReduceNcclTestFixture::TestAllReduceT(const int m) {
   const at::ScalarType dtype = TypeToTorch<T>::type;
   const auto option = at::TensorOptions().dtype(dtype).device(device);
   at::manual_seed(stream->rank() + 1);
-  auto x = dllm::Tensor::create();
-  {
-    auto task = dllm::compute::Utils::rand(x, {m}, option);
-    tp->submit(std::move(task));
-  }
-  {
-    auto task =
-        dllm::communication::AllReduce<dllm::communication::NCCL>::runInplace(
-            {x}, dllm::communication::SUM);
-    stream->submit(std::move(task));
-  }
+  dllm::Tensor x;
+  dllm::compute::Utils::rand(*tp, x, {m}, option);
+  dllm::communication::AllReduce<dllm::communication::NCCL>::runInplace(
+      *stream, {x}, dllm::communication::SUM);
 
   at::Tensor x_torch;
-  {
-    auto task = dllm::memory::toTorch(x_torch, x);
-    copy->submit(std::move(task));
-    x->wait();
-  }
+  dllm::memory::toTorch(*copy, x_torch, x);
+  x.wait();
 
   auto accumulator = torch::zeros_like(x_torch);
   for (int i = 0; i < stream->commSize(); ++i) {

@@ -1,8 +1,9 @@
 #include <ATen/Dispatch.h>
+#include <cuda_runtime.h>
 
 #include "internal_utils.h"
 #include "optimizer/adamw.h"
-#include "tensor_friend.h"
+#include "tensor_impl.h"
 
 namespace dllm::optimizer {
 namespace {
@@ -75,12 +76,9 @@ __global__ void step(T *__restrict w, T *__restrict m, T *__restrict v,
 }  // namespace
 
 void stepKernel(cudaStream_t stream, const AdamW::State::Options &options,
-                const std::shared_ptr<Tensor> &w,
-                const std::shared_ptr<Tensor> &m,
-                const std::shared_ptr<Tensor> &v,
-                const std::shared_ptr<const ReadOnlyTensor> &dw) {
+                Tensor &w, Tensor &m, Tensor &v, const ReadOnlyTensor &dw) {
   const auto size = [&] {
-    const auto sizes = DLLM_EXTRACT_TENSOR(dw).sizes();
+    const auto sizes = dw.impl()->tensor().sizes();
     int64_t s = 1;
     for (const auto e : sizes) {
       s *= e;
@@ -89,30 +87,26 @@ void stepKernel(cudaStream_t stream, const AdamW::State::Options &options,
   }();
   AT_DISPATCH_FLOATING_TYPES_AND2(
       at::ScalarType::Half, at::ScalarType::BFloat16,
-      DLLM_EXTRACT_TENSOR(dw).scalar_type(), "AdamW w/o Amsgrad", [&] {
+      dw.impl()->tensor().scalar_type(), "AdamW w/o Amsgrad", [&] {
         using T = scalar_t;
         dim3 block(std::min<decltype(size)>(128, size));
-        dim3 grid(util::ceil_div(size, std::min<decltype(size)>(128, size)));
+        dim3 grid(utils::ceil_div(size, std::min<decltype(size)>(128, size)));
         step<T><<<grid, block, 0, stream>>>(
-            DLLM_EXTRACT_TENSOR(w).data_ptr<T>(),
-            DLLM_EXTRACT_TENSOR(m).data_ptr<T>(),
-            DLLM_EXTRACT_TENSOR(v).data_ptr<T>(),
-            DLLM_EXTRACT_TENSOR(dw).data_ptr<T>(), options.lr, options.beta1,
-            options.beta2, 1. / (1. - std::pow(options.beta1, options.t)),
+            w.impl()->tensor().data_ptr<T>(), m.impl()->tensor().data_ptr<T>(),
+            v.impl()->tensor().data_ptr<T>(), dw.impl()->tensor().data_ptr<T>(),
+            options.lr, options.beta1, options.beta2,
+            1. / (1. - std::pow(options.beta1, options.t)),
             1. / (1. - std::pow(options.beta2, options.t)), options.eps,
             options.weight_decay, size);
       });
 }
 
 void stepKernelAmsgrad(cudaStream_t stream,
-                       const AdamW::State::Options &options,
-                       const std::shared_ptr<Tensor> &w,
-                       const std::shared_ptr<Tensor> &m,
-                       const std::shared_ptr<Tensor> &v,
-                       const std::shared_ptr<Tensor> &vMax,
-                       const std::shared_ptr<const ReadOnlyTensor> &dw) {
+                       const AdamW::State::Options &options, Tensor &w,
+                       Tensor &m, Tensor &v, Tensor &vMax,
+                       const ReadOnlyTensor &dw) {
   const auto size = [&] {
-    const auto sizes = DLLM_EXTRACT_TENSOR(dw).sizes();
+    const auto sizes = dw.impl()->tensor().sizes();
     int64_t s = 1;
     for (const auto e : sizes) {
       s *= e;
@@ -121,16 +115,15 @@ void stepKernelAmsgrad(cudaStream_t stream,
   }();
   AT_DISPATCH_FLOATING_TYPES_AND2(
       at::ScalarType::Half, at::ScalarType::BFloat16,
-      DLLM_EXTRACT_TENSOR(dw).scalar_type(), "AdamW w/o Amsgrad", [&] {
+      dw.impl()->tensor().scalar_type(), "AdamW w/o Amsgrad", [&] {
         using T = scalar_t;
         dim3 block(std::min<decltype(size)>(128, size));
-        dim3 grid(util::ceil_div(size, std::min<decltype(size)>(128, size)));
+        dim3 grid(utils::ceil_div(size, std::min<decltype(size)>(128, size)));
         step<T><<<grid, block, 0, stream>>>(
-            DLLM_EXTRACT_TENSOR(w).data_ptr<T>(),
-            DLLM_EXTRACT_TENSOR(m).data_ptr<T>(),
-            DLLM_EXTRACT_TENSOR(v).data_ptr<T>(),
-            DLLM_EXTRACT_TENSOR(vMax).data_ptr<T>(),
-            DLLM_EXTRACT_TENSOR(dw).data_ptr<T>(), options.lr, options.beta1,
+            w.impl()->tensor().data_ptr<T>(), m.impl()->tensor().data_ptr<T>(),
+            v.impl()->tensor().data_ptr<T>(),
+            vMax.impl()->tensor().data_ptr<T>(),
+            dw.impl()->tensor().data_ptr<T>(), options.lr, options.beta1,
             options.beta2, 1. / (1. - std::pow(options.beta1, options.t)),
             1. / (1. - std::pow(options.beta2, options.t)), options.eps,
             options.weight_decay, size);

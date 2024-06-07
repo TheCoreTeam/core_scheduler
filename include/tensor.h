@@ -1,155 +1,54 @@
 #pragma once
 #include <ATen/core/TensorBody.h>
-#include <torch/cuda.h>
 
-#include <exception>
-#include <future>
 #include <memory>
 
-#include "threading/task_future.h"
-
 namespace dllm {
-struct TensorFriend;
-
 using IntArrayRef = at::IntArrayRef;
 
 using IntArray = c10::SmallVector<IntArrayRef::value_type>;
 
 using TensorOptions = at::TensorOptions;
 
-struct TensorFuture {
-  mutable TaskFuture rFuture{};
-  mutable TaskFuture wFuture{};
-
-  void wait() const {
-    if (rFuture.valid()) {
-      rFuture.wait();
-    }
-    if (wFuture.valid()) {
-      wFuture.wait();
-    }
-  }
-
-  void get() const {
-    if (rFuture.valid()) {
-      rFuture.get();
-    }
-    if (wFuture.valid()) {
-      wFuture.get();
-    }
-  }
-
-  static bool valid() { return true; }
-};
-
 struct ReadOnlyTensor {
-  static auto create() {
-    return std::shared_ptr<const ReadOnlyTensor>(nullptr);
-  }
+  ReadOnlyTensor();
 
-  [[nodiscard]] auto &future() { return future_->wFuture; }
+  [[nodiscard]] const TensorOptions &options() const;
 
-  [[nodiscard]] const auto &future() const { return future_->wFuture; }
+  [[nodiscard]] TensorOptions &options();
 
-  void resetFuture(const TaskFuture &future) const {
-    future_->rFuture = future;
-  }
+  [[nodiscard]] IntArray &sizes();
 
-  [[nodiscard]] const TensorOptions &options() const { return options_; }
+  [[nodiscard]] const IntArray &sizes() const;
 
-  [[nodiscard]] TensorOptions &options() { return options_; }
+  [[nodiscard]] int64_t size(int64_t dim) const;
 
-  [[nodiscard]] IntArray &sizes() { return sizes_; }
+  [[nodiscard]] int64_t numel() const;
 
-  [[nodiscard]] const IntArray &sizes() const { return sizes_; }
+  void wait() const;
 
-  [[nodiscard]] auto size(const int64_t dim) const {
-    return dim >= 0 ? sizes()[dim] : sizes()[sizes().size() + dim];
-  }
+  struct Impl;
 
-  [[nodiscard]] auto numel() const {
-    int64_t c = 1;
-    for (const auto s : sizes()) {
-      c *= s;
-    }
-    return c;
-  }
+  [[nodiscard]] const std::shared_ptr<Impl> &impl() const;
 
-  void wait() const {
-    if (future().valid()) {
-      future().wait();
-    }
-  }
+  void reset();
 
  protected:
-  ReadOnlyTensor() : future_{std::make_shared<TensorFuture>()} {}
-
-  explicit ReadOnlyTensor(const at::Tensor &tensor,
-                          const std::shared_ptr<TensorFuture> &future)
-      : tensor_{tensor}, future_{future} {}
-
-  explicit ReadOnlyTensor(const std::shared_ptr<TensorFuture> &future)
-      : future_{future} {}
-
-  at::Tensor tensor_{};
-
-  std::shared_ptr<TensorFuture> future_{};
-
-  IntArray sizes_{0};
-
-  TensorOptions options_;
-
-#ifdef DLLM_ENABLE_INTERNAL_BUILD
-  friend TensorFriend;
-#endif
+  std::shared_ptr<Impl> impl_;
 };
 
 struct Tensor : ReadOnlyTensor {
-  static auto create() { return std::make_shared<Tensor>(Tensor{}); }
+  Tensor();
 
-  [[nodiscard]] auto &future() { return *future_; }
-
-  [[nodiscard]] const auto &future() const { return *future_; }
-
-  void resetFuture(const TaskFuture &future) const {
-    future_->wFuture = future;
-  }
-
-  void wait() const {
-    if (future().valid()) {
-      future().wait();
-      try {
-        future().get();
-      } catch (const std::exception &) {
-        std::rethrow_exception(std::current_exception());
-      }
-    }
-  }
-
- private:
-  Tensor() = default;
-
-  explicit Tensor(const at::Tensor &tensor,
-                  const std::shared_ptr<TensorFuture> &future)
-      : ReadOnlyTensor{tensor, future} {}
-
-  explicit Tensor(const std::shared_ptr<TensorFuture> &future)
-      : ReadOnlyTensor{future} {}
-
-#ifdef DLLM_ENABLE_INTERNAL_BUILD
-  friend TensorFriend;
-#endif
+  void wait() const;
 };
 }  // namespace dllm
 
 namespace at {
-bool allclose(const std::shared_ptr<const ::dllm::ReadOnlyTensor> &t1,
-              const at::Tensor &t2, double rtol = 1e-05, double atol = 1e-08,
-              bool equal_nan = false);
-bool allclose(const std::shared_ptr<const ::dllm::ReadOnlyTensor> &t1,
-              const std::shared_ptr<const ::dllm::ReadOnlyTensor> &t2,
+bool allclose(const dllm::ReadOnlyTensor &t1, const at::Tensor &t2,
               double rtol = 1e-05, double atol = 1e-08, bool equal_nan = false);
-bool allclose(const at::Tensor &t1,
-              const std::shared_ptr<const ::dllm::ReadOnlyTensor> &t2,
+bool allclose(const dllm::ReadOnlyTensor &t1, const dllm::ReadOnlyTensor &t2,
+              double rtol = 1e-05, double atol = 1e-08, bool equal_nan = false);
+bool allclose(const at::Tensor &t1, const dllm::ReadOnlyTensor &t2,
               double rtol = 1e-05, double atol = 1e-08, bool equal_nan = false);
 }  // namespace at

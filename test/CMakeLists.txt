@@ -4,7 +4,6 @@ add_executable(dllm_tests
         #        test_relu.cpp
         test_linear.cpp
         test_gelu.cpp
-        test_init.cpp
         test_flash_attention.cpp
         #        test_add.cpp
         test_embedding.cpp

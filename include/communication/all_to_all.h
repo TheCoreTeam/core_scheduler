@@ -1,8 +1,7 @@
 #pragma once
 #include "communication.h"
 #include "tensor.h"
-#include "threading/task_mpi.h"
-#include "threading/task_nccl.h"
+#include "threading/scheduler.h"
 
 namespace dllm::communication {
 template <Backend backend>
@@ -10,8 +9,8 @@ struct AllToAll;
 
 template <>
 struct AllToAll<NCCL> {
-  static TaskNccl run(
-      const std::vector<std::shared_ptr<Tensor>> &tensorReceive,
-      const std::vector<std::shared_ptr<const ReadOnlyTensor>> &tensorSend);
+  static void run(const Scheduler &scheduler,
+                  const std::vector<Tensor> &tensorReceive,
+                  const std::vector<ReadOnlyTensor> &tensorSend);
 };
 }  // namespace dllm::communication
