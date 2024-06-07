@@ -7,9 +7,11 @@
 #include "logger.h"
 #include "nvtx_helper.h"
 #include "tensor_friend.h"
+#include "threading/scheduler_impl.h"
 
 namespace dllm::communication {
-TaskNccl AllGather<NCCL>::run(
+void AllGather<NCCL>::run(
+    const Scheduler &scheduler,
     const std::vector<std::vector<std::shared_ptr<Tensor>>> &tensorReceive,
     const std::vector<std::shared_ptr<const ReadOnlyTensor>> &tensorSend) {
   std::vector<TaskFuture> futureSend;
@@ -72,6 +74,6 @@ TaskNccl AllGather<NCCL>::run(
       t->resetFuture(future);
     }
   }
-  return task;
+  scheduler.impl()->submit(std::move(task));
 }
 }  // namespace dllm::communication

@@ -6,10 +6,13 @@
 #include <ATen/ops/native_layer_norm_backward.h>
 #include <ATen/ops/ones.h>
 #include <ATen/ops/zeros.h>
+#include <cuda_runtime_api.h>
 
 #include "internal_utils.h"
 #include "logger.h"
 #include "tensor_friend.h"
+#include "threading/scheduler_impl.h"
+#include "threading/task_compute.h"
 
 namespace dllm::compute {
 OrderedDict<std::string, std::shared_ptr<Tensor>> LayerNorm::State::parameters()
@@ -34,8 +37,8 @@ LayerNorm::State::increments() {
   return dict;
 }
 
-TaskCompute LayerNorm::init(std::shared_ptr<State>& state,
-                            const Options& options) {
+void LayerNorm::init(const Scheduler& scheduler, std::shared_ptr<State>& state,
+                     const Options& options) {
   DLLM_ASSERT_TRUE(options.elementwise_affine() == true,
                    "elementwise_affine must be enabled now");
   auto weight = Tensor::create();
@@ -90,12 +93,13 @@ TaskCompute LayerNorm::init(std::shared_ptr<State>& state,
         State::Args{options.normalized_shape(), options.eps(),
                     options.elementwise_affine(), options.bias()});
   }
-  return task;
+  scheduler.impl()->submit(std::move(task));
 }
 
-TaskCompute LayerNorm::forward(
-    const std::shared_ptr<State>& state, const std::shared_ptr<Tensor>& output,
-    const std::shared_ptr<const ReadOnlyTensor>& input) {
+void LayerNorm::forward(const Scheduler& scheduler,
+                        const std::shared_ptr<State>& state,
+                        const std::shared_ptr<Tensor>& output,
+                        const std::shared_ptr<const ReadOnlyTensor>& input) {
   auto mean = Tensor::create();
   auto rstd = Tensor::create();
   TaskCompute task;
@@ -168,11 +172,11 @@ TaskCompute LayerNorm::forward(
   state->backward.mean = mean;
   state->backward.rstd = rstd;
   output->sizes() = input->sizes();
-  return task;
+  scheduler.impl()->submit(std::move(task));
 }
 
-TaskCompute LayerNorm::backward(
-    const std::shared_ptr<State>& state,
+void LayerNorm::backward(
+    const Scheduler& scheduler, const std::shared_ptr<State>& state,
     const std::shared_ptr<Tensor>& grad_input,
     const std::shared_ptr<const ReadOnlyTensor>& grad_output) {
   if (state->forward.grad_weight == nullptr) {
@@ -300,7 +304,7 @@ TaskCompute LayerNorm::backward(
   state->backward.input.reset();
   state->backward.mean.reset();
   state->backward.rstd.reset();
-  return task;
+  scheduler.impl()->submit(std::move(task));
 }
 
 }  // namespace dllm::compute

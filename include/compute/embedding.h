@@ -1,7 +1,7 @@
 #pragma once
 #include "arg.h"
 #include "tensor.h"
-#include "threading/task_compute.h"
+#include "threading/scheduler.h"
 
 namespace dllm::compute {
 struct Embedding {
@@ -37,16 +37,16 @@ struct Embedding {
     DLLM_ARG(c10::optional<at::ScalarType>, dtype) = {};
   };
 
-  static TaskCompute init(std::shared_ptr<State> &state,
-                          const Options &options);
+  static void init(const Scheduler &scheduler, std::shared_ptr<State> &state,
+                   const Options &options);
 
-  static TaskCompute forward(
-      const std::shared_ptr<State> &state,
-      const std::shared_ptr<Tensor> &output,
-      const std::shared_ptr<const ReadOnlyTensor> &indices);
+  static void forward(const Scheduler &scheduler,
+                      const std::shared_ptr<State> &state,
+                      const std::shared_ptr<Tensor> &output,
+                      const std::shared_ptr<const ReadOnlyTensor> &indices);
 
-  static TaskCompute backward(
-      const std::shared_ptr<State> &state,
+  static void backward(
+      const Scheduler &scheduler, const std::shared_ptr<State> &state,
       const std::shared_ptr<const ReadOnlyTensor> &grad_output);
 };
 

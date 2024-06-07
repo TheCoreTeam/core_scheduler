@@ -6,16 +6,18 @@
 #include "logger.h"
 #include "nvtx_helper.h"
 #include "tensor_friend.h"
+#include "threading/scheduler_impl.h"
 
 namespace dllm::compute {
-TaskCompute GeLU::init(std::shared_ptr<State> &state) {
+void GeLU::init(const Scheduler &scheduler, std::shared_ptr<State> &state) {
   state = std::make_shared<State>();
-  return TaskCompute{[](const ContextCompute *) {}};
+  scheduler.impl()->submit(TaskCompute{[](const ContextCompute *) {}});
 }
 
-TaskCompute GeLU::forward(const std::shared_ptr<State> &state,
-                          const std::shared_ptr<Tensor> &output,
-                          const std::shared_ptr<const ReadOnlyTensor> &input) {
+void GeLU::forward(const Scheduler &scheduler,
+                   const std::shared_ptr<State> &state,
+                   const std::shared_ptr<Tensor> &output,
+                   const std::shared_ptr<const ReadOnlyTensor> &input) {
   auto task = TaskCompute{
       [output = output, input = input, outputfuture = output->future(),
        inputFuture = input->future()](const ContextCompute *context) mutable {
@@ -35,12 +37,13 @@ TaskCompute GeLU::forward(const std::shared_ptr<State> &state,
   state->backward.input = input;
   // size
   output->sizes() = input->sizes();
-  return task;
+  scheduler.impl()->submit(std::move(task));
 }
 
-TaskCompute GeLU::backward(
-    const std::shared_ptr<State> &state, const std::shared_ptr<Tensor> &dinput,
-    const std::shared_ptr<const ReadOnlyTensor> &doutput) {
+void GeLU::backward(const Scheduler &scheduler,
+                    const std::shared_ptr<State> &state,
+                    const std::shared_ptr<Tensor> &dinput,
+                    const std::shared_ptr<const ReadOnlyTensor> &doutput) {
   auto task = TaskCompute{[doutput = doutput, input = state->backward.input,
                            dinput = dinput, dinputFuture = dinput->future(),
                            doutputFuture = doutput->future(),
@@ -67,6 +70,6 @@ TaskCompute GeLU::backward(
   dinput->sizes() = doutput->sizes();
   // decrease counter
   state->backward.input.reset();
-  return task;
+  scheduler.impl()->submit(std::move(task));
 }
 }  // namespace dllm::compute

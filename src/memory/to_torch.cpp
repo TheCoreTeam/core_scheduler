@@ -6,10 +6,12 @@
 #include "logger.h"
 #include "nvtx_helper.h"
 #include "tensor_friend.h"
+#include "threading/scheduler_impl.h"
+#include "threading/task_cudart.h"
 
 namespace dllm::memory {
-TaskCudart toTorch(at::Tensor &dst,
-                   const std::shared_ptr<const ReadOnlyTensor> &src) {
+void toTorch(const Scheduler &scheduler, at::Tensor &dst,
+             const std::shared_ptr<const ReadOnlyTensor> &src) {
   auto task = TaskCudart{[&dst = dst, src = src, srcFuture = src->future()](
                              const ContextCudart *context) mutable {
     DLLM_NVTX_RANGE_FN("dllm::memory::toTorch");
@@ -26,6 +28,6 @@ TaskCudart toTorch(at::Tensor &dst,
   }};
 
   src->resetFuture(task.get_future());
-  return task;
+  scheduler.impl()->submit(std::move(task));
 }
 }  // namespace dllm::memory

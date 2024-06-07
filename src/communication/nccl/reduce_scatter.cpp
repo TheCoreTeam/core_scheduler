@@ -7,6 +7,7 @@
 #include "logger.h"
 #include "nvtx_helper.h"
 #include "tensor_friend.h"
+#include "threading/scheduler_impl.h"
 
 namespace dllm::communication {
 namespace {
@@ -19,7 +20,8 @@ constexpr auto toC10dRedOp(const Operation operation) {
   }
 }
 }  // namespace
-TaskNccl ReduceScatter<NCCL>::run(
+void ReduceScatter<NCCL>::run(
+    const Scheduler &scheduler,
     const std::vector<std::shared_ptr<Tensor>> &tensorReceive,
     const std::vector<std::vector<std::shared_ptr<const ReadOnlyTensor>>>
         &tensorSend,
@@ -88,6 +90,6 @@ TaskNccl ReduceScatter<NCCL>::run(
   for (const auto &t : tensorReceive) {
     t->resetFuture(future);
   }
-  return task;
+  scheduler.impl()->submit(std::move(task));
 }
 }  // namespace dllm::communication

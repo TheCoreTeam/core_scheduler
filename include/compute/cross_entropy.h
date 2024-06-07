@@ -1,8 +1,9 @@
 #pragma once
-#include "ATen/core/Reduction.h"
+#include <ATen/core/Reduction.h>
+
 #include "arg.h"
 #include "tensor.h"
-#include "threading/task_compute.h"
+#include "threading/scheduler.h"
 
 namespace dllm::compute {
 struct CrossEntropy {
@@ -30,15 +31,17 @@ struct CrossEntropy {
     DLLM_ARG(double, label_smoothing) = 0.0;
   };
 
-  static TaskCompute init(std::shared_ptr<State> &state,
-                          const Options &options = {});
+  static void init(const Scheduler &scheduler, std::shared_ptr<State> &state,
+                   const Options &options = {});
 
-  static TaskCompute forward(
-      const std::shared_ptr<State> &state, const std::shared_ptr<Tensor> &loss,
-      const std::shared_ptr<const ReadOnlyTensor> &input,
-      const std::shared_ptr<const ReadOnlyTensor> &target);
+  static void forward(const Scheduler &scheduler,
+                      const std::shared_ptr<State> &state,
+                      const std::shared_ptr<Tensor> &loss,
+                      const std::shared_ptr<const ReadOnlyTensor> &input,
+                      const std::shared_ptr<const ReadOnlyTensor> &target);
 
-  static TaskCompute backward(const std::shared_ptr<State> &state,
-                              const std::shared_ptr<Tensor> &dinput);
+  static void backward(const Scheduler &scheduler,
+                       const std::shared_ptr<State> &state,
+                       const std::shared_ptr<Tensor> &dinput);
 };
 }  // namespace dllm::compute

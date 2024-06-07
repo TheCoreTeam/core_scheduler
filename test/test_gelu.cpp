@@ -53,40 +53,18 @@ void TestDLLMGelu::TestRoutine(const int T, const double tol_forward,
   const auto tensorOutput = dllm::Tensor::create();
   const auto GradOutput_ = dllm::Tensor::create();
   std::shared_ptr<dllm::compute::GeLU::State> state;
-  {
-    auto task = dllm::compute::Utils::randn(input2, {B, T}, option);
-    tp.submit(std::move(task));
-  }
-  {
-    auto task = dllm::compute::GeLU::init(state);
-    tp.submit(std::move(task));
-  }
-  {
-    auto task = dllm::compute::GeLU::forward(state, tensorOutput, input2);
-    tp.submit(std::move(task));
-  }
-  {
-    auto task = dllm::compute::Utils::randn_like(GradOutput_, tensorOutput);
-    tp.submit(std::move(task));
-  }
-  {
-    auto task =
-        dllm::compute::GeLU::backward(state, tensorGradInput, GradOutput_);
-    tp.submit(std::move(task));
-  }
+  dllm::compute::Utils::randn(tp, input2, {B, T}, option);
+  dllm::compute::GeLU::init(tp, state);
+  dllm::compute::GeLU::forward(tp, state, tensorOutput, input2);
+  dllm::compute::Utils::randn_like(tp, GradOutput_, tensorOutput);
+  dllm::compute::GeLU::backward(tp, state, tensorGradInput, GradOutput_);
 
   torch::Tensor input;
   torch::Tensor GradOutput;
-  {
-    auto task = dllm::memory::toTorch(input, input2);
-    stream.submit(std::move(task));
-    input2->wait();
-  }
-  {
-    auto task = dllm::memory::toTorch(GradOutput, GradOutput_);
-    stream.submit(std::move(task));
-    GradOutput_->wait();
-  }
+  dllm::memory::toTorch(stream, input, input2);
+  input2->wait();
+  dllm::memory::toTorch(stream, GradOutput, GradOutput_);
+  GradOutput_->wait();
 
   auto input1 = input.detach().clone().set_requires_grad(true);
 

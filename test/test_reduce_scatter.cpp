@@ -69,28 +69,17 @@ void ReduceScatterNCCLTestFixture::TestlAllToAllT(const int blockSize) {
   vs.reserve(stream->commSize());
   for (int i = 0; i < stream->commSize(); ++i) {
     auto t = dllm::Tensor::create();
-    auto task = dllm::compute::Utils::rand(t, {blockSize}, option);
-    tp->submit(std::move(task));
+    dllm::compute::Utils::rand(*tp, t, {blockSize}, option);
     vs.push_back(t);
   }
   auto r = dllm::Tensor::create();
-  {
-    auto task = dllm::compute::Utils::empty(r, {blockSize}, option);
-    tp->submit(std::move(task));
-  }
-  {
-    auto task =
-        dllm::communication::ReduceScatter<dllm::communication::NCCL>::run(
-            {r}, {vs}, dllm::communication::SUM);
-    stream->submit(std::move(task));
-  }
+  dllm::compute::Utils::empty(*tp, r, {blockSize}, option);
+  dllm::communication::ReduceScatter<dllm::communication::NCCL>::run(
+      *stream, {r}, {vs}, dllm::communication::SUM);
 
   at::Tensor x_torch;
-  {
-    auto task = dllm::memory::toTorch(x_torch, r);
-    copy->submit(std::move(task));
-    r->wait();
-  }
+  dllm::memory::toTorch(*copy, x_torch, r);
+  r->wait();
 
   auto accumulator = torch::zeros({m}, option);
   for (int i = 0; i < stream->commSize(); ++i) {

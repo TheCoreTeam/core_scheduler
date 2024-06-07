@@ -2,7 +2,7 @@
 #include "arg.h"
 #include "module/state.h"
 #include "tensor.h"
-#include "threading/task_compute.h"
+#include "threading/scheduler.h"
 
 namespace dllm::compute {
 struct LayerNorm {
@@ -47,16 +47,16 @@ struct LayerNorm {
     DLLM_ARG(c10::optional<at::ScalarType>, dtype) = {};
   };
 
-  static TaskCompute init(std::shared_ptr<State> &state,
-                          const Options &options);
+  static void init(const Scheduler &scheduler, std::shared_ptr<State> &state,
+                   const Options &options);
 
-  static TaskCompute forward(
-      const std::shared_ptr<State> &state,
-      const std::shared_ptr<Tensor> &output,
-      const std::shared_ptr<const ReadOnlyTensor> &input);
+  static void forward(const Scheduler &scheduler,
+                      const std::shared_ptr<State> &state,
+                      const std::shared_ptr<Tensor> &output,
+                      const std::shared_ptr<const ReadOnlyTensor> &input);
 
-  static TaskCompute backward(
-      const std::shared_ptr<State> &state,
+  static void backward(
+      const Scheduler &scheduler, const std::shared_ptr<State> &state,
       const std::shared_ptr<Tensor> &grad_input,
       const std::shared_ptr<const ReadOnlyTensor> &grad_output);
 };

@@ -7,19 +7,22 @@
 #include "logger.h"
 #include "nvtx_helper.h"
 #include "tensor_friend.h"
+#include "threading/scheduler_impl.h"
+#include "threading/task_compute.h"
 
 namespace dllm::compute {
-TaskCompute ScaledDotProductFlashAttention::init(std::shared_ptr<State> &state,
-                                                 const Options &options) {
+void ScaledDotProductFlashAttention::init(const Scheduler &scheduler,
+                                          std::shared_ptr<State> &state,
+                                          const Options &options) {
   state = std::make_shared<State>(
       State::Forward{}, State::Backward{},
       State::Args{options.dropout_p(), options.is_causal(),
                   options.return_debug_mask(), options.scale()});
-  return TaskCompute{[](const ContextCompute *) {}};
 }
 
-TaskCompute ScaledDotProductFlashAttention::forward(
-    const std::shared_ptr<State> &state, const std::shared_ptr<Tensor> &output,
+void ScaledDotProductFlashAttention::forward(
+    const Scheduler &scheduler, const std::shared_ptr<State> &state,
+    const std::shared_ptr<Tensor> &output,
     const std::shared_ptr<const ReadOnlyTensor> &query,
     const std::shared_ptr<const ReadOnlyTensor> &key,
     const std::shared_ptr<const ReadOnlyTensor> &value) {
@@ -100,11 +103,11 @@ TaskCompute ScaledDotProductFlashAttention::forward(
   // TODO(Jie): support different attention algorithm
   // size
   output->sizes() = query->sizes();
-  return task;
+  scheduler.impl()->submit(std::move(task));
 }
 
-TaskCompute ScaledDotProductFlashAttention::backward(
-    const std::shared_ptr<State> &state,
+void ScaledDotProductFlashAttention::backward(
+    const Scheduler &scheduler, const std::shared_ptr<State> &state,
     const std::shared_ptr<Tensor> &grad_query,
     const std::shared_ptr<Tensor> &grad_key,
     const std::shared_ptr<Tensor> &grad_value,
@@ -210,6 +213,6 @@ TaskCompute ScaledDotProductFlashAttention::backward(
   state->backward.cum_seq_k.reset();
   state->backward.philox_seed.reset();
   state->backward.philox_offset.reset();
-  return task;
+  scheduler.impl()->submit(std::move(task));
 }
 }  // namespace dllm::compute

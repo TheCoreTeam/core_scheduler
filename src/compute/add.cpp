@@ -6,12 +6,13 @@
 #include "logger.h"
 #include "nvtx_helper.h"
 #include "tensor_friend.h"
+#include "threading/scheduler_impl.h"
+#include "threading/task_compute.h"
 
 namespace dllm::compute::Add {
-
-TaskCompute forward(const std::shared_ptr<Tensor>& output,
-                    const std::shared_ptr<const ReadOnlyTensor>& A,
-                    const std::shared_ptr<const ReadOnlyTensor>& B) {
+void forward(const Scheduler& scheduler, const std::shared_ptr<Tensor>& output,
+             const std::shared_ptr<const ReadOnlyTensor>& A,
+             const std::shared_ptr<const ReadOnlyTensor>& B) {
   DLLM_ASSERT_TRUE(A->sizes() == B->sizes(),
                    "We do not supprot implicit broadcast add now!");
   auto task =
@@ -36,6 +37,6 @@ TaskCompute forward(const std::shared_ptr<Tensor>& output,
   B->resetFuture(future);
   output->resetFuture(future);
   output->sizes() = A->sizes();
-  return task;
+  scheduler.impl()->submit(std::move(task));
 }
 }  // namespace dllm::compute::Add

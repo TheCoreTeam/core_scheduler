@@ -7,21 +7,22 @@
 #include "logger.h"
 #include "nvtx_helper.h"
 #include "tensor_friend.h"
+#include "threading/scheduler_impl.h"
 
 namespace dllm::compute {
-TaskCompute CrossEntropy::init(std::shared_ptr<State> &state,
-                               const Options &options) {
+void CrossEntropy::init(const Scheduler &scheduler,
+                        std::shared_ptr<State> &state, const Options &options) {
   DLLM_ASSERT_TRUE(options.label_smoothing() == 0.0,
                    "We do not support label_smoothing");
   state = std::make_shared<State>(
       State::Forward{}, State::Backward{},
       State::Args{options.reduction(), options.ignore_index(),
                   options.label_smoothing()});
-  return TaskCompute{[](const ContextCompute *) {}};
 }
 
-TaskCompute CrossEntropy::forward(
-    const std::shared_ptr<State> &state, const std::shared_ptr<Tensor> &loss,
+void CrossEntropy::forward(
+    const Scheduler &scheduler, const std::shared_ptr<State> &state,
+    const std::shared_ptr<Tensor> &loss,
     const std::shared_ptr<const ReadOnlyTensor> &input,
     const std::shared_ptr<const ReadOnlyTensor> &target) {
   auto log_probs = Tensor::create();
@@ -76,11 +77,12 @@ TaskCompute CrossEntropy::forward(
   // size
   log_probs->sizes() = input->sizes();
   loss->sizes() = IntArray{1};
-  return task;
+  scheduler.impl()->submit(std::move(task));
 }
 
-TaskCompute CrossEntropy::backward(const std::shared_ptr<State> &state,
-                                   const std::shared_ptr<Tensor> &dinput) {
+void CrossEntropy::backward(const Scheduler &scheduler,
+                            const std::shared_ptr<State> &state,
+                            const std::shared_ptr<Tensor> &dinput) {
   auto task = TaskCompute{
       [weight = state->forward.weight, log_probs = state->backward.log_probs,
        total_weight = state->backward.total_weight,
@@ -140,6 +142,6 @@ TaskCompute CrossEntropy::backward(const std::shared_ptr<State> &state,
   state->backward.total_weight.reset();
   state->backward.target.reset();
   state->backward.loss.reset();
-  return task;
+  scheduler.impl()->submit(std::move(task));
 }
 }  // namespace dllm::compute

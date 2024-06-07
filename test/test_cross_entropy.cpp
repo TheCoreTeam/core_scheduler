@@ -50,29 +50,26 @@ void TestCrossEntropyFixture::Test(const int size) {
   auto x = dllm::Tensor::create();
   auto dx = dllm::Tensor::create();
   auto target = dllm::Tensor::create();
-  DLLM_SUBMIT_TASK(
-      tp, dllm::compute::Utils::rand(x, {size, 2 * size, 3 * size}, option));
-  DLLM_SUBMIT_TASK(tp, dllm::compute::Utils::view(x, x, {-1, x->size(-1)}));
-  DLLM_SUBMIT_TASK(
-      tp, dllm::compute::Utils::randint(target, 0, 3 * size, {size, 2 * size},
-                                        option.dtype(at::kLong)));
-  DLLM_SUBMIT_TASK(tp, dllm::compute::Utils::view(target, target, {-1}));
+  dllm::compute::Utils::rand(tp, x, {size, 2 * size, 3 * size}, option);
+  dllm::compute::Utils::view(tp, x, x, {-1, x->size(-1)});
+  dllm::compute::Utils::randint(tp, target, 0, 3 * size, {size, 2 * size},
+                                option.dtype(at::kLong));
+  dllm::compute::Utils::view(tp, target, target, {-1});
   std::shared_ptr<dllm::compute::CrossEntropy::State> state;
-  DLLM_SUBMIT_TASK(tp, dllm::compute::CrossEntropy::init(state));
-  DLLM_SUBMIT_TASK(
-      tp, dllm::compute::CrossEntropy::forward(state, loss, x, target));
-  DLLM_SUBMIT_TASK(tp, dllm::compute::CrossEntropy::backward(state, dx));
+  dllm::compute::CrossEntropy::init(tp, state);
+  dllm::compute::CrossEntropy::forward(tp, state, loss, x, target);
+  dllm::compute::CrossEntropy::backward(tp, state, dx);
   at::Tensor loss_ref_torch, x_torch, dx_torch, target_torch;
-  DLLM_SUBMIT_TASK(stream, dllm::memory::toTorch(loss_ref_torch, loss));
+  dllm::memory::toTorch(stream, loss_ref_torch, loss);
   loss->wait();
-  DLLM_SUBMIT_TASK(stream, dllm::memory::toTorch(x_torch, x));
+  dllm::memory::toTorch(stream, x_torch, x);
   x->wait();
-  DLLM_SUBMIT_TASK(stream, dllm::memory::toTorch(dx_torch, dx));
+  dllm::memory::toTorch(stream, dx_torch, dx);
   dx->wait();
-  DLLM_SUBMIT_TASK(stream, dllm::memory::toTorch(target_torch, target));
+  dllm::memory::toTorch(stream, target_torch, target);
   target->wait();
   x_torch.set_requires_grad(true);
-  auto loss_torch = at::cross_entropy_loss(x_torch, target_torch);
+  const auto loss_torch = at::cross_entropy_loss(x_torch, target_torch);
   loss_torch.backward();
   ASSERT_TRUE(at::allclose(loss_torch, loss_ref_torch));
   ASSERT_TRUE(at::allclose(x_torch.grad(), dx));

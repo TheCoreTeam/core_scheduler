@@ -4,7 +4,7 @@
 #include "arg.h"
 #include "module/state.h"
 #include "tensor.h"
-#include "threading/task_compute.h"
+#include "threading/scheduler.h"
 
 namespace dllm::module {
 struct Module;
@@ -48,31 +48,31 @@ struct AdamW {
     DLLM_ARG(long, t) = 0;
   };
 
-  static void init(ThreadPoolCompute &tp, const module::Module &module,
+  static void init(const Scheduler &scheduler, const module::Module &module,
                    const Options &options);
 
   template <typename Module, typename = std::enable_if_t<
                                  !std::is_base_of_v<module::Module, Module>>>
-  static void init(ThreadPoolCompute &tp, const Module &module,
+  static void init(const Scheduler &scheduler, const Module &module,
                    const Options &options) {
-    init(tp, *module, options);
+    init(scheduler, *module, options);
   }
 
-  static void step(ThreadPoolCompute &tp, const module::Module &module);
+  static void step(const Scheduler &scheduler, const module::Module &module);
 
   template <typename Module, typename = std::enable_if_t<
                                  !std::is_base_of_v<module::Module, Module>>>
-  static void step(ThreadPoolCompute &tp, const Module &module) {
-    step(tp, *module);
+  static void step(const Scheduler &scheduler, const Module &module) {
+    step(scheduler, *module);
   }
 
-  static TaskCompute init(
-      std::shared_ptr<State> &state,
-      const std::shared_ptr<const ReadOnlyTensor> &parameter,
-      const Options &options);
+  static void init(const Scheduler &scheduler, std::shared_ptr<State> &state,
+                   const std::shared_ptr<const ReadOnlyTensor> &parameter,
+                   const Options &options);
 
-  static TaskCompute step(const std::shared_ptr<State> &state,
-                          const std::shared_ptr<Tensor> &w,
-                          const std::shared_ptr<const ReadOnlyTensor> &dw);
+  static void step(const Scheduler &scheduler,
+                   const std::shared_ptr<State> &state,
+                   const std::shared_ptr<Tensor> &w,
+                   const std::shared_ptr<const ReadOnlyTensor> &dw);
 };
 }  // namespace dllm::optimizer

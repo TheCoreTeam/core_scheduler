@@ -6,12 +6,14 @@
 #include "logger.h"
 #include "nvtx_helper.h"
 #include "tensor_friend.h"
+#include "threading/scheduler_impl.h"
+#include "threading/task_compute.h"
 
 namespace dllm::compute::Utils {
-TaskCompute sum(const std::shared_ptr<Tensor> &output,
-                const std::shared_ptr<const ReadOnlyTensor> &input,
-                const IntArray &dim, const bool keep_dim,
-                c10::optional<at::ScalarType> dtype) {
+void sum(const Scheduler &scheduler, const std::shared_ptr<Tensor> &output,
+         const std::shared_ptr<const ReadOnlyTensor> &input,
+         const IntArray &dim, const bool keep_dim,
+         c10::optional<at::ScalarType> dtype) {
   DLLM_ASSERT_TRUE(!dim.empty(), "dim should not be empty");
   auto task = TaskCompute{
       [output = output, input = input, dim = dim, keep_dim = keep_dim,
@@ -58,12 +60,12 @@ TaskCompute sum(const std::shared_ptr<Tensor> &output,
     }
     return size;
   }();
-  return task;
+  scheduler.impl()->submit(std::move(task));
 }
 
-TaskCompute range(const std::shared_ptr<Tensor> &tensor,
-                  const at::Scalar &start, const at::Scalar &end,
-                  const at::TensorOptions options) {
+void range(const Scheduler &scheduler, const std::shared_ptr<Tensor> &tensor,
+           const at::Scalar &start, const at::Scalar &end,
+           const at::TensorOptions options) {
   auto task = TaskCompute{
       [tensor = tensor, start = start, end = end, options = options,
        future = tensor->future()](const ContextCompute *context) mutable {
@@ -79,12 +81,12 @@ TaskCompute range(const std::shared_ptr<Tensor> &tensor,
   tensor->resetFuture(future);
   // size
   tensor->sizes() = IntArray{end.toLong() - start.toLong()};
-  return task;
+  scheduler.impl()->submit(std::move(task));
 }
 
-TaskCompute arange(const std::shared_ptr<Tensor> &tensor,
-                   const at::Scalar &start, const at::Scalar &end,
-                   const at::TensorOptions options) {
+void arange(const Scheduler &scheduler, const std::shared_ptr<Tensor> &tensor,
+            const at::Scalar &start, const at::Scalar &end,
+            const at::TensorOptions options) {
   auto task = TaskCompute{
       [tensor = tensor, start = start, end = end, options = options,
        future = tensor->future()](const ContextCompute *context) mutable {
@@ -101,12 +103,12 @@ TaskCompute arange(const std::shared_ptr<Tensor> &tensor,
   // size
   tensor->sizes() = IntArray{(end.toLong() - start.toLong())};
   tensor->options() = options;
-  return task;
+  scheduler.impl()->submit(std::move(task));
 }
 
-TaskCompute arange(const std::shared_ptr<Tensor> &tensor,
-                   const at::Scalar &start, const at::Scalar &end,
-                   const at::Scalar &step, const at::TensorOptions options) {
+void arange(const Scheduler &scheduler, const std::shared_ptr<Tensor> &tensor,
+            const at::Scalar &start, const at::Scalar &end,
+            const at::Scalar &step, const at::TensorOptions options) {
   auto task = TaskCompute{[tensor = tensor, start = start, end = end,
                            step = step, options = options,
                            future = tensor->future()](
@@ -124,12 +126,12 @@ TaskCompute arange(const std::shared_ptr<Tensor> &tensor,
   // size
   tensor->sizes() = IntArray{(end.toLong() - start.toLong()) / step.toLong()};
   tensor->options() = options;
-  return task;
+  scheduler.impl()->submit(std::move(task));
 }
 
-TaskCompute randint(const std::shared_ptr<Tensor> &tensor, const int64_t low,
-                    const int64_t high, const IntArrayRef &size,
-                    const at::TensorOptions options) {
+void randint(const Scheduler &scheduler, const std::shared_ptr<Tensor> &tensor,
+             const int64_t low, const int64_t high, const IntArrayRef &size,
+             const at::TensorOptions options) {
   auto task = TaskCompute{
       [tensor = tensor, high = high, low = low, options = options,
        future = tensor->future()](const ContextCompute *context) mutable {
@@ -147,11 +149,11 @@ TaskCompute randint(const std::shared_ptr<Tensor> &tensor, const int64_t low,
   // size
   tensor->sizes() = size;
   tensor->options() = options;
-  return task;
+  scheduler.impl()->submit(std::move(task));
 }
 
-TaskCompute empty(const std::shared_ptr<Tensor> &tensor,
-                  const IntArrayRef &size, at::TensorOptions options) {
+void empty(const Scheduler &scheduler, const std::shared_ptr<Tensor> &tensor,
+           const IntArrayRef &size, at::TensorOptions options) {
   auto task = TaskCompute{
       [tensor = tensor, options = options,
        future = tensor->future()](const ContextCompute *context) mutable {
@@ -168,11 +170,11 @@ TaskCompute empty(const std::shared_ptr<Tensor> &tensor,
   // size
   tensor->sizes() = size;
   tensor->options() = options;
-  return task;
+  scheduler.impl()->submit(std::move(task));
 }
 
-TaskCompute empty_like(const std::shared_ptr<Tensor> &dst,
-                       const std::shared_ptr<const ReadOnlyTensor> &src) {
+void empty_like(const Scheduler &scheduler, const std::shared_ptr<Tensor> &dst,
+                const std::shared_ptr<const ReadOnlyTensor> &src) {
   auto task = TaskCompute{[dst = dst, src = src, dstFuture = dst->future(),
                            srcFuture = src->future()](
                               const ContextCompute *context) mutable {
@@ -192,11 +194,11 @@ TaskCompute empty_like(const std::shared_ptr<Tensor> &dst,
   // size
   dst->sizes() = src->sizes();
   dst->options() = src->options();
-  return task;
+  scheduler.impl()->submit(std::move(task));
 }
 
-TaskCompute ones(const std::shared_ptr<Tensor> &tensor, const IntArrayRef &size,
-                 at::TensorOptions options) {
+void ones(const Scheduler &scheduler, const std::shared_ptr<Tensor> &tensor,
+          const IntArrayRef &size, at::TensorOptions options) {
   auto task = TaskCompute{
       [tensor = tensor, options = options,
        future = tensor->future()](const ContextCompute *context) mutable {
@@ -212,11 +214,11 @@ TaskCompute ones(const std::shared_ptr<Tensor> &tensor, const IntArrayRef &size,
   tensor->resetFuture(future);
   tensor->sizes() = size;
   tensor->options() = options;
-  return task;
+  scheduler.impl()->submit(std::move(task));
 }
 
-TaskCompute ones_like(const std::shared_ptr<Tensor> &dst,
-                      const std::shared_ptr<const ReadOnlyTensor> &src) {
+void ones_like(const Scheduler &scheduler, const std::shared_ptr<Tensor> &dst,
+               const std::shared_ptr<const ReadOnlyTensor> &src) {
   auto task = TaskCompute{
       [dst = dst, src = src, dstFuture = dst->future(),
        srcFuture = src->future()](const ContextCompute *context) mutable {
@@ -236,11 +238,11 @@ TaskCompute ones_like(const std::shared_ptr<Tensor> &dst,
   // size
   dst->sizes() = src->sizes();
   dst->options() = src->options();
-  return task;
+  scheduler.impl()->submit(std::move(task));
 }
 
-TaskCompute zeros(const std::shared_ptr<Tensor> &tensor,
-                  const IntArrayRef &size, at::TensorOptions options) {
+void zeros(const Scheduler &scheduler, const std::shared_ptr<Tensor> &tensor,
+           const IntArrayRef &size, at::TensorOptions options) {
   auto task = TaskCompute{
       [tensor = tensor, options = options,
        future = tensor->future()](const ContextCompute *context) mutable {
@@ -257,11 +259,11 @@ TaskCompute zeros(const std::shared_ptr<Tensor> &tensor,
   // size
   tensor->sizes() = size;
   tensor->options() = options;
-  return task;
+  scheduler.impl()->submit(std::move(task));
 }
 
-TaskCompute zeros_like(const std::shared_ptr<Tensor> &dst,
-                       const std::shared_ptr<const ReadOnlyTensor> &src) {
+void zeros_like(const Scheduler &scheduler, const std::shared_ptr<Tensor> &dst,
+                const std::shared_ptr<const ReadOnlyTensor> &src) {
   auto task = TaskCompute{[dst = dst, src = src, dstFuture = dst->future(),
                            srcFuture = src->future()](
                               const ContextCompute *context) mutable {
@@ -281,11 +283,11 @@ TaskCompute zeros_like(const std::shared_ptr<Tensor> &dst,
   // size
   dst->sizes() = src->sizes();
   dst->options() = src->options();
-  return task;
+  scheduler.impl()->submit(std::move(task));
 }
 
-TaskCompute rand(const std::shared_ptr<Tensor> &tensor, const IntArrayRef &size,
-                 at::TensorOptions options) {
+void rand(const Scheduler &scheduler, const std::shared_ptr<Tensor> &tensor,
+          const IntArrayRef &size, at::TensorOptions options) {
   auto task = TaskCompute{
       [tensor = tensor, options = options,
        future = tensor->future()](const ContextCompute *context) mutable {
@@ -302,11 +304,11 @@ TaskCompute rand(const std::shared_ptr<Tensor> &tensor, const IntArrayRef &size,
   // size
   tensor->sizes() = size;
   tensor->options() = options;
-  return task;
+  scheduler.impl()->submit(std::move(task));
 }
 
-TaskCompute rand_like(const std::shared_ptr<Tensor> &dst,
-                      const std::shared_ptr<const ReadOnlyTensor> &src) {
+void rand_like(const Scheduler &scheduler, const std::shared_ptr<Tensor> &dst,
+               const std::shared_ptr<const ReadOnlyTensor> &src) {
   auto task = TaskCompute{
       [dst = dst, src = src, dstFuture = dst->future(),
        srcFuture = src->future()](const ContextCompute *context) mutable {
@@ -326,11 +328,11 @@ TaskCompute rand_like(const std::shared_ptr<Tensor> &dst,
   // size
   dst->sizes() = src->sizes();
   dst->options() = src->options();
-  return task;
+  scheduler.impl()->submit(std::move(task));
 }
 
-TaskCompute randn(const std::shared_ptr<Tensor> &tensor,
-                  const IntArrayRef &size, at::TensorOptions options) {
+void randn(const Scheduler &scheduler, const std::shared_ptr<Tensor> &tensor,
+           const IntArrayRef &size, at::TensorOptions options) {
   auto task = TaskCompute{
       [tensor = tensor, options = options,
        future = tensor->future()](const ContextCompute *context) mutable {
@@ -347,11 +349,11 @@ TaskCompute randn(const std::shared_ptr<Tensor> &tensor,
   // size
   tensor->sizes() = size;
   tensor->options() = options;
-  return task;
+  scheduler.impl()->submit(std::move(task));
 }
 
-TaskCompute randn_like(const std::shared_ptr<Tensor> &dst,
-                       const std::shared_ptr<const ReadOnlyTensor> &src) {
+void randn_like(const Scheduler &scheduler, const std::shared_ptr<Tensor> &dst,
+                const std::shared_ptr<const ReadOnlyTensor> &src) {
   auto task = TaskCompute{[dst = dst, src = src, dstFuture = dst->future(),
                            srcFuture = src->future()](
                               const ContextCompute *context) mutable {
@@ -371,12 +373,13 @@ TaskCompute randn_like(const std::shared_ptr<Tensor> &dst,
   // size
   dst->sizes() = src->sizes();
   dst->options() = src->options();
-  return task;
+  scheduler.impl()->submit(std::move(task));
 }
 
-TaskCompute split(std::vector<std::shared_ptr<const ReadOnlyTensor>> &output,
-                  const std::shared_ptr<const ReadOnlyTensor> &src,
-                  const int64_t &split_size, const int64_t &dim) {
+void split(const Scheduler &scheduler,
+           std::vector<std::shared_ptr<const ReadOnlyTensor>> &output,
+           const std::shared_ptr<const ReadOnlyTensor> &src,
+           const int64_t &split_size, const int64_t &dim) {
   auto input_size = src->sizes();
   const auto split_num =
       input_size[dim > 0 ? dim : input_size.size() + dim] / split_size;
@@ -411,12 +414,12 @@ TaskCompute split(std::vector<std::shared_ptr<const ReadOnlyTensor>> &output,
   }};
 
   p0->resetFuture(task.get_future());
-  return task;
+  scheduler.impl()->submit(std::move(task));
 }
 
-TaskCompute view(const std::shared_ptr<Tensor> &output,
-                 const std::shared_ptr<const ReadOnlyTensor> &input,
-                 const IntArrayRef &size) {
+void view(const Scheduler &scheduler, const std::shared_ptr<Tensor> &output,
+          const std::shared_ptr<const ReadOnlyTensor> &input,
+          const IntArrayRef &size) {
   TensorFriend::extract_future_ptr(output) =
       TensorFriend::extract_future_ptr(input);
   auto task = TaskCompute{
@@ -474,12 +477,13 @@ TaskCompute view(const std::shared_ptr<Tensor> &output,
   };
   output->sizes() = toNewShape(input->sizes(), size);
   output->options() = input->options();
-  return task;
+  scheduler.impl()->submit(std::move(task));
 }
 
-TaskCompute broadcast_to(const std::shared_ptr<Tensor> &output,
-                         const std::shared_ptr<const ReadOnlyTensor> &input,
-                         const IntArrayRef &size) {
+void broadcast_to(const Scheduler &scheduler,
+                  const std::shared_ptr<Tensor> &output,
+                  const std::shared_ptr<const ReadOnlyTensor> &input,
+                  const IntArrayRef &size) {
   TensorFriend::extract_future_ptr(output) =
       TensorFriend::extract_future_ptr(input);
   auto task = TaskCompute{
@@ -502,12 +506,12 @@ TaskCompute broadcast_to(const std::shared_ptr<Tensor> &output,
   // size
   output->sizes() = size;
   output->options() = input->options();
-  return task;
+  scheduler.impl()->submit(std::move(task));
 }
 
-TaskCompute cat(const std::shared_ptr<Tensor> &output,
-                const std::vector<std::shared_ptr<const ReadOnlyTensor>> &input,
-                const int64_t dim) {
+void cat(const Scheduler &scheduler, const std::shared_ptr<Tensor> &output,
+         const std::vector<std::shared_ptr<const ReadOnlyTensor>> &input,
+         const int64_t dim) {
   std::vector<TaskFuture> inputFuture;
   inputFuture.reserve(input.size());
   for (const auto &t : input) {
@@ -551,6 +555,6 @@ TaskCompute cat(const std::shared_ptr<Tensor> &output,
     return size;
   }();
   output->options() = input[0]->options();
-  return task;
+  scheduler.impl()->submit(std::move(task));
 }
 }  // namespace dllm::compute::Utils

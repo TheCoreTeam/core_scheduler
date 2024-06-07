@@ -1,7 +1,7 @@
 #pragma once
 #include "arg.h"
 #include "tensor.h"
-#include "threading/task_compute.h"
+#include "threading/scheduler.h"
 
 namespace dllm::compute {
 struct ScaledDotProductFlashAttention {
@@ -40,21 +40,21 @@ struct ScaledDotProductFlashAttention {
     DLLM_ARG(c10::optional<double>, scale) = {};
   };
 
-  static TaskCompute init(std::shared_ptr<State> &state,
-                          const Options &options = {});
+  static void init(const Scheduler &scheduler, std::shared_ptr<State> &state,
+                   const Options &options = {});
 
-  static TaskCompute forward(
-      const std::shared_ptr<State> &state,
-      const std::shared_ptr<Tensor> &output,
-      const std::shared_ptr<const ReadOnlyTensor> &query,
-      const std::shared_ptr<const ReadOnlyTensor> &key,
-      const std::shared_ptr<const ReadOnlyTensor> &value);
+  static void forward(const Scheduler &scheduler,
+                      const std::shared_ptr<State> &state,
+                      const std::shared_ptr<Tensor> &output,
+                      const std::shared_ptr<const ReadOnlyTensor> &query,
+                      const std::shared_ptr<const ReadOnlyTensor> &key,
+                      const std::shared_ptr<const ReadOnlyTensor> &value);
 
-  static TaskCompute backward(
-      const std::shared_ptr<State> &state,
-      const std::shared_ptr<Tensor> &grad_query,
-      const std::shared_ptr<Tensor> &grad_key,
-      const std::shared_ptr<Tensor> &grad_value,
-      const std::shared_ptr<const ReadOnlyTensor> &grad_out);
+  static void backward(const Scheduler &scheduler,
+                       const std::shared_ptr<State> &state,
+                       const std::shared_ptr<Tensor> &grad_query,
+                       const std::shared_ptr<Tensor> &grad_key,
+                       const std::shared_ptr<Tensor> &grad_value,
+                       const std::shared_ptr<const ReadOnlyTensor> &grad_out);
 };
 }  // namespace dllm::compute

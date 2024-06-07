@@ -7,6 +7,8 @@
 #include "logger.h"
 #include "nvtx_helper.h"
 #include "tensor_friend.h"
+#include "threading/scheduler_impl.h"
+#include "threading/task_compute.h"
 
 namespace dllm::compute {
 OrderedDict<std::string, std::shared_ptr<Tensor>> Linear::State::parameters()
@@ -30,8 +32,8 @@ OrderedDict<std::string, module::State::Increment> Linear::State::increments() {
   return dict;
 }
 
-TaskCompute Linear::init(std::shared_ptr<State> &state,
-                         const Options &options) {
+void Linear::init(const Scheduler &scheduler, std::shared_ptr<State> &state,
+                  const Options &options) {
   DLLM_ASSERT_TRUE(options.bias() == false, "we do not supprot bias now");
   // ReSharper disable once CppDFAUnreachableCode
   at::TensorOptions tensorOptions{};
@@ -97,12 +99,13 @@ TaskCompute Linear::init(std::shared_ptr<State> &state,
         std::make_shared<State>(State::Forward{std::move(weight)},
                                 State::Backward{}, State::Args{options.bias()});
   }
-  return task;
+  scheduler.impl()->submit(std::move(task));
 }
 
-TaskCompute Linear::forward(
-    const std::shared_ptr<State> &state, const std::shared_ptr<Tensor> &output,
-    const std::shared_ptr<const ReadOnlyTensor> &input) {
+void Linear::forward(const Scheduler &scheduler,
+                     const std::shared_ptr<State> &state,
+                     const std::shared_ptr<Tensor> &output,
+                     const std::shared_ptr<const ReadOnlyTensor> &input) {
   auto task = TaskCompute{[input = input, weight = state->forward.weight,
                            output = output, yFuture = output->future(),
                            xFuture = input->future(),
@@ -130,11 +133,12 @@ TaskCompute Linear::forward(
   auto input_size = input->sizes();
   input_size[input_size.size() - 1] = state->forward.weight->sizes()[0];
   output->sizes() = input_size;
-  return task;
+  scheduler.impl()->submit(std::move(task));
 }
 
-TaskCompute Linear::backwardInput(
-    const std::shared_ptr<State> &state, const std::shared_ptr<Tensor> &dinput,
+void Linear::backwardInput(
+    const Scheduler &scheduler, const std::shared_ptr<State> &state,
+    const std::shared_ptr<Tensor> &dinput,
     const std::shared_ptr<const ReadOnlyTensor> &grad_output) {
   auto task = TaskCompute{[dinput = dinput, grad_output = grad_output,
                            weight = state->forward.weight,
@@ -163,11 +167,11 @@ TaskCompute Linear::backwardInput(
   auto output_size = grad_output->sizes();
   output_size[output_size.size() - 1] = state->forward.weight->sizes()[1];
   dinput->sizes() = output_size;
-  return task;
+  scheduler.impl()->submit(std::move(task));
 }
 
-TaskCompute Linear::backwardParameter(
-    const std::shared_ptr<State> &state,
+void Linear::backwardParameter(
+    const Scheduler &scheduler, const std::shared_ptr<State> &state,
     const std::shared_ptr<const ReadOnlyTensor> &grad_output) {
   if (state->forward.grad_weight == nullptr) {
     state->forward.grad_weight = Tensor::create();
@@ -222,6 +226,6 @@ TaskCompute Linear::backwardParameter(
                    ->sizes()[state->backward.input->sizes().size() - 1]};
   // decrease counter
   state->backward.input.reset();
-  return task;
+  scheduler.impl()->submit(std::move(task));
 }
 }  // namespace dllm::compute

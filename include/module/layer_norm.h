@@ -11,12 +11,13 @@ namespace dllm::module {
 struct DLLM_API LayerNormImpl : Module {
   using Options = compute::LayerNorm::Options;
 
-  explicit LayerNormImpl(ThreadPoolCompute &tp, const Options &options);
+  explicit LayerNormImpl(const Scheduler &scheduler, const Options &options);
 
-  void forward(ThreadPoolCompute &tp, const std::shared_ptr<Tensor> &output,
+  void forward(const Scheduler &scheduler,
+               const std::shared_ptr<Tensor> &output,
                const std::shared_ptr<const ReadOnlyTensor> &input) const;
 
-  void backward(ThreadPoolCompute &tp,
+  void backward(const Scheduler &scheduler,
                 const std::shared_ptr<Tensor> &grad_input,
                 const std::shared_ptr<const ReadOnlyTensor> &grad_output) const;
 

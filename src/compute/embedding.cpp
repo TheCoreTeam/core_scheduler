@@ -6,10 +6,12 @@
 #include "logger.h"
 #include "nvtx_helper.h"
 #include "tensor_friend.h"
+#include "threading/scheduler_impl.h"
+#include "threading/task_compute.h"
 
 namespace dllm::compute {
-TaskCompute Embedding::init(std::shared_ptr<State> &state,
-                            const Options &options) {
+void Embedding::init(const Scheduler &scheduler, std::shared_ptr<State> &state,
+                     const Options &options) {
   int64_t padding_idx = -1;
   if (options.padding_idx() != c10::nullopt) {
     if (*options.padding_idx() > 0) {
@@ -50,12 +52,13 @@ TaskCompute Embedding::init(std::shared_ptr<State> &state,
       State::Args{options.num_embeddings(), padding_idx, options.max_norm(),
                   options.norm_type(), options.scale_grad_by_freq(),
                   options.sparse()});
-  return task;
+  scheduler.impl()->submit(std::move(task));
 }
 
-TaskCompute Embedding::forward(
-    const std::shared_ptr<State> &state, const std::shared_ptr<Tensor> &output,
-    const std::shared_ptr<const ReadOnlyTensor> &indices) {
+void Embedding::forward(const Scheduler &scheduler,
+                        const std::shared_ptr<State> &state,
+                        const std::shared_ptr<Tensor> &output,
+                        const std::shared_ptr<const ReadOnlyTensor> &indices) {
   auto task = TaskCompute{
       [padding_idx = state->args.padding_idx,
        scale_grad_by_freq = state->args.scale_grad_by_freq,
@@ -91,11 +94,11 @@ TaskCompute Embedding::forward(
     sizes.push_back(state->forward.weight->size(1));
     return sizes;
   }();
-  return task;
+  scheduler.impl()->submit(std::move(task));
 }
 
-TaskCompute Embedding::backward(
-    const std::shared_ptr<State> &state,
+void Embedding::backward(
+    const Scheduler &scheduler, const std::shared_ptr<State> &state,
     const std::shared_ptr<const ReadOnlyTensor> &grad_output) {
   auto task = TaskCompute{
       [num_weights = state->args.num_weights,
@@ -138,6 +141,6 @@ TaskCompute Embedding::backward(
   state->forward.weight->resetFuture(future);
   // decrease counter
   state->backward.indices.reset();
-  return task;
+  scheduler.impl()->submit(std::move(task));
 }
 }  // namespace dllm::compute

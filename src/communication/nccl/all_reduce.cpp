@@ -7,6 +7,7 @@
 #include "logger.h"
 #include "nvtx_helper.h"
 #include "tensor_friend.h"
+#include "threading/scheduler_impl.h"
 
 namespace dllm::communication {
 namespace {
@@ -20,7 +21,8 @@ constexpr auto toC10dRedOp(const Operation operation) {
 }
 }  // namespace
 
-TaskNccl AllReduce<NCCL>::runInplace(
+void AllReduce<NCCL>::runInplace(
+    const Scheduler &scheduler,
     const std::vector<std::shared_ptr<Tensor>> &tensors, Operation operation) {
   std::vector<TensorFuture> futures;
   futures.reserve(tensors.size());
@@ -54,6 +56,6 @@ TaskNccl AllReduce<NCCL>::runInplace(
   for (const auto &t : tensors) {
     t->resetFuture(future);
   }
-  return task;
+  scheduler.impl()->submit(std::move(task));
 }
 }  // namespace dllm::communication

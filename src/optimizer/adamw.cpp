@@ -7,6 +7,7 @@
 #include "module/module.h"
 #include "nvtx_helper.h"
 #include "tensor_friend.h"
+#include "threading/scheduler_impl.h"
 #include "threading/task_compute.h"
 #include "threading/thread_pool_compute.h"
 
@@ -25,31 +26,31 @@ void stepKernelAmsgrad(cudaStream_t stream,
                        const std::shared_ptr<Tensor> &vMax,
                        const std::shared_ptr<const ReadOnlyTensor> &dw);
 
-void AdamW::init(ThreadPoolCompute &tp, const module::Module &module,
+void AdamW::init(const Scheduler &scheduler, const module::Module &module,
                  const Options &options) {
   for (auto &kvState : module.named_states()) {
     for (auto &kvIncrement : kvState.value()->increments()) {
       std::shared_ptr<State> state;
-      tp.submit(init(state, kvIncrement->parameter, options));
+      init(scheduler, state, kvIncrement->parameter, options);
       kvIncrement->optimizerState = state;
     }
   }
 }
 
-void AdamW::step(ThreadPoolCompute &tp, const module::Module &module) {
+void AdamW::step(const Scheduler &scheduler, const module::Module &module) {
   for (auto &kvState : module.named_states()) {
     for (auto &kvIncrement : kvState.value()->increments()) {
-      tp.submit(
-          step(std::dynamic_pointer_cast<State>(kvIncrement->optimizerState),
-               kvIncrement->parameter, kvIncrement->gradient));
+      step(scheduler,
+           std::dynamic_pointer_cast<State>(kvIncrement->optimizerState),
+           kvIncrement->parameter, kvIncrement->gradient);
       kvIncrement->gradient = Tensor::create();
     }
   }
 }
 
-TaskCompute AdamW::init(std::shared_ptr<State> &state,
-                        const std::shared_ptr<const ReadOnlyTensor> &parameter,
-                        const Options &options) {
+void AdamW::init(const Scheduler &scheduler, std::shared_ptr<State> &state,
+                 const std::shared_ptr<const ReadOnlyTensor> &parameter,
+                 const Options &options) {
   auto m = Tensor::create();
   auto v = Tensor::create();
   m->sizes() = parameter->sizes();
@@ -102,12 +103,13 @@ TaskCompute AdamW::init(std::shared_ptr<State> &state,
     m->resetFuture(future);
     v->resetFuture(future);
   }
-  return task;
+  scheduler.impl()->submit(std::move(task));
 }
 
-TaskCompute AdamW::step(const std::shared_ptr<State> &state,
-                        const std::shared_ptr<Tensor> &w,
-                        const std::shared_ptr<const ReadOnlyTensor> &dw) {
+void AdamW::step(const Scheduler &scheduler,
+                 const std::shared_ptr<State> &state,
+                 const std::shared_ptr<Tensor> &w,
+                 const std::shared_ptr<const ReadOnlyTensor> &dw) {
   state->options.t++;
   TaskCompute task;
   if (state->options.amsgrad) {
@@ -173,6 +175,6 @@ TaskCompute AdamW::step(const std::shared_ptr<State> &state,
     v->resetFuture(future);
     dw->resetFuture(future);
   }
-  return task;
+  scheduler.impl()->submit(std::move(task));
 }
 }  // namespace dllm::optimizer

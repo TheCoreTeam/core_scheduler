@@ -57,24 +57,21 @@ void TestLayerNormFixture::TestFunctional(const int size) {
   auto dx = dllm::Tensor::create();
   auto y = dllm::Tensor::create();
   auto dy = dllm::Tensor::create();
-  DLLM_SUBMIT_TASK(
-      tp,
-      dllm::compute::LayerNorm::init(
-          state,
-          dllm::compute::LayerNorm::Options{{3 * size}}.device(device).dtype(
-              dtype)));
-  DLLM_SUBMIT_TASK(
-      tp, dllm::compute::Utils::rand(x, {size, 2 * size, 3 * size}, option));
-  DLLM_SUBMIT_TASK(tp, dllm::compute::LayerNorm::forward(state, y, x));
-  DLLM_SUBMIT_TASK(tp, dllm::compute::Utils::rand_like(dy, y));
-  DLLM_SUBMIT_TASK(tp, dllm::compute::LayerNorm::backward(state, dx, dy));
+  dllm::compute::LayerNorm::init(
+      tp, state,
+      dllm::compute::LayerNorm::Options{{3 * size}}.device(device).dtype(
+          dtype));
+  dllm::compute::Utils::rand(tp, x, {size, 2 * size, 3 * size}, option);
+  dllm::compute::LayerNorm::forward(tp, state, y, x);
+  dllm::compute::Utils::rand_like(tp, dy, y);
+  dllm::compute::LayerNorm::backward(tp, state, dx, dy);
 
   at::Tensor x_torch, dx_torch, y_ref_torch, dy_torch;
-  DLLM_SUBMIT_TASK(stream, dllm::memory::toTorch(x_torch, x));
+  dllm::memory::toTorch(stream, x_torch, x);
   x->wait();
-  DLLM_SUBMIT_TASK(stream, dllm::memory::toTorch(y_ref_torch, y));
+  dllm::memory::toTorch(stream, y_ref_torch, y);
   y->wait();
-  DLLM_SUBMIT_TASK(stream, dllm::memory::toTorch(dy_torch, dy));
+  dllm::memory::toTorch(stream, dy_torch, dy);
   dy->wait();
   x_torch.set_requires_grad(true);
   torch::nn::LayerNorm ln{torch::nn::LayerNormOptions({3 * size})};
@@ -104,18 +101,17 @@ void TestLayerNormFixture::TestModule(const int size) {
   dllm::module::LayerNorm lnOurs{
       tp,
       dllm::module::LayerNorm::Options{{3 * size}}.device(device).dtype(dtype)};
-  DLLM_SUBMIT_TASK(
-      tp, dllm::compute::Utils::rand(x, {size, 2 * size, 3 * size}, option));
+  dllm::compute::Utils::rand(tp, x, {size, 2 * size, 3 * size}, option);
   lnOurs->forward(tp, y, x);
-  DLLM_SUBMIT_TASK(tp, dllm::compute::Utils::rand_like(dy, y));
+  dllm::compute::Utils::rand_like(tp, dy, y);
   lnOurs->backward(tp, dx, dy);
 
   at::Tensor x_torch, dx_torch, y_ref_torch, dy_torch;
-  DLLM_SUBMIT_TASK(stream, dllm::memory::toTorch(x_torch, x));
+  dllm::memory::toTorch(stream, x_torch, x);
   x->wait();
-  DLLM_SUBMIT_TASK(stream, dllm::memory::toTorch(y_ref_torch, y));
+  dllm::memory::toTorch(stream, y_ref_torch, y);
   y->wait();
-  DLLM_SUBMIT_TASK(stream, dllm::memory::toTorch(dy_torch, dy));
+  dllm::memory::toTorch(stream, dy_torch, dy);
   dy->wait();
   x_torch.set_requires_grad(true);
   torch::nn::LayerNorm ln{torch::nn::LayerNormOptions({3 * size})};
