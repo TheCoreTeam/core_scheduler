@@ -18,19 +18,12 @@ struct ThreadStreamCudart {
   explicit ThreadStreamCudart(int deviceRank,
                               std::optional<const int> bindingMap = {});
 
-  ~ThreadStreamCudart();
+  void submit(TaskCudart &&task) const;
 
-  void submit(TaskCudart &&task);
-
-  void submit(const TaskCudart &task) = delete;
+  void submit(const TaskCudart &task) const = delete;
 
  private:
-  std::latch latch_;
-  std::queue<TaskCudart> taskQueue{};
-  std::mutex queueMutex{};
-  std::condition_variable cv{};
-  std::mutex cvMutex{};
-  std::atomic<bool> shutDown{false};
-  std::jthread thread{};
+  struct Impl;
+  std::shared_ptr<Impl> impl_;
 };
 }  // namespace dllm

@@ -19,19 +19,12 @@ struct ThreadPoolCompute {
   ThreadPoolCompute(int localRank, int threadNum,
                     const std::vector<int> &bindingMap = {});
 
-  ~ThreadPoolCompute();
+  void submit(TaskCompute &&task) const;
 
-  void submit(TaskCompute &&task);
-
-  void submit(const TaskCompute &task) = delete;
+  void submit(const TaskCompute &task) const = delete;
 
  private:
-  std::latch latch_;
-  std::vector<std::jthread> threadVector{};
-  std::queue<TaskCompute> taskQueue{};
-  std::mutex queueMutex{};
-  std::condition_variable cv{};
-  std::mutex cvMutex{};
-  std::atomic<bool> shutDown{false};
+  struct Impl;
+  std::shared_ptr<Impl> impl_;
 };
 }  // namespace dllm

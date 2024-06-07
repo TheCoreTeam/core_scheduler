@@ -15,6 +15,31 @@
 #include "logger.h"
 
 namespace dllm {
+struct ThreadStreamNccl::Impl {
+  Impl(MPI_Comm mpiComm, int deviceRank, std::optional<const int> bindingMap);
+
+  ~Impl();
+
+  void submit(TaskNccl &&task);
+
+  void submit(const TaskNccl &task) = delete;
+
+  [[nodiscard]] int64_t commSize() const;
+
+  [[nodiscard]] int64_t rank() const;
+
+ private:
+  const int64_t commSize_;
+  const int64_t rank_;
+  std::latch latch_;
+  std::queue<TaskNccl> taskQueue{};
+  std::mutex queueMutex{};
+  std::condition_variable cv{};
+  std::mutex cvMutex{};
+  std::atomic<bool> shutDown{false};
+  std::jthread thread{};
+};
+
 namespace {
 void setThreadAffinity(std::jthread &th, const int coreId) {
   cpu_set_t cpuset;
@@ -101,28 +126,8 @@ void threadTask(const MPI_Comm mpiComm, const int deviceRank,
 }
 }  // namespace
 
-ThreadStreamNccl::~ThreadStreamNccl() {
-  shutDown = true;
-  cv.notify_one();
-  while (!thread.joinable()) {
-    cv.notify_one();
-  }
-  thread.join();
-}
-
-void ThreadStreamNccl::submit(TaskNccl &&task) {
-  std::unique_lock lock{queueMutex};
-  taskQueue.push(std::move(task));
-  lock.unlock();
-  cv.notify_one();
-}
-
-int64_t ThreadStreamNccl::commSize() const { return commSize_; }
-
-int64_t ThreadStreamNccl::rank() const { return rank_; }
-
-ThreadStreamNccl::ThreadStreamNccl(const MPI_Comm mpiComm, const int deviceRank,
-                                   const std::optional<const int> bindingMap)
+ThreadStreamNccl::Impl::Impl(const MPI_Comm mpiComm, const int deviceRank,
+                             const std::optional<const int> bindingMap)
     : commSize_{[&] {
         int size;
         MPI_Comm_size(mpiComm, &size);
@@ -141,4 +146,36 @@ ThreadStreamNccl::ThreadStreamNccl(const MPI_Comm mpiComm, const int deviceRank,
   }
   latch_.arrive_and_wait();
 }
+
+ThreadStreamNccl::Impl::~Impl() {
+  shutDown = true;
+  cv.notify_one();
+  while (!thread.joinable()) {
+    cv.notify_one();
+  }
+  thread.join();
+}
+
+void ThreadStreamNccl::Impl::submit(TaskNccl &&task) {
+  std::unique_lock lock{queueMutex};
+  taskQueue.push(std::move(task));
+  lock.unlock();
+  cv.notify_one();
+}
+
+int64_t ThreadStreamNccl::Impl::commSize() const { return commSize_; }
+
+int64_t ThreadStreamNccl::Impl::rank() const { return rank_; }
+
+void ThreadStreamNccl::submit(TaskNccl &&task) const {
+  impl_->submit(std::move(task));
+}
+
+int64_t ThreadStreamNccl::commSize() const { return impl_->commSize(); }
+
+int64_t ThreadStreamNccl::rank() const { return impl_->rank(); }
+
+ThreadStreamNccl::ThreadStreamNccl(const MPI_Comm mpiComm, const int deviceRank,
+                                   const std::optional<const int> bindingMap)
+    : impl_{std::make_shared<Impl>(mpiComm, deviceRank, bindingMap)} {}
 }  // namespace dllm

@@ -19,25 +19,16 @@ struct ThreadStreamNccl {
   ThreadStreamNccl(MPI_Comm mpiComm, int deviceRank,
                    std::optional<const int> bindingMap = {});
 
-  ~ThreadStreamNccl();
+  void submit(TaskNccl &&task) const;
 
-  void submit(TaskNccl &&task);
+  void submit(const TaskNccl &task) const = delete;
 
-  void submit(const TaskNccl &task) = delete;
+  [[nodiscard]] int64_t commSize() const;
 
-  int64_t commSize() const;
-
-  int64_t rank() const;
+  [[nodiscard]] int64_t rank() const;
 
  private:
-  const int64_t commSize_;
-  const int64_t rank_;
-  std::latch latch_;
-  std::queue<TaskNccl> taskQueue{};
-  std::mutex queueMutex{};
-  std::condition_variable cv{};
-  std::mutex cvMutex{};
-  std::atomic<bool> shutDown{false};
-  std::jthread thread{};
+  struct Impl;
+  std::shared_ptr<Impl> impl_;
 };
 }  // namespace dllm
