@@ -21,7 +21,7 @@ struct GeLU {
                       const ReadOnlyTensor &input);
 
   static void backward(const Scheduler &scheduler,
-                       const std::shared_ptr<State> &state, Tensor &dinput,
-                       const ReadOnlyTensor &doutput);
+                       const std::shared_ptr<State> &state, Tensor &grad_input,
+                       const ReadOnlyTensor &grad_output);
 };
 }  // namespace dllm::compute

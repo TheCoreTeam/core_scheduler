@@ -38,10 +38,17 @@ struct ReadOnlyTensor {
 };
 
 struct Tensor : ReadOnlyTensor {
-  Tensor();
+  Tensor() = default;
 
   void wait() const;
 };
+
+TORCH_API std::ostream &print(std::ostream &stream,
+                              const ReadOnlyTensor &tensor, int64_t linesize);
+
+static std::ostream &operator<<(std::ostream &out, const ReadOnlyTensor &t) {
+  return print(out, t, 80);
+}
 }  // namespace dllm
 
 namespace at {

@@ -6,13 +6,11 @@
 #include <ATen/ops/native_layer_norm_backward.h>
 #include <ATen/ops/ones.h>
 #include <ATen/ops/zeros.h>
-#include <cuda_runtime_api.h>
 
-#include "internal_utils.h"
 #include "logger.h"
 #include "tensor_impl.h"
 #include "threading/scheduler_impl.h"
-#include "threading/task_compute.h"
+#include "threading/task_impl.h"
 
 namespace dllm::compute {
 OrderedDict<std::string, Tensor> LayerNorm::State::parameters() const {
@@ -40,52 +38,63 @@ void LayerNorm::init(const Scheduler& scheduler, std::shared_ptr<State>& state,
                      const Options& options) {
   DLLM_ASSERT_TRUE(options.elementwise_affine() == true,
                    "elementwise_affine must be enabled now");
+  at::TensorOptions tensorOptions{};
+  if (options.device().has_value()) {
+    tensorOptions = tensorOptions.device(options.device());
+  }
+  if (options.dtype().has_value()) {
+    tensorOptions = tensorOptions.dtype(options.dtype());
+  }
   Tensor weight;
-  TaskCompute task;
+  Task task{nullptr};
   if (options.bias()) {
+    struct Impl : Task::Impl {
+      const Options options;
+      const TensorOptions tensorOptions;
+
+      explicit Impl(std::vector<Tensor> output /* weight, bias */,
+                    const Options& options, const TensorOptions tensorOptions)
+          : Task::Impl{std::move(output), {}, compute},
+            options{options},
+            tensorOptions{tensorOptions} {}
+      void operator()() const override {
+        output()[0].impl()->tensor() =
+            at::ones(options.normalized_shape(), tensorOptions);
+        output()[1].impl()->tensor() =
+            at::zeros(options.normalized_shape(), tensorOptions);
+      }
+      [[nodiscard]] const char* name() const override {
+        return "dllm::compute::LayerNorm::init";
+      }
+    };
+
     Tensor bias;
-    task = TaskCompute{[=, weight = weight,
-                        bias = bias](const ContextCompute* context) mutable {
-      at::TensorOptions tensorOptions{};
-      if (options.device().has_value()) {
-        tensorOptions = tensorOptions.device(options.device());
-      }
-      if (options.dtype().has_value()) {
-        tensorOptions = tensorOptions.dtype(options.dtype());
-      }
-      weight.impl()->tensor() =
-          at::ones(options.normalized_shape(), tensorOptions);
-      bias.impl()->tensor() =
-          at::zeros(options.normalized_shape(), tensorOptions);
-      CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
-      weight.reset();
-      bias.reset();
-    }};
-    const TaskFuture future = task.get_future();
-    utils::resetFuture(weight, future);
-    utils::resetFuture(bias, future);
+    task = Task{
+        std::make_shared<Impl>(Impl{{weight, bias}, options, tensorOptions})};
     state = std::make_shared<State>(
         State::Forward{std::move(weight), std::move(bias)}, State::Backward{},
         State::Args{options.normalized_shape(), options.eps(),
                     options.elementwise_affine(), options.bias()});
   } else {
-    // ReSharper disable once CppDFAUnreachableCode
-    task =
-        TaskCompute{[=, normalized_shape = options.normalized_shape(),
-                     weight = weight](const ContextCompute* context) mutable {
-          at::TensorOptions tensorOptions{};
-          if (options.device().has_value()) {
-            tensorOptions = tensorOptions.device(options.device());
-          }
-          if (options.dtype().has_value()) {
-            tensorOptions = tensorOptions.dtype(options.dtype());
-          }
-          weight.impl()->tensor() = at::ones(normalized_shape, tensorOptions);
-          CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
-          weight.reset();
-        }};
-    const TaskFuture future = task.get_future();
-    utils::resetFuture(weight, future);
+    struct Impl : Task::Impl {
+      const Options options;
+      const TensorOptions tensorOptions;
+
+      explicit Impl(std::vector<Tensor> output /* weight */,
+                    const Options& options, const TensorOptions tensorOptions)
+          : Task::Impl{std::move(output), {}, compute},
+            options{options},
+            tensorOptions{tensorOptions} {}
+      void operator()() const override {
+        output()[0].impl()->tensor() =
+            at::ones(options.normalized_shape(), tensorOptions);
+      }
+      [[nodiscard]] const char* name() const override {
+        return "dllm::compute::LayerNorm::init";
+      }
+    };
+
+    task = Task{std::make_shared<Impl>(Impl{{weight}, options, tensorOptions})};
     state = std::make_shared<State>(
         State::Forward{std::move(weight)}, State::Backward{},
         State::Args{options.normalized_shape(), options.eps(),
@@ -99,67 +108,59 @@ void LayerNorm::forward(const Scheduler& scheduler,
                         const ReadOnlyTensor& input) {
   Tensor mean;
   Tensor rstd;
-  TaskCompute task;
+  Task task{nullptr};
   Tensor output_;
   if (state->args.bias) {
-    task = TaskCompute{
-        [args = state->args, output = output_, input = input, mean = mean,
-         rstd = rstd, weight = state->forward.weight,
-         bias = state->forward.bias, inputFuture = utils::future(input),
-         weightFuture = utils::future(state->forward.weight),
-         biasFuture = utils::future(state->forward.bias)](
-            const ContextCompute* context) mutable {
-          utils::FutureGuard weightGuard{weightFuture};
-          utils::FutureGuard biasGuard{biasFuture};
-          utils::FutureGuard inputGuard{inputFuture};
-          std::make_tuple(std::ref(output.impl()->tensor()),
-                          std::ref(mean.impl()->tensor()),
-                          std::ref(rstd.impl()->tensor())) =
-              at::native_layer_norm(
-                  input.impl()->tensor(), args.normalized_shape,
-                  weight.impl()->tensor(), bias.impl()->tensor(), args.eps);
-          input.reset();
-          mean.reset();
-          rstd.reset();
-          output.reset();
-          weight.reset();
-          bias.reset();
-          CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
-        }};
-    const TaskFuture future = task.get_future();
-    utils::resetFuture(output_, future);
-    utils::resetFuture(input, future);
-    utils::resetFuture(mean, future);
-    utils::resetFuture(rstd, future);
-    utils::resetFuture(state->forward.weight, future);
-    utils::resetFuture(state->forward.bias, future);
+    struct Impl : Task::Impl {
+      State::Args args;
+
+      explicit Impl(std::vector<Tensor> output /* output, mean, rstd */,
+                    std::vector<ReadOnlyTensor> input /* input, weight, bias */,
+                    const State::Args& args)
+          : Task::Impl{std::move(output), std::move(input), compute},
+            args{args} {}
+      void operator()() const override {
+        std::make_tuple(std::ref(output()[0].impl()->tensor()),
+                        std::ref(output()[1].impl()->tensor()),
+                        std::ref(output()[2].impl()->tensor())) =
+            at::native_layer_norm(input()[0].impl()->tensor(),
+                                  args.normalized_shape,
+                                  input()[1].impl()->tensor(),
+                                  input()[2].impl()->tensor(), args.eps);
+      }
+      [[nodiscard]] const char* name() const override {
+        return "dllm::compute::LayerNorm::forward";
+      }
+    };
+
+    task = Task{std::make_shared<Impl>(
+        Impl{{output_, mean, rstd},
+             {input, state->forward.weight, state->forward.bias},
+             state->args})};
   } else {
-    task = TaskCompute{[args = state->args, output = output_, input = input,
-                        mean = mean, rstd = rstd,
-                        weight = state->forward.weight,
-                        inputFuture = utils::future(input),
-                        weightFuture = utils::future(state->forward.weight)](
-                           const ContextCompute* context) mutable {
-      utils::FutureGuard weightGuard{weightFuture};
-      utils::FutureGuard inputGuard{inputFuture};
-      std::make_tuple(std::ref(output.impl()->tensor()),
-                      std::ref(mean.impl()->tensor()),
-                      std::ref(rstd.impl()->tensor())) =
-          at::native_layer_norm(input.impl()->tensor(), args.normalized_shape,
-                                weight.impl()->tensor(), {}, args.eps);
-      input.reset();
-      mean.reset();
-      rstd.reset();
-      output.reset();
-      weight.reset();
-      CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
-    }};
-    const TaskFuture future = task.get_future();
-    utils::resetFuture(output_, future);
-    utils::resetFuture(input, future);
-    utils::resetFuture(mean, future);
-    utils::resetFuture(rstd, future);
-    utils::resetFuture(state->forward.weight, future);
+    struct Impl : Task::Impl {
+      State::Args args;
+
+      explicit Impl(std::vector<Tensor> output /* output, mean, rstd */,
+                    std::vector<ReadOnlyTensor> input /* input, weight */,
+                    const State::Args& args)
+          : Task::Impl{std::move(output), std::move(input), compute},
+            args{args} {}
+      void operator()() const override {
+        std::make_tuple(std::ref(output()[0].impl()->tensor()),
+                        std::ref(output()[1].impl()->tensor()),
+                        std::ref(output()[2].impl()->tensor())) =
+            at::native_layer_norm(input()[0].impl()->tensor(),
+                                  args.normalized_shape,
+                                  input()[1].impl()->tensor(), {}, args.eps);
+      }
+      [[nodiscard]] const char* name() const override {
+        return "dllm::compute::LayerNorm::forward";
+      }
+    };
+
+    task = Task{std::make_shared<Impl>(Impl{
+        {output_, mean, rstd}, {input, state->forward.weight}, state->args})};
   }
   state->backward.input = input;
   state->backward.mean = mean;
@@ -175,116 +176,79 @@ void LayerNorm::backward(const Scheduler& scheduler,
                          const ReadOnlyTensor& grad_output) {
   auto weight = static_cast<const ReadOnlyTensor&>(state->forward.weight);
   Tensor grad_input_;
-  TaskCompute task;
+  Task task{nullptr};
   if (state->args.bias) {
-    auto bias = static_cast<const ReadOnlyTensor&>(state->forward.bias);
-    task = TaskCompute{
-        [args = state->args, grad_input = grad_input_,
-         grad_output = grad_output, weight = weight, bias = bias,
-         dweight = state->forward.grad_weight, dbias = state->forward.grad_bias,
-         mean = state->backward.mean, rstd = state->backward.rstd,
-         input = state->backward.input,
-         doutputFuture = utils::future(grad_output),
-         weightFuture = utils::future(weight),
-         dweightFuture = utils::future(state->forward.grad_weight),
-         biasFuture = utils::future(bias),
-         dbiasFuture = utils::future(state->forward.grad_bias),
-         meanFuture = utils::future(state->backward.mean),
-         rstdFuture = utils::future(state->backward.rstd),
-         inputFuture = utils::future(state->backward.input)](
-            const ContextCompute* context) mutable {
-          utils::FutureGuard doutputGuard{doutputFuture};
-          utils::FutureGuard weightGuard{weightFuture};
-          utils::FutureGuard dweightGuard{dweightFuture};
-          utils::FutureGuard biasGuard{biasFuture};
-          utils::FutureGuard dbiasGuard{dbiasFuture};
-          utils::FutureGuard meanGuard{meanFuture};
-          utils::FutureGuard rstdGuard{rstdFuture};
-          utils::FutureGuard inputGuard{inputFuture};
-          auto [dx, dw, db] = at::native_layer_norm_backward(
-              grad_output.impl()->tensor(), input.impl()->tensor(),
-              args.normalized_shape, mean.impl()->tensor(),
-              rstd.impl()->tensor(), weight.impl()->tensor(),
-              bias.impl()->tensor(), {true, true, true});
-          grad_input.impl()->tensor() = dx;
-          if (dweight.impl()->tensor().defined()) {
-            dweight.impl()->tensor() += dw;
-          } else {
-            dweight.impl()->tensor() = dw;
-          }
-          if (dbias.impl()->tensor().defined()) {
-            dbias.impl()->tensor() += db;
-          } else {
-            dbias.impl()->tensor() = db;
-          }
-          grad_input.reset();
-          grad_output.reset();
-          weight.reset();
-          bias.reset();
-          dweight.reset();
-          dbias.reset();
-          mean.reset();
-          rstd.reset();
-          input.reset();
-          CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
-        }};
-    const TaskFuture future = task.get_future();
-    utils::resetFuture(grad_input_, future);
-    utils::resetFuture(grad_output, future);
-    utils::resetFuture(weight, future);
-    utils::resetFuture(bias, future);
-    utils::resetFuture(state->forward.grad_weight, future);
-    utils::resetFuture(state->forward.grad_bias, future);
-    utils::resetFuture(state->backward.input, future);
-    utils::resetFuture(state->backward.mean, future);
-    utils::resetFuture(state->backward.rstd, future);
+    struct Impl : Task::Impl {
+      State::Args args;
+
+      explicit Impl(
+          std::vector<Tensor> output /* grad_input, grad_weight, grad_bias */,
+          std::vector<ReadOnlyTensor>
+              input /* grad_output, input, mean, rstd, weight, bias */,
+          const State::Args& args)
+          : Task::Impl{std::move(output), std::move(input), compute},
+            args{args} {}
+      void operator()() const override {
+        auto [dx, dw, db] = at::native_layer_norm_backward(
+            input()[0].impl()->tensor(), input()[1].impl()->tensor(),
+            args.normalized_shape, input()[2].impl()->tensor(),
+            input()[3].impl()->tensor(), input()[4].impl()->tensor(),
+            input()[5].impl()->tensor(), {true, true, true});
+        output()[0].impl()->tensor() = dx;
+        if (output()[1].impl()->tensor().defined()) {
+          output()[1].impl()->tensor() += dw;
+        } else {
+          output()[1].impl()->tensor() = dw;
+        }
+        if (output()[2].impl()->tensor().defined()) {
+          output()[2].impl()->tensor() += db;
+        } else {
+          output()[2].impl()->tensor() = db;
+        }
+      }
+      [[nodiscard]] const char* name() const override {
+        return "dllm::compute::LayerNorm::backward";
+      }
+    };
+
+    task = Task{std::make_shared<Impl>(Impl{
+        {grad_input_, state->forward.grad_weight, state->forward.grad_bias},
+        {grad_output, state->backward.input, state->backward.mean,
+         state->backward.rstd, state->forward.weight, state->forward.bias},
+        state->args})};
   } else {
-    task = TaskCompute{
-        [args = state->args, grad_input = grad_input_,
-         grad_output = grad_output, weight = weight,
-         dweight = state->forward.grad_weight, mean = state->backward.mean,
-         rstd = state->backward.rstd, input = state->backward.input,
-         doutputFuture = utils::future(grad_output),
-         weightFuture = utils::future(weight),
-         dweightFuture = utils::future(state->forward.grad_weight),
-         meanFuture = utils::future(state->backward.mean),
-         rstdFuture = utils::future(state->backward.rstd),
-         inputFuture = utils::future(state->backward.input)](
-            const ContextCompute* context) mutable {
-          utils::FutureGuard doutputGuard{doutputFuture};
-          utils::FutureGuard weightGuard{weightFuture};
-          utils::FutureGuard dweightGuard{dweightFuture};
-          utils::FutureGuard meanGuard{meanFuture};
-          utils::FutureGuard rstdGuard{rstdFuture};
-          utils::FutureGuard inputGuard{inputFuture};
-          auto [dx, dw, db] = at::native_layer_norm_backward(
-              grad_output.impl()->tensor(), input.impl()->tensor(),
-              args.normalized_shape, mean.impl()->tensor(),
-              rstd.impl()->tensor(), weight.impl()->tensor(), {},
-              {true, true, true});
-          grad_input.impl()->tensor() = dx;
-          if (dweight.impl()->tensor().defined()) {
-            dweight.impl()->tensor() += dw;
-          } else {
-            dweight.impl()->tensor() = dw;
-          }
-          grad_input.reset();
-          grad_output.reset();
-          weight.reset();
-          dweight.reset();
-          mean.reset();
-          rstd.reset();
-          input.reset();
-          CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
-        }};
-    const TaskFuture future = task.get_future();
-    utils::resetFuture(grad_input_, future);
-    utils::resetFuture(grad_output, future);
-    utils::resetFuture(weight, future);
-    utils::resetFuture(state->forward.grad_weight, future);
-    utils::resetFuture(state->backward.input, future);
-    utils::resetFuture(state->backward.mean, future);
-    utils::resetFuture(state->backward.rstd, future);
+    struct Impl : Task::Impl {
+      State::Args args;
+
+      explicit Impl(std::vector<Tensor> output /* grad_input, grad_weight */,
+                    std::vector<ReadOnlyTensor>
+                        input /* grad_output, input, mean, rstd, weight */,
+                    const State::Args& args)
+          : Task::Impl{std::move(output), std::move(input), compute},
+            args{args} {}
+      void operator()() const override {
+        auto [dx, dw, db] = at::native_layer_norm_backward(
+            input()[0].impl()->tensor(), input()[1].impl()->tensor(),
+            args.normalized_shape, input()[2].impl()->tensor(),
+            input()[3].impl()->tensor(), input()[4].impl()->tensor(), {},
+            {true, true, false});
+        output()[0].impl()->tensor() = dx;
+        if (output()[1].impl()->tensor().defined()) {
+          output()[1].impl()->tensor() += dw;
+        } else {
+          output()[1].impl()->tensor() = dw;
+        }
+      }
+      [[nodiscard]] const char* name() const override {
+        return "dllm::compute::LayerNorm::backward";
+      }
+    };
+
+    task = Task{std::make_shared<Impl>(
+        Impl{{grad_input_, state->forward.grad_weight},
+             {grad_output, state->backward.input, state->backward.mean,
+              state->backward.rstd, state->forward.weight},
+             state->args})};
   }
 
   grad_input_.sizes() = state->backward.input.sizes();

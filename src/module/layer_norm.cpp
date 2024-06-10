@@ -1,6 +1,6 @@
 #include "module/layer_norm.h"
 
-#include "threading/thread_pool_compute.h"
+#include "threading/scheduler.h"
 
 namespace dllm::module {
 LayerNormImpl::LayerNormImpl(const Scheduler& scheduler,

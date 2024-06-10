@@ -1,10 +1,13 @@
 #include "tensor.h"
 
 #include <ATen/ops/allclose.h>
+#include <c10/cuda/CUDAStream.h>
 #include <torch/cuda.h>
 
+#include "logger.h"
 #include "nvtx_helper.h"
 #include "tensor_impl.h"
+#include "threading/task_impl.h"
 
 namespace dllm {
 template <typename T1, typename T2>
@@ -29,9 +32,7 @@ static bool allclose_impl(const T1 &t1_, const T2 &t2_, const double rtol,
 }
 
 void ReadOnlyTensor::wait() const {
-  if (utils::future(*this).valid()) {
-    utils::future(*this).wait();
-  }
+  CHECK_CUDART(cudaStreamSynchronize(impl()->stream()));
 }
 
 const std::shared_ptr<ReadOnlyTensor::Impl> &ReadOnlyTensor::impl() const {
@@ -39,17 +40,13 @@ const std::shared_ptr<ReadOnlyTensor::Impl> &ReadOnlyTensor::impl() const {
 }
 void ReadOnlyTensor::reset() { *this = ReadOnlyTensor{}; }
 
-void Tensor::wait() const {
-  if (utils::future(*this).valid()) {
-    utils::future(*this).wait();
-    try {
-      utils::future(*this).get();
-    } catch (const std::exception &) {
-      std::rethrow_exception(std::current_exception());
-    }
-  }
+void Tensor::wait() const { static_cast<const ReadOnlyTensor *>(this)->wait(); }
+
+std::ostream &print(std::ostream &stream, const ReadOnlyTensor &tensor,
+                    const int64_t linesize) {
+  tensor.wait();
+  return at::print(stream, tensor.impl()->tensor(), linesize);
 }
-Tensor::Tensor() : ReadOnlyTensor{} {}
 
 int64_t ReadOnlyTensor::numel() const { return impl_->numel(); }
 

@@ -20,6 +20,7 @@ add_library(dllm_core SHARED
         logger.cpp
         tensor.cpp
         random.cpp
+        communication.cpp
         ${DLLM_MODULE_SRCS}
         ${DLLM_COMPUTE_SRCS}
         ${DLLM_MEMORY_SRCS}
@@ -45,8 +46,9 @@ target_link_libraries(dllm_core PUBLIC spdlog::spdlog_header_only OpenMP::OpenMP
 
 target_compile_definitions(dllm_core PRIVATE -DDLLM_ENABLE_INTERNAL_BUILD)
 
-add_subdirectory(dataset)
+#add_subdirectory(dataset)
 
 add_library(dllm INTERFACE)
 
-target_link_libraries(dllm INTERFACE dllm_core dllm_dataset)
+#target_link_libraries(dllm INTERFACE dllm_core dllm_dataset)
+target_link_libraries(dllm INTERFACE dllm_core)

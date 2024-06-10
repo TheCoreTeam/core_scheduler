@@ -5,8 +5,7 @@
 namespace dllm {
 struct NvtxRange {
   template <typename... T>
-  explicit NvtxRange(fmt::format_string<T...> fmt, T &&...args) {
-    const std::string range_string = fmt::format(fmt, std::forward<T>(args)...);
+  explicit NvtxRange(const std::string &range_string) {
     nvtxRangePush(range_string.c_str());
   }
   ~NvtxRange() { nvtxRangePop(); }

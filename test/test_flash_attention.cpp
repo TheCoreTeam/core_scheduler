@@ -1,16 +1,17 @@
 #include <ATen/ATen.h>
+#include <cuda_bf16.h>
+#include <cuda_fp16.h>
 #include <gtest/gtest.h>
 #include <torch/nn/functional.h>
 
 #include "compute/scaled_dot_product_attention.h"
 #include "compute/utils.h"
 #include "memory/to_torch.h"
-#include "threading/thread_pool_compute.h"
-#include "threading/thread_stream_cudart.h"
+#include "threading/dynamic_scheduler.h"
 
 class FlashAttentionTestFixture : public ::testing::Test {
  protected:
-  dllm::ThreadPoolCompute tp{0, 2};
+  dllm::DynamicScheduler scheduler{0};
 };
 
 template <typename T>
@@ -42,8 +43,7 @@ struct TypeToTorch<double> {
 
 namespace {
 template <typename Element>
-void TestT(dllm::ThreadPoolCompute& tp) {
-  dllm::ThreadStreamCudart stream{0};
+void TestT(dllm::Scheduler& scheduler) {
   static_assert(std::is_same_v<Element, nv_half> ||
                 std::is_same_v<Element, nv_bfloat16>);
   const torch::Device device = torch::kCUDA;
@@ -52,9 +52,9 @@ void TestT(dllm::ThreadPoolCompute& tp) {
   torch::manual_seed(1);
   int B = 15, T = 7, n_head = 8, n_embd = n_head * 8;
   dllm::Tensor qkv;
-  dllm::compute::Utils::rand(tp, qkv, {B, T, n_embd * 3}, option);
-  std::vector<dllm::ReadOnlyTensor> qkvSplit;
-  dllm::compute::Utils::split(tp, qkvSplit, qkv, n_embd, -1);
+  dllm::compute::Utils::rand(scheduler, qkv, {B, T, n_embd * 3}, option);
+  std::vector<dllm::Tensor> qkvSplit;
+  dllm::compute::Utils::split(scheduler, qkvSplit, qkv, n_embd, -1);
   auto& q = qkvSplit[0];
   auto& k = qkvSplit[1];
   auto& v = qkvSplit[2];
@@ -63,38 +63,41 @@ void TestT(dllm::ThreadPoolCompute& tp) {
   auto state =
       std::make_shared<dllm::compute::ScaledDotProductFlashAttention::State>();
   dllm::compute::ScaledDotProductFlashAttention::init(
-      tp, state,
+      scheduler, state,
       dllm::compute::ScaledDotProductFlashAttention::Options{}
           .is_causal(true)
           .scale(scale));
   dllm::Tensor qview;
-  dllm::compute::Utils::view(tp, qview, q, {B, T, n_head, n_embd / n_head});
+  dllm::compute::Utils::view(scheduler, qview, q,
+                             {B, T, n_head, n_embd / n_head});
   qview.wait();
   dllm::Tensor kview;
-  dllm::compute::Utils::view(tp, kview, k, {B, T, n_head, n_embd / n_head});
+  dllm::compute::Utils::view(scheduler, kview, k,
+                             {B, T, n_head, n_embd / n_head});
   kview.wait();
   dllm::Tensor vview;
-  dllm::compute::Utils::view(tp, vview, v, {B, T, n_head, n_embd / n_head});
+  dllm::compute::Utils::view(scheduler, vview, v,
+                             {B, T, n_head, n_embd / n_head});
   vview.wait();
   dllm::Tensor output;
-  dllm::compute::ScaledDotProductFlashAttention::forward(tp, state, output,
-                                                         qview, kview, vview);
+  dllm::compute::ScaledDotProductFlashAttention::forward(
+      scheduler, state, output, qview, kview, vview);
   output.wait();
   dllm::Tensor dout;
   dllm::Tensor dq;
   dllm::Tensor dk;
   dllm::Tensor dv;
-  dllm::compute::Utils::rand_like(tp, dout, output);
+  dllm::compute::Utils::rand_like(scheduler, dout, output);
   output.wait();
-  dllm::compute::ScaledDotProductFlashAttention::backward(tp, state, dq, dk, dv,
-                                                          dout);
+  dllm::compute::ScaledDotProductFlashAttention::backward(scheduler, state, dq,
+                                                          dk, dv, dout);
   dq.wait();
 
   torch::Tensor qkv_torch;
-  dllm::memory::toTorch(stream, qkv_torch, qkv);
+  dllm::memory::toTorch(scheduler, qkv_torch, qkv);
   qkv.wait();
   torch::Tensor dout_torch;
-  dllm::memory::toTorch(stream, dout_torch, dout);
+  dllm::memory::toTorch(scheduler, dout_torch, dout);
   dout.wait();
 
   auto qkv_torch_v = qkv_torch.split(n_embd, -1);
@@ -137,5 +140,5 @@ void TestT(dllm::ThreadPoolCompute& tp) {
 }
 }  // namespace
 
-TEST_F(FlashAttentionTestFixture, TestF16) { TestT<nv_half>(tp); }
-TEST_F(FlashAttentionTestFixture, TestBF16) { TestT<nv_bfloat16>(tp); }
+TEST_F(FlashAttentionTestFixture, TestF16) { TestT<nv_half>(scheduler); }
+TEST_F(FlashAttentionTestFixture, TestBF16) { TestT<nv_bfloat16>(scheduler); }

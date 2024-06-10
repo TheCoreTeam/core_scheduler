@@ -1,4 +1,5 @@
 #include <ATen/Context.h>
+#include <cuda_fp16.h>
 #include <gtest/gtest.h>
 #include <torch/all.h>
 
@@ -7,8 +8,7 @@
 #include "module/linear.h"
 #include "optimizer/adamw.h"
 #include "tensor.h"
-#include "threading/thread_pool_compute.h"
-#include "threading/thread_stream_cudart.h"
+#include "threading/dynamic_scheduler.h"
 
 template <typename T>
 struct TypeToTorch;
@@ -33,8 +33,7 @@ struct TypeToTorch<double> {
 
 class TestDLLMAdamW : public ::testing::Test {
  protected:
-  dllm::ThreadStreamCudart stream{0};
-  dllm::ThreadPoolCompute tp{0, 1};
+  dllm::DynamicScheduler scheduler{0};
 
   template <typename Element>
   void TestFunctionalRoutine(int size);
@@ -56,9 +55,9 @@ void TestDLLMAdamW::TestFunctionalRoutine(const int size) {
   const auto option = torch::TensorOptions().dtype(dtype).device(device);
   torch::manual_seed(1);
   dllm::Tensor x;
-  dllm::compute::Utils::rand(tp, x, {size}, option);
+  dllm::compute::Utils::rand(scheduler, x, {size}, option);
   std::shared_ptr<dllm::optimizer::AdamW::State> state;
-  dllm::optimizer::AdamW::init(tp, state, x,
+  dllm::optimizer::AdamW::init(scheduler, state, x,
                                dllm::optimizer::AdamW::Options{}
                                    .lr(lr)
                                    .beta1(beta1)
@@ -67,13 +66,13 @@ void TestDLLMAdamW::TestFunctionalRoutine(const int size) {
                                    .weight_decay(weight_decay)
                                    .t(t));
   dllm::Tensor dx;
-  dllm::compute::Utils::rand(tp, dx, {size}, option);
-  dllm::optimizer::AdamW::step(tp, state, x, dx);
+  dllm::compute::Utils::rand(scheduler, dx, {size}, option);
+  dllm::optimizer::AdamW::step(scheduler, state, x, dx);
   ;
   at::Tensor x_torch, dx_torch;
-  dllm::memory::toTorch(stream, x_torch, x);
+  dllm::memory::toTorch(scheduler, x_torch, x);
   x.wait();
-  dllm::memory::toTorch(stream, dx_torch, dx);
+  dllm::memory::toTorch(scheduler, dx_torch, dx);
   dx.wait();
   torch::manual_seed(1);
   x_torch = torch::rand_like(x_torch);
@@ -112,7 +111,6 @@ void TestDLLMAdamW::TestModuleRoutine(const int size) {
   const double eps = 1e-8;
   const double weight_decay = 1e-2;
   const long t = 0;
-  dllm::ThreadStreamCudart stream{0};
   const int m = size, n = 16, k = 4, s = 3;
   const torch::Device device = torch::kCUDA;
   const torch::Dtype dtype = TypeToTorch<Element>::type;
@@ -120,22 +118,23 @@ void TestDLLMAdamW::TestModuleRoutine(const int size) {
   dllm::Tensor y;
   dllm::Tensor dx;
   dllm::Tensor x;
-  dllm::compute::Utils::randn(tp, x, {m, s, k}, option);
+  dllm::compute::Utils::randn(scheduler, x, {m, s, k}, option);
   dllm::module::Linear fc{
-      tp, dllm::module::Linear::Options{k, n}.bias(false).device(device).dtype(
-              dtype)};
-  fc->forward(tp, y, x);
+      scheduler,
+      dllm::module::Linear::Options{k, n}.bias(false).device(device).dtype(
+          dtype)};
+  fc->forward(scheduler, y, x);
   dllm::Tensor yGrad;
-  dllm::compute::Utils::randn_like(tp, yGrad, y);
-  fc->backward(tp, dx, yGrad);
+  dllm::compute::Utils::randn_like(scheduler, yGrad, y);
+  fc->backward(scheduler, dx, yGrad);
   dx.wait();
   fc->state()->forward.grad_weight.wait();
   torch::Tensor xRef;
-  dllm::memory::toTorch(stream, xRef, x);
+  dllm::memory::toTorch(scheduler, xRef, x);
   x.wait();
   xRef.requires_grad_(true);
   torch::Tensor wRef;
-  dllm::memory::toTorch(stream, wRef, fc->state()->forward.weight);
+  dllm::memory::toTorch(scheduler, wRef, fc->state()->forward.weight);
   fc->state()->forward.weight.wait();
   wRef.requires_grad_(true);
   auto fcTorch = torch::nn::Linear{torch::nn::LinearOptions{k, n}.bias(false)};
@@ -149,7 +148,7 @@ void TestDLLMAdamW::TestModuleRoutine(const int size) {
                                      .weight_decay(weight_decay)};
   auto yRef = fcTorch->forward(xRef);
   torch::Tensor yGradRef;
-  dllm::memory::toTorch(stream, yGradRef, yGrad);
+  dllm::memory::toTorch(scheduler, yGradRef, yGrad);
   yGrad.wait();
   optimTorch.zero_grad();
   yRef.backward(yGradRef);
@@ -161,7 +160,7 @@ void TestDLLMAdamW::TestModuleRoutine(const int size) {
 
   optimTorch.step();
 
-  dllm::optimizer::AdamW::init(tp, fc,
+  dllm::optimizer::AdamW::init(scheduler, fc,
                                dllm::optimizer::AdamW::Options{}
                                    .lr(lr)
                                    .beta1(beta1)
@@ -169,7 +168,7 @@ void TestDLLMAdamW::TestModuleRoutine(const int size) {
                                    .eps(eps)
                                    .weight_decay(weight_decay)
                                    .t(t));
-  dllm::optimizer::AdamW::step(tp, fc);
+  dllm::optimizer::AdamW::step(scheduler, fc);
 
   ASSERT_TRUE(torch::allclose(fc->state()->forward.weight, fcTorch->weight));
 }

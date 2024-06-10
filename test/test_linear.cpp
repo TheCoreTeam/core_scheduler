@@ -1,3 +1,4 @@
+#include <cuda_fp16.h>
 #include <gtest/gtest.h>
 #include <torch/torch.h>
 
@@ -6,8 +7,7 @@
 #include "logger.h"
 #include "memory/to_torch.h"
 #include "module/linear.h"
-#include "threading/thread_pool_compute.h"
-#include "threading/thread_stream_cudart.h"
+#include "threading/dynamic_scheduler.h"
 
 template <typename T>
 struct TypeToTorch;
@@ -32,13 +32,12 @@ struct TypeToTorch<double> {
 
 class LinearTestFixture : public ::testing::Test {
  protected:
-  dllm::ThreadPoolCompute threadPool{0, 1};
+  dllm::DynamicScheduler scheduler_{0};
 };
 
 namespace {
 template <typename Element>
-void TestBackwardT(dllm::ThreadPoolCompute &tp) {
-  dllm::ThreadStreamCudart stream{0};
+void TestBackwardT(dllm::Scheduler &scheduler) {
   const int m = 32, n = 16, k = 4, s = 3;
   const torch::Device device = torch::kCUDA;
   const torch::Dtype dtype = TypeToTorch<Element>::type;
@@ -46,30 +45,30 @@ void TestBackwardT(dllm::ThreadPoolCompute &tp) {
   dllm::Tensor y;
   dllm::Tensor dx;
   dllm::Tensor x;
-  dllm::compute::Utils::randn(tp, x, {m, s, k}, option);
+  dllm::compute::Utils::randn(scheduler, x, {m, s, k}, option);
   std::shared_ptr<dllm::compute::Linear::State> state;
   dllm::compute::Linear::init(
-      tp, state,
+      scheduler, state,
       dllm::compute::Linear::Options{k, n}.bias(false).device(device).dtype(
           dtype));
-  dllm::compute::Linear::forward(tp, state, y, x);
+  dllm::compute::Linear::forward(scheduler, state, y, x);
   dllm::Tensor yGrad;
-  dllm::compute::Utils::randn_like(tp, yGrad, y);
-  dllm::compute::Linear::backwardInput(tp, state, dx, yGrad);
-  dllm::compute::Linear::backwardParameter(tp, state, yGrad);
+  dllm::compute::Utils::randn_like(scheduler, yGrad, y);
+  dllm::compute::Linear::backwardInput(scheduler, state, dx, yGrad);
+  dllm::compute::Linear::backwardParameter(scheduler, state, yGrad);
   dx.wait();
   state->forward.grad_weight.wait();
   torch::Tensor xRef;
-  dllm::memory::toTorch(stream, xRef, x);
+  dllm::memory::toTorch(scheduler, xRef, x);
   x.wait();
   xRef.requires_grad_(true);
   torch::Tensor wRef;
-  dllm::memory::toTorch(stream, wRef, state->forward.weight);
+  dllm::memory::toTorch(scheduler, wRef, state->forward.weight);
   state->forward.weight.wait();
   wRef.requires_grad_(true);
   auto yRef = torch::linear(xRef, wRef);
   torch::Tensor yGradRef;
-  dllm::memory::toTorch(stream, yGradRef, yGrad);
+  dllm::memory::toTorch(scheduler, yGradRef, yGrad);
   yGrad.wait();
   yRef.backward(yGradRef);
 
@@ -80,17 +79,16 @@ void TestBackwardT(dllm::ThreadPoolCompute &tp) {
 }  // namespace
 
 TEST_F(LinearTestFixture, TestBackwardF16) {
-  TestBackwardT<nv_half>(threadPool);
+  TestBackwardT<nv_half>(scheduler_);
 }
-TEST_F(LinearTestFixture, TestBackwardF32) { TestBackwardT<float>(threadPool); }
+TEST_F(LinearTestFixture, TestBackwardF32) { TestBackwardT<float>(scheduler_); }
 TEST_F(LinearTestFixture, TestBackwardF64) {
-  TestBackwardT<double>(threadPool);
+  TestBackwardT<double>(scheduler_);
 }
 
 namespace {
 template <typename Element>
-void TestModuleT(dllm::ThreadPoolCompute &tp) {
-  dllm::ThreadStreamCudart stream{0};
+void TestModuleT(dllm::Scheduler &scheduler) {
   const int m = 32, n = 16, k = 4, s = 3;
   const torch::Device device = torch::kCUDA;
   const torch::Dtype dtype = TypeToTorch<Element>::type;
@@ -98,27 +96,28 @@ void TestModuleT(dllm::ThreadPoolCompute &tp) {
   dllm::Tensor y;
   dllm::Tensor dx;
   dllm::Tensor x;
-  dllm::compute::Utils::randn(tp, x, {m, s, k}, option);
+  dllm::compute::Utils::randn(scheduler, x, {m, s, k}, option);
   dllm::module::Linear fc{
-      tp, dllm::module::Linear::Options{k, n}.bias(false).device(device).dtype(
-              dtype)};
-  fc->forward(tp, y, x);
+      scheduler,
+      dllm::module::Linear::Options{k, n}.bias(false).device(device).dtype(
+          dtype)};
+  fc->forward(scheduler, y, x);
   dllm::Tensor yGrad;
-  dllm::compute::Utils::randn_like(tp, yGrad, y);
-  fc->backward(tp, dx, yGrad);
+  dllm::compute::Utils::randn_like(scheduler, yGrad, y);
+  fc->backward(scheduler, dx, yGrad);
   dx.wait();
   fc->state()->forward.grad_weight.wait();
   torch::Tensor xRef;
-  dllm::memory::toTorch(stream, xRef, x);
+  dllm::memory::toTorch(scheduler, xRef, x);
   x.wait();
   xRef.requires_grad_(true);
   torch::Tensor wRef;
-  dllm::memory::toTorch(stream, wRef, fc->state()->forward.weight);
+  dllm::memory::toTorch(scheduler, wRef, fc->state()->forward.weight);
   fc->state()->forward.weight.wait();
   wRef.requires_grad_(true);
   auto yRef = torch::linear(xRef, wRef);
   torch::Tensor yGradRef;
-  dllm::memory::toTorch(stream, yGradRef, yGrad);
+  dllm::memory::toTorch(scheduler, yGradRef, yGrad);
   yGrad.wait();
   yRef.backward(yGradRef);
 
@@ -128,6 +127,6 @@ void TestModuleT(dllm::ThreadPoolCompute &tp) {
 }
 }  // namespace
 
-TEST_F(LinearTestFixture, TestModuleF16) { TestModuleT<nv_half>(threadPool); }
-TEST_F(LinearTestFixture, TestModuleF32) { TestModuleT<float>(threadPool); }
-TEST_F(LinearTestFixture, TestModuleF64) { TestModuleT<double>(threadPool); }
+TEST_F(LinearTestFixture, TestModuleF16) { TestModuleT<nv_half>(scheduler_); }
+TEST_F(LinearTestFixture, TestModuleF32) { TestModuleT<float>(scheduler_); }
+TEST_F(LinearTestFixture, TestModuleF64) { TestModuleT<double>(scheduler_); }

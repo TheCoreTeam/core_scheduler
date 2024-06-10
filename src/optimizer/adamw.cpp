@@ -1,23 +1,23 @@
 #include "optimizer/adamw.h"
 
+#include <c10/cuda/CUDAStream.h>
 #include <torch/csrc/autograd/generated/variable_factories.h>
 
-#include "internal_utils.h"
 #include "logger.h"
 #include "module/module.h"
-#include "nvtx_helper.h"
 #include "tensor_impl.h"
+#include "threading/scheduler.h"
 #include "threading/scheduler_impl.h"
-#include "threading/task_compute.h"
-#include "threading/thread_pool_compute.h"
+#include "threading/task_impl.h"
 
 namespace dllm::optimizer {
 void stepKernel(cudaStream_t stream, const AdamW::State::Options &options,
-                Tensor &w, Tensor &m, Tensor &v, const ReadOnlyTensor &dw);
+                const Tensor &w, const Tensor &m, const Tensor &v,
+                const ReadOnlyTensor &dw);
 
 void stepKernelAmsgrad(cudaStream_t stream,
-                       const AdamW::State::Options &options, Tensor &w,
-                       Tensor &m, Tensor &v, Tensor &vMax,
+                       const AdamW::State::Options &options, const Tensor &w,
+                       const Tensor &m, const Tensor &v, const Tensor &vMax,
                        const ReadOnlyTensor &dw);
 
 void AdamW::init(const Scheduler &scheduler, const module::Module &module,
@@ -48,8 +48,24 @@ void AdamW::init(const Scheduler &scheduler, std::shared_ptr<State> &state,
   Tensor v;
   m.sizes() = parameter.sizes();
   v.sizes() = parameter.sizes();
-  TaskCompute task;
   if (options.amsgrad()) {
+    struct Impl : Task::Impl {
+      explicit Impl(std::vector<Tensor> output /* m, v, vMax */,
+                    std::vector<ReadOnlyTensor> input /* parameter */)
+          : Task::Impl{std::move(output), std::move(input), compute} {}
+      void operator()() const override {
+        output()[0].impl()->tensor() =
+            at::zeros_like(input()[0].impl()->tensor());
+        output()[1].impl()->tensor() =
+            at::zeros_like(input()[0].impl()->tensor());
+        output()[2].impl()->tensor() =
+            at::zeros_like(input()[0].impl()->tensor());
+      }
+      [[nodiscard]] const char *name() const override {
+        return "dllm::optimizer::AdamW::init";
+      }
+    };
+
     Tensor vMax;
     vMax.sizes() = parameter.sizes();
     state = std::make_shared<State>(
@@ -57,115 +73,95 @@ void AdamW::init(const Scheduler &scheduler, std::shared_ptr<State> &state,
         State::Options{options.lr(), options.beta1(), options.beta2(),
                        options.eps(), options.weight_decay(), options.amsgrad(),
                        options.t()});
-    task = TaskCompute{[parameter = parameter, m = m, v = v, vMax = vMax,
-                        parameterFuture = utils::future(parameter)](
-                           const ContextCompute *context) mutable {
-      utils::FutureGuard guard{parameterFuture};
-      m.impl()->tensor() = at::zeros_like(parameter.impl()->tensor());
-      v.impl()->tensor() = at::zeros_like(parameter.impl()->tensor());
-      vMax.impl()->tensor() = at::zeros_like(parameter.impl()->tensor());
-      CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
-      parameter.reset();
-      m.reset();
-      v.reset();
-      vMax.reset();
-    }};
-    const TaskFuture future = task.get_future();
-    utils::resetFuture(m, future);
-    utils::resetFuture(v, future);
-    utils::resetFuture(vMax, future);
+
+    scheduler.impl()->submit(
+        Task{std::make_shared<Impl>(Impl{{m, v, vMax}, {parameter}})});
   } else {
+    struct Impl : Task::Impl {
+      explicit Impl(std::vector<Tensor> output /* m, v */,
+                    std::vector<ReadOnlyTensor> input /* parameter */)
+          : Task::Impl{std::move(output), std::move(input), compute} {}
+      void operator()() const override {
+        output()[0].impl()->tensor() =
+            at::zeros_like(input()[0].impl()->tensor());
+        output()[1].impl()->tensor() =
+            at::zeros_like(input()[0].impl()->tensor());
+      }
+      [[nodiscard]] const char *name() const override {
+        return "dllm::optimizer::AdamW::init";
+      }
+    };
+
     state = std::make_shared<State>(
         State::Tensors{m, v},
         State::Options{options.lr(), options.beta1(), options.beta2(),
                        options.eps(), options.weight_decay(), options.amsgrad(),
                        options.t()});
-    task = TaskCompute{[parameter = parameter, m = m, v = v,
-                        parameterFuture = utils::future(parameter)](
-                           const ContextCompute *context) mutable {
-      utils::FutureGuard guard{parameterFuture};
-      m.impl()->tensor() = at::zeros_like(parameter.impl()->tensor());
-      v.impl()->tensor() = at::zeros_like(parameter.impl()->tensor());
-      CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
-      parameter.reset();
-      m.reset();
-      v.reset();
-    }};
-    const TaskFuture future = task.get_future();
-    utils::resetFuture(m, future);
-    utils::resetFuture(v, future);
+
+    scheduler.impl()->submit(
+        Task{std::make_shared<Impl>(Impl{{m, v}, {parameter}})});
   }
-  scheduler.impl()->submit(std::move(task));
 }
 
 void AdamW::step(const Scheduler &scheduler,
                  const std::shared_ptr<State> &state, Tensor &w,
                  const ReadOnlyTensor &dw) {
   state->options.t++;
-  TaskCompute task;
   if (state->options.amsgrad) {
+    struct Impl : Task::Impl {
+      State::Options options;
+
+      explicit Impl(std::vector<Tensor> output /* w, m, v, vMax */,
+                    std::vector<ReadOnlyTensor> input /* w, m, v, vMax, dw */,
+                    const State::Options &options)
+          : Task::Impl{std::move(output), std::move(input), compute},
+            options{options} {}
+      void operator()() const override {
+        const auto stream = c10::cuda::getCurrentCUDAStream();
+        if (input()[4].impl()->tensor().defined()) {
+          stepKernelAmsgrad(stream.stream(), options, output()[0], output()[1],
+                            output()[2], output()[3], input()[4]);
+        } else {
+          DLLM_WARN_TRUE(false, "got non-defined gradient, skip the update");
+        }
+      }
+      [[nodiscard]] const char *name() const override {
+        return "dllm::optimizer::AdamW::step";
+      }
+    };
+
     const auto &m = state->tensors.m;
     const auto &v = state->tensors.v;
     const auto &vMax = state->tensors.vMax;
-    task = TaskCompute{
-        [options = state->options, m = m, v = v, vMax = vMax, w = w, dw = dw,
-         wFuture = utils::future(w), mFuture = utils::future(m),
-         vFuture = utils::future(v), vMaxFuture = utils::future(vMax),
-         dwFuture = utils::future(dw)](const ContextCompute *context) mutable {
-          DLLM_NVTX_RANGE_FN("dllm::optimizer::AdamW<true>::step");
-          utils::FutureGuard wGuard{wFuture};
-          utils::FutureGuard mGuard{mFuture};
-          utils::FutureGuard vGuard{vFuture};
-          utils::FutureGuard vMaxGuard{vMaxFuture};
-          utils::FutureGuard dwGuard{dwFuture};
-          if (dw.impl()->tensor().defined()) {
-            stepKernelAmsgrad(context->cudaStream, options, w, m, v, vMax, dw);
-          } else {
-            DLLM_WARN_TRUE(false, "got non-defined gradient, skip the update");
-          }
-          CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
-          m.reset();
-          v.reset();
-          vMax.reset();
-          w.reset();
-          dw.reset();
-        }};
-    const TaskFuture future = task.get_future();
-    utils::resetFuture(w, future);
-    utils::resetFuture(m, future);
-    utils::resetFuture(v, future);
-    utils::resetFuture(vMax, future);
-    utils::resetFuture(dw, future);
+    scheduler.impl()->submit(Task{std::make_shared<Impl>(
+        Impl{{w, m, v, vMax}, {w, m, v, vMax, dw}, state->options})});
   } else {
+    struct Impl : Task::Impl {
+      State::Options options;
+
+      explicit Impl(std::vector<Tensor> output /* w, m, v */,
+                    std::vector<ReadOnlyTensor> input /* w, m, v, dw */,
+                    const State::Options &options)
+          : Task::Impl{std::move(output), std::move(input), compute},
+            options{options} {}
+      void operator()() const override {
+        const auto stream = c10::cuda::getCurrentCUDAStream();
+        if (input()[3].impl()->tensor().defined()) {
+          stepKernel(stream.stream(), options, output()[0], output()[1],
+                     output()[2], input()[3]);
+        } else {
+          DLLM_WARN_TRUE(false, "got non-defined gradient, skip the update");
+        }
+      }
+      [[nodiscard]] const char *name() const override {
+        return "dllm::optimizer::AdamW::step";
+      }
+    };
+
     const auto &m = state->tensors.m;
     const auto &v = state->tensors.v;
-    task =
-        TaskCompute{[options = state->options, m = m, v = v, w = w, dw = dw,
-                     wFuture = utils::future(w), mFuture = utils::future(m),
-                     vFuture = utils::future(v), dwFuture = utils::future(dw)](
-                        const ContextCompute *context) mutable {
-          DLLM_NVTX_RANGE_FN("dllm::optimizer::AdamW<true>::step");
-          utils::FutureGuard wGuard{wFuture};
-          utils::FutureGuard mGuard{mFuture};
-          utils::FutureGuard vGuard{vFuture};
-          utils::FutureGuard dwGuard{dwFuture};
-          if (dw.impl()->tensor().defined()) {
-            stepKernel(context->cudaStream, options, w, m, v, dw);
-          } else {
-            DLLM_WARN_TRUE(false, "got non-defined gradient, skip the update");
-          }
-          CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
-          m.reset();
-          v.reset();
-          w.reset();
-          dw.reset();
-        }};
-    const TaskFuture future = task.get_future();
-    utils::resetFuture(w, future);
-    utils::resetFuture(m, future);
-    utils::resetFuture(v, future);
-    utils::resetFuture(dw, future);
+    scheduler.impl()->submit(Task{std::make_shared<Impl>(
+        Impl{{w, m, v}, {w, m, v, dw}, state->options})});
   }
-  scheduler.impl()->submit(std::move(task));
 }
 }  // namespace dllm::optimizer

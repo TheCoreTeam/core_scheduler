@@ -40,6 +40,6 @@ struct CrossEntropy {
                       const ReadOnlyTensor &target);
 
   static void backward(const Scheduler &scheduler,
-                       const std::shared_ptr<State> &state, Tensor &dinput);
+                       const std::shared_ptr<State> &state, Tensor &grad_input);
 };
 }  // namespace dllm::compute

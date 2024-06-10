@@ -1,6 +1,6 @@
 #include "module/linear.h"
 
-#include "threading/thread_pool_compute.h"
+#include "threading/scheduler.h"
 
 namespace dllm::module {
 LinearImpl::LinearImpl(const Scheduler& scheduler, const Options& options) {
