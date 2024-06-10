@@ -7,6 +7,7 @@ namespace dllm {
 struct Task::Impl {
   enum Type {
     compute,
+    loader,
     memcpy,
     nccl,
   };
@@ -23,18 +24,22 @@ struct Task::Impl {
 
   [[nodiscard]] auto &output() const { return output_; }
 
+  [[nodiscard]] auto &intermediate() const { return intermediate_; }
+
   [[nodiscard]] auto &type() const { return type_; }
 
   virtual void operator()() const = 0;
 
   [[nodiscard]] virtual const char *name() const = 0;
 
- protected:
+ private:
   std::shared_ptr<std::latch> latch_{new std::latch{1}};
 
   std::vector<Tensor> output_;
 
   std::vector<ReadOnlyTensor> input_;
+
+  mutable std::vector<at::Tensor> intermediate_;
 
   Type type_;
 };

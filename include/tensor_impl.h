@@ -4,8 +4,6 @@
 #include <ATen/core/TensorBody.h>
 #include <cuda_runtime.h>
 
-#include <memory>
-
 #include "tensor.h"
 #include "threading/event.h"
 

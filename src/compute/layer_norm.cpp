@@ -205,6 +205,9 @@ void LayerNorm::backward(const Scheduler& scheduler,
         } else {
           output()[2].impl()->tensor() = db;
         }
+        intermediate().resize(2);
+        intermediate().push_back(dw);
+        intermediate().push_back(db);
       }
       [[nodiscard]] const char* name() const override {
         return "dllm::compute::LayerNorm::backward";
@@ -238,6 +241,8 @@ void LayerNorm::backward(const Scheduler& scheduler,
         } else {
           output()[1].impl()->tensor() = dw;
         }
+        intermediate().resize(1);
+        intermediate().push_back(dw);
       }
       [[nodiscard]] const char* name() const override {
         return "dllm::compute::LayerNorm::backward";
