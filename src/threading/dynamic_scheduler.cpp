@@ -40,6 +40,13 @@ void threadTask(const int localRank, const int8_t streamIdx,
                 const std::shared_ptr<std::atomic<bool>> shutDown,
                 const std::shared_ptr<std::barrier<>> startBarrier,
                 const std::shared_ptr<std::barrier<>> endBarrier) {
+  struct ContextCompute {
+    int deviceRank{0};
+    // the random state will be changed all the time
+    cudaStream_t cudaStream{nullptr};
+    cudaMemPool_t memPool{nullptr};
+    cublasHandle_t cublasHandle{nullptr};
+  };
   ContextCompute context{.deviceRank = localRank};
   startBarrier->arrive_and_wait();
   CHECK_CUDART(cudaSetDevice(localRank));

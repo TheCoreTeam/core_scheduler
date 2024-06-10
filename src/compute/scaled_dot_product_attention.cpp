@@ -6,7 +6,6 @@
 #include "logger.h"
 #include "tensor_impl.h"
 #include "threading/scheduler_impl.h"
-#include "threading/task_compute.h"
 #include "threading/task_impl.h"
 
 namespace dllm::compute {

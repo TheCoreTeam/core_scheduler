@@ -3,15 +3,12 @@
 #include <c10/cuda/CUDAStream.h>
 #include <torch/csrc/autograd/generated/variable_factories.h>
 
-#include "internal_utils.h"
 #include "logger.h"
 #include "module/module.h"
-#include "nvtx_helper.h"
 #include "tensor_impl.h"
+#include "threading/scheduler.h"
 #include "threading/scheduler_impl.h"
-#include "threading/task_compute.h"
 #include "threading/task_impl.h"
-#include "threading/thread_pool_compute.h"
 
 namespace dllm::optimizer {
 void stepKernel(cudaStream_t stream, const AdamW::State::Options &options,

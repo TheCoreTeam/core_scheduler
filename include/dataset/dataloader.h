@@ -1,11 +1,8 @@
 #pragma once
 #include <memory>
-#include <queue>
-#include <thread>
 
 #include "dataset/dataset.h"
 #include "tensor.h"
-#include "threading/task_cudart.h"
 
 namespace dllm::dataset {
 // This class is only a proxy class
