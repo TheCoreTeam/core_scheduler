@@ -13,13 +13,9 @@ using TensorOptions = at::TensorOptions;
 struct ReadOnlyTensor {
   ReadOnlyTensor();
 
-  [[nodiscard]] const TensorOptions &options() const;
+  [[nodiscard]] TensorOptions options() const;
 
-  [[nodiscard]] TensorOptions &options();
-
-  [[nodiscard]] IntArray &sizes();
-
-  [[nodiscard]] const IntArray &sizes() const;
+  [[nodiscard]] IntArrayRef sizes() const;
 
   [[nodiscard]] int64_t size(int64_t dim) const;
 

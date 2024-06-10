@@ -54,17 +54,11 @@ int64_t ReadOnlyTensor::size(const int64_t dim) const {
   return impl_->size(dim);
 }
 
-const IntArray &ReadOnlyTensor::sizes() const { return impl_->sizes(); }
-
-IntArray &ReadOnlyTensor::sizes() { return impl_->sizes(); }
-
-TensorOptions &ReadOnlyTensor::options() { return impl_->options(); }
+IntArrayRef ReadOnlyTensor::sizes() const { return impl_->sizes(); }
 
 ReadOnlyTensor::ReadOnlyTensor() : impl_{std::make_shared<Impl>()} {}
 
-const TensorOptions &ReadOnlyTensor::options() const {
-  return impl_->options();
-}
+TensorOptions ReadOnlyTensor::options() const { return impl_->options(); }
 
 }  // namespace dllm
 

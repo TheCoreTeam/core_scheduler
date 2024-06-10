@@ -22,11 +22,6 @@ void forward(const Scheduler& scheduler, Tensor& output,
       return "dllm::compute::Utils::Add";
     }
   };
-
-  DLLM_ASSERT_TRUE(A.sizes() == B.sizes(),
-                   "We do not supprot implicit broadcast add now!");
-
-  output.sizes() = A.sizes();
   scheduler.impl()->submit(
       Task{std::make_shared<Impl>(Impl{{output}, {A, B}})});
 }

@@ -46,7 +46,6 @@ void Embedding::init(const Scheduler &scheduler, std::shared_ptr<State> &state,
   TORCH_CHECK(options.max_norm() == c10::nullopt)
 
   Tensor weight;
-  weight.sizes() = IntArray{options.num_embeddings(), options.embedding_dim()};
   scheduler.impl()->submit(
       Task{std::make_shared<Impl>(Impl{{weight}, options})});
 
@@ -82,12 +81,6 @@ void Embedding::forward(const Scheduler &scheduler,
 
   output = Tensor{};
   state->backward.indices = indices;
-  // size
-  output.sizes() = [&]() {
-    auto sizes = indices.sizes();
-    sizes.push_back(state->forward.weight.size(1));
-    return sizes;
-  }();
   scheduler.impl()->submit(Task{std::make_shared<Impl>(
       Impl{{output}, {state->forward.weight, indices}, state->args})});
 }
@@ -121,7 +114,6 @@ void Embedding::backward(const Scheduler &scheduler,
     }
   };
 
-  state->forward.grad_weight.sizes() = state->forward.weight.sizes();
   scheduler.impl()->submit(
       Task{std::make_shared<Impl>(Impl{{state->forward.grad_weight},
                                        {grad_output, state->backward.indices},

@@ -165,7 +165,6 @@ void LayerNorm::forward(const Scheduler& scheduler,
   state->backward.input = input;
   state->backward.mean = mean;
   state->backward.rstd = rstd;
-  output_.sizes() = input.sizes();
   output = output_;
   scheduler.impl()->submit(std::move(task));
 }
@@ -256,7 +255,6 @@ void LayerNorm::backward(const Scheduler& scheduler,
              state->args})};
   }
 
-  grad_input_.sizes() = state->backward.input.sizes();
   state->backward.input.reset();
   state->backward.mean.reset();
   state->backward.rstd.reset();

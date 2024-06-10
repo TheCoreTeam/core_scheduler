@@ -58,8 +58,6 @@ void CrossEntropy::forward(const Scheduler &scheduler,
   state->backward.target = target;
   state->backward.loss = loss;
   // size
-  log_probs.sizes() = input.sizes();
-  loss.sizes() = IntArray{1};
   scheduler.impl()->submit(
       Task{std::make_shared<Impl>(Impl{{log_probs, loss, total_weight},
                                        {state->forward.weight, input, target},
@@ -99,7 +97,6 @@ void CrossEntropy::backward(const Scheduler &scheduler,
 
   grad_input = Tensor{};
   // size
-  grad_input.sizes() = state->backward.log_probs.sizes();
   scheduler.impl()->submit(Task{std::make_shared<Impl>(Impl{
       {grad_input},
       {state->forward.weight, state->backward.loss, state->backward.log_probs,

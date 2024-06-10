@@ -44,14 +44,20 @@ void Linear::init(const Scheduler &scheduler, std::shared_ptr<State> &state,
   if (options.bias()) {
     struct Impl : Task::Impl {
       const TensorOptions options;
+      const int64_t in_futures;
+      const int64_t out_futures;
 
       explicit Impl(std::vector<Tensor> output /* weight, bias */,
-                    const TensorOptions options)
-          : Task::Impl{std::move(output), {}, compute}, options{options} {}
+                    const TensorOptions options, const int64_t in_futures,
+                    const int64_t out_futures)
+          : Task::Impl{std::move(output), {}, compute},
+            options{options},
+            in_futures{in_futures},
+            out_futures{out_futures} {}
       void operator()() const override {
-        const auto weight_ = torch::empty(output()[0].sizes(), options);
+        const auto weight_ = torch::empty({out_futures, in_futures}, options);
         output()[0].impl()->tensor() = weight_;
-        const auto bias_ = torch::empty(output()[1].sizes(), options);
+        const auto bias_ = torch::empty({out_futures}, options);
         output()[1].impl()->tensor() = bias_;
         torch::nn::init::kaiming_uniform_(output()[0].impl()->tensor(),
                                           std::sqrt(5));
@@ -67,23 +73,29 @@ void Linear::init(const Scheduler &scheduler, std::shared_ptr<State> &state,
 
     Tensor weight;
     Tensor bias;
-    // size
-    weight.sizes() = IntArray{options.out_futures(), options.in_futures()};
-    bias.sizes() = IntArray{options.out_futures()};
     scheduler.impl()->submit(
-        Task{std::make_shared<Impl>(Impl{{weight, bias}, tensorOptions})});
+        Task{std::make_shared<Impl>(Impl{{weight, bias},
+                                         tensorOptions,
+                                         options.in_futures(),
+                                         options.out_futures()})});
     state = std::make_shared<State>(
         State::Forward{std::move(weight), std::move(bias)}, State::Backward{},
         State::Args{options.bias()});
   } else {
     struct Impl : Task::Impl {
       const TensorOptions options;
+      const int64_t in_futures;
+      const int64_t out_futures;
 
-      explicit Impl(std::vector<Tensor> output /* weight */,
-                    const TensorOptions options)
-          : Task::Impl{std::move(output), {}, compute}, options{options} {}
+      explicit Impl(std::vector<Tensor> output /* weight, bias */,
+                    const TensorOptions options, const int64_t in_futures,
+                    const int64_t out_futures)
+          : Task::Impl{std::move(output), {}, compute},
+            options{options},
+            in_futures{in_futures},
+            out_futures{out_futures} {}
       void operator()() const override {
-        const auto weight_ = torch::empty(output()[0].sizes(), options);
+        const auto weight_ = torch::empty({out_futures, in_futures}, options);
         output()[0].impl()->tensor() = weight_;
         torch::nn::init::kaiming_uniform_(output()[0].impl()->tensor(),
                                           std::sqrt(5));
@@ -94,10 +106,11 @@ void Linear::init(const Scheduler &scheduler, std::shared_ptr<State> &state,
     };
 
     Tensor weight;
-    // size
-    weight.sizes() = IntArray{options.out_futures(), options.in_futures()};
     scheduler.impl()->submit(
-        Task{std::make_shared<Impl>(Impl{{weight}, tensorOptions})});
+        Task{std::make_shared<Impl>(Impl{{weight},
+                                         tensorOptions,
+                                         options.in_futures(),
+                                         options.out_futures()})});
     state =
         std::make_shared<State>(State::Forward{std::move(weight)},
                                 State::Backward{}, State::Args{options.bias()});
@@ -123,9 +136,6 @@ void Linear::forward(const Scheduler &scheduler,
   Tensor output_;
   state->backward.input = input;
   // size
-  auto input_size = input.sizes();
-  input_size[input_size.size() - 1] = state->forward.weight.sizes()[0];
-  output_.sizes() = input_size;
   output = output_;
   scheduler.impl()->submit(Task{
       std::make_shared<Impl>(Impl{{output}, {input, state->forward.weight}})});
@@ -150,9 +160,6 @@ void Linear::backwardInput(const Scheduler &scheduler,
 
   Tensor grad_input_;
   // size
-  auto output_size = grad_output.sizes();
-  output_size[output_size.size() - 1] = state->forward.weight.sizes()[1];
-  grad_input_.sizes() = output_size;
   grad_input = grad_input_;
   scheduler.impl()->submit(Task{std::make_shared<Impl>(
       Impl{{grad_input}, {grad_output, state->forward.weight}})});
@@ -198,10 +205,6 @@ void Linear::backwardParameter(const Scheduler &scheduler,
     }
   };
 
-  // size
-  state->forward.grad_weight.sizes() = IntArray{
-      grad_output.sizes()[grad_output.sizes().size() - 1],
-      state->backward.input.sizes()[state->backward.input.sizes().size() - 1]};
   // decrease counter
   scheduler.impl()->submit(Task{std::make_shared<Impl>(Impl{
       {state->forward.grad_weight}, {grad_output, state->backward.input}})});

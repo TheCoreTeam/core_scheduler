@@ -29,33 +29,17 @@ struct ReadOnlyTensor::Impl {
 
   Impl() = default;
 
-  [[nodiscard]] const TensorOptions &options() const { return options_; }
+  [[nodiscard]] auto options() const { return tensor_.options(); }
 
-  [[nodiscard]] TensorOptions &options() { return options_; }
+  [[nodiscard]] auto sizes() const { return tensor_.sizes(); }
 
-  [[nodiscard]] IntArray &sizes() { return sizes_; }
+  [[nodiscard]] auto size(const int64_t dim) const { return tensor_.size(dim); }
 
-  [[nodiscard]] const IntArray &sizes() const { return sizes_; }
-
-  [[nodiscard]] auto size(const int64_t dim) const {
-    return dim >= 0 ? sizes()[dim] : sizes()[sizes().size() + dim];
-  }
-
-  [[nodiscard]] auto numel() const {
-    int64_t c = 1;
-    for (const auto s : sizes()) {
-      c *= s;
-    }
-    return c;
-  }
+  [[nodiscard]] auto numel() const { return tensor_.numel(); }
 
   auto &tensor() { return tensor_; }
 
   at::Tensor tensor_{};
-
-  IntArray sizes_{0};
-
-  TensorOptions options_{};
 };
 }  // namespace dllm
 #else

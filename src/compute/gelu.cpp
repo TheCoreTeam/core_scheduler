@@ -29,8 +29,6 @@ void GeLU::forward(const Scheduler &scheduler,
 
   Tensor output_{};
   state->backward.input = input;
-  // size
-  output_.sizes() = input.sizes();
   scheduler.impl()->submit(
       Task{std::make_shared<Impl>(Impl{{output_}, {input}})});
   output = output_;
@@ -53,8 +51,6 @@ void GeLU::backward(const Scheduler &scheduler,
   };
 
   Tensor grad_input_{};
-  // size
-  grad_input_.sizes() = grad_output.sizes();
   // decrease counter
   scheduler.impl()->submit(Task{std::make_shared<Impl>(
       Impl{{grad_input_}, {grad_output, state->backward.input}})});

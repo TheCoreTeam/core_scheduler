@@ -46,8 +46,6 @@ void AdamW::init(const Scheduler &scheduler, std::shared_ptr<State> &state,
                  const ReadOnlyTensor &parameter, const Options &options) {
   Tensor m;
   Tensor v;
-  m.sizes() = parameter.sizes();
-  v.sizes() = parameter.sizes();
   if (options.amsgrad()) {
     struct Impl : Task::Impl {
       explicit Impl(std::vector<Tensor> output /* m, v, vMax */,
@@ -67,7 +65,6 @@ void AdamW::init(const Scheduler &scheduler, std::shared_ptr<State> &state,
     };
 
     Tensor vMax;
-    vMax.sizes() = parameter.sizes();
     state = std::make_shared<State>(
         State::Tensors{m, v, vMax},
         State::Options{options.lr(), options.beta1(), options.beta2(),
