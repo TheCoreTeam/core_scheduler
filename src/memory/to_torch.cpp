@@ -1,34 +1,35 @@
 #include "memory/to_torch.h"
 
-#include <ATen/core/Formatting.h>
+#include <c10/cuda/CUDAStream.h>
 
-#include "internal_utils.h"
-#include "logger.h"
-#include "nvtx_helper.h"
 #include "tensor_impl.h"
 #include "threading/scheduler_impl.h"
-#include "threading/task_cudart.h"
+#include "threading/task_impl.h"
 
 namespace dllm::memory {
 void toTorch(const Scheduler &scheduler, at::Tensor &dst,
              const ReadOnlyTensor &src) {
-  auto task =
-      TaskCudart{[&dst = dst, src = src, srcFuture = utils::future(src)](
-                     const ContextCudart *context) mutable {
-        DLLM_NVTX_RANGE_FN("dllm::memory::toTorch");
-        {
-          utils::FutureGuard guard{srcFuture};
-          if (dst.defined()) {
-            dst.copy_(src.impl()->tensor().clone().detach_());
-          } else {
-            dst = src.impl()->tensor().clone().detach_();
-          }
-          src.reset();
-        }
-        CHECK_CUDART(cudaStreamSynchronize(context->cudaStream));
-      }};
-
-  utils::resetFuture(src, task.get_future());
-  scheduler.impl()->submit(std::move(task));
+  struct Impl : Task::Impl {
+    explicit Impl(std::vector<Tensor> output /* tensor */,
+                  std::vector<ReadOnlyTensor> input /* input */)
+        : Task::Impl{std::move(output), std::move(input), compute} {}
+    void operator()() const override {
+      c10::cuda::getCurrentCUDAStream().synchronize();
+      auto &dst = output()[0].impl()->tensor();
+      auto &src = input()[0].impl()->tensor();
+      if (dst.defined()) {
+        dst.copy_(src.clone().detach_());
+      } else {
+        dst = src.clone().detach_();
+      }
+      c10::cuda::getCurrentCUDAStream().synchronize();
+    }
+    [[nodiscard]] const char *name() const override {
+      return "dllm::memory::toTorch";
+    }
+  };
+  Tensor dst_;
+  scheduler.impl()->submit(Task{std::make_shared<Impl>(Impl{{dst_}, {src}})});
+  dst = dst_.impl()->tensor();
 }
 }  // namespace dllm::memory

@@ -20,6 +20,7 @@ add_library(dllm_core SHARED
         logger.cpp
         tensor.cpp
         random.cpp
+        communication.cpp
         ${DLLM_MODULE_SRCS}
         ${DLLM_COMPUTE_SRCS}
         ${DLLM_MEMORY_SRCS}

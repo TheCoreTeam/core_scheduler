@@ -16,51 +16,50 @@ inline void sum(const Scheduler &scheduler, Tensor &output,
 }
 
 void range(const Scheduler &scheduler, Tensor &tensor, const at::Scalar &start,
-           const at::Scalar &end, at::TensorOptions options = {});
+           const at::Scalar &end, TensorOptions options = {});
 
 void arange(const Scheduler &scheduler, Tensor &tensor, const at::Scalar &start,
-            const at::Scalar &end, at::TensorOptions options = {});
+            const at::Scalar &end, TensorOptions options = {});
 
 void arange(const Scheduler &scheduler, Tensor &tensor, const at::Scalar &start,
             const at::Scalar &end, const at::Scalar &step,
-            at::TensorOptions options = {});
+            TensorOptions options = {});
 
 void randint(const Scheduler &scheduler, Tensor &tensor, int64_t low,
              int64_t high, const IntArrayRef &size,
-             at::TensorOptions options = at::kLong);
+             TensorOptions options = at::kLong);
 
 void empty(const Scheduler &scheduler, Tensor &tensor, const IntArrayRef &size,
-           at::TensorOptions options = {});
+           TensorOptions options = {});
 
 void empty_like(const Scheduler &scheduler, Tensor &dst,
                 const ReadOnlyTensor &src);
 
 void ones(const Scheduler &scheduler, Tensor &tensor, const IntArrayRef &size,
-          at::TensorOptions options = {});
+          TensorOptions options = {});
 
 void ones_like(const Scheduler &scheduler, Tensor &dst,
                const ReadOnlyTensor &src);
 
 void zeros(const Scheduler &scheduler, Tensor &tensor, const IntArrayRef &size,
-           at::TensorOptions options = {});
+           TensorOptions options = {});
 
 void zeros_like(const Scheduler &scheduler, Tensor &dst,
                 const ReadOnlyTensor &src);
 
 void rand(const Scheduler &scheduler, Tensor &tensor, const IntArrayRef &size,
-          at::TensorOptions options = {});
+          TensorOptions options = {});
 
 void rand_like(const Scheduler &scheduler, Tensor &dst,
                const ReadOnlyTensor &src);
 
 void randn(const Scheduler &scheduler, Tensor &tensor, const IntArrayRef &size,
-           at::TensorOptions options = {});
+           TensorOptions options = {});
 
 void randn_like(const Scheduler &scheduler, Tensor &dst,
                 const ReadOnlyTensor &src);
 
-// split output tensors should be read-only!
-void split(const Scheduler &scheduler, std::vector<ReadOnlyTensor> &output,
+void split(const Scheduler &scheduler, std::vector<Tensor> &output,
            const ReadOnlyTensor &src, const int64_t &split_size,
            const int64_t &dim);
 

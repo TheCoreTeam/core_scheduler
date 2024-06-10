@@ -1,11 +1,11 @@
+#include <cuda_fp16.h>
 #include <gtest/gtest.h>
 #include <torch/torch.h>
 
 #include "compute/embedding.h"
 #include "compute/utils.h"
 #include "memory/to_torch.h"
-#include "threading/thread_pool_compute.h"
-#include "threading/thread_stream_cudart.h"
+#include "threading/dynamic_scheduler.h"
 
 template <typename T>
 struct TypeToTorch;
@@ -30,8 +30,7 @@ struct TypeToTorch<double> {
 
 class TestEmbedding : public ::testing::Test {
  protected:
-  dllm::ThreadPoolCompute tp{0, 2};
-  dllm::ThreadStreamCudart stream{0};
+  dllm::DynamicScheduler scheduler{0};
 
   template <typename Element>
   void TestRoutine(const double tol_forward, const double tol_backward);
@@ -58,28 +57,28 @@ void TestEmbedding::TestRoutine(const double tol_forward,
   dllm::Tensor input;
   std::shared_ptr<dllm::compute::Embedding::State> state;
   dllm::compute::Utils::randint(
-      tp, input, 0, 3, {B, T},
+      scheduler, input, 0, 3, {B, T},
       torch::TensorOptions().dtype(torch::kInt).device(device));
   dllm::compute::Embedding::init(
-      tp, state,
+      scheduler, state,
       dllm::compute::Embedding::Options(vocab, d).device(device).dtype(dtype));
 
   dllm::Tensor output;
-  dllm::compute::Embedding::forward(tp, state, output, input);
+  dllm::compute::Embedding::forward(scheduler, state, output, input);
   output.wait();
   dllm::Tensor grad_output;
-  dllm::compute::Utils::randn_like(tp, grad_output, output);
-  dllm::compute::Embedding::backward(tp, state, grad_output);
+  dllm::compute::Utils::randn_like(scheduler, grad_output, output);
+  dllm::compute::Embedding::backward(scheduler, state, grad_output);
   torch::Tensor input_torch;
-  dllm::memory::toTorch(stream, input_torch, input);
+  dllm::memory::toTorch(scheduler, input_torch, input);
   input.wait();
   torch::Tensor weight_torch;
-  dllm::memory::toTorch(stream, weight_torch, state->forward.weight);
+  dllm::memory::toTorch(scheduler, weight_torch, state->forward.weight);
   state->forward.weight.wait();
   weight_torch.requires_grad_(true);
   const auto output_torch = at::embedding(weight_torch, input_torch);
   torch::Tensor grad_output_torch;
-  dllm::memory::toTorch(stream, grad_output_torch, grad_output);
+  dllm::memory::toTorch(scheduler, grad_output_torch, grad_output);
   grad_output.wait();
   output_torch.backward(grad_output_torch);
 

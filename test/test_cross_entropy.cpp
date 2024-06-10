@@ -2,13 +2,13 @@
 #include <ATen/ops/allclose.h>
 #include <ATen/ops/cat.h>
 #include <ATen/ops/cross_entropy_loss.h>
+#include <cuda_fp16.h>
 #include <gtest/gtest.h>
 
 #include "compute/cross_entropy.h"
 #include "compute/utils.h"
 #include "memory/to_torch.h"
-#include "threading/thread_pool_compute.h"
-#include "threading/thread_stream_cudart.h"
+#include "threading/dynamic_scheduler.h"
 
 template <typename T>
 struct TypeToTorch;
@@ -33,8 +33,7 @@ struct TypeToTorch<double> {
 
 class TestCrossEntropyFixture : public ::testing::Test {
  protected:
-  dllm::ThreadPoolCompute tp{0, 1};
-  dllm::ThreadStreamCudart stream{0};
+  dllm::DynamicScheduler scheduler{0};
 
   template <typename T>
   void Test(int size);
@@ -50,23 +49,23 @@ void TestCrossEntropyFixture::Test(const int size) {
   dllm::Tensor x;
   dllm::Tensor dx;
   dllm::Tensor target;
-  dllm::compute::Utils::rand(tp, x, {size, 2 * size, 3 * size}, option);
-  dllm::compute::Utils::view(tp, x, x, {-1, x.size(-1)});
-  dllm::compute::Utils::randint(tp, target, 0, 3 * size, {size, 2 * size},
-                                option.dtype(at::kLong));
-  dllm::compute::Utils::view(tp, target, target, {-1});
+  dllm::compute::Utils::rand(scheduler, x, {size, 2 * size, 3 * size}, option);
+  dllm::compute::Utils::view(scheduler, x, x, {-1, x.size(-1)});
+  dllm::compute::Utils::randint(scheduler, target, 0, 3 * size,
+                                {size, 2 * size}, option.dtype(at::kLong));
+  dllm::compute::Utils::view(scheduler, target, target, {-1});
   std::shared_ptr<dllm::compute::CrossEntropy::State> state;
-  dllm::compute::CrossEntropy::init(tp, state);
-  dllm::compute::CrossEntropy::forward(tp, state, loss, x, target);
-  dllm::compute::CrossEntropy::backward(tp, state, dx);
+  dllm::compute::CrossEntropy::init(scheduler, state);
+  dllm::compute::CrossEntropy::forward(scheduler, state, loss, x, target);
+  dllm::compute::CrossEntropy::backward(scheduler, state, dx);
   at::Tensor loss_ref_torch, x_torch, dx_torch, target_torch;
-  dllm::memory::toTorch(stream, loss_ref_torch, loss);
+  dllm::memory::toTorch(scheduler, loss_ref_torch, loss);
   loss.wait();
-  dllm::memory::toTorch(stream, x_torch, x);
+  dllm::memory::toTorch(scheduler, x_torch, x);
   x.wait();
-  dllm::memory::toTorch(stream, dx_torch, dx);
+  dllm::memory::toTorch(scheduler, dx_torch, dx);
   dx.wait();
-  dllm::memory::toTorch(stream, target_torch, target);
+  dllm::memory::toTorch(scheduler, target_torch, target);
   target.wait();
   x_torch.set_requires_grad(true);
   const auto loss_torch = at::cross_entropy_loss(x_torch, target_torch);

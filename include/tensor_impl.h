@@ -6,10 +6,25 @@
 #include <memory>
 
 #include "tensor.h"
+#include "threading/event.h"
 #include "threading/task_future.h"
 
 namespace dllm {
+struct Event;
+
 struct ReadOnlyTensor::Impl {
+  int8_t streamIdx_;
+  auto &streamIdx() { return streamIdx_; }
+  auto &streamIdx() const { return streamIdx_; }
+
+  int8_t schedulerIdx_;
+  auto &schedulerIdx() { return schedulerIdx_; }
+  auto &schedulerIdx() const { return schedulerIdx_; }
+
+  Event event_;
+  auto &event() { return event_; }
+  auto &event() const { return event_; }
+
   struct TensorFuture {
     mutable TaskFuture rFuture{};
     mutable TaskFuture wFuture{};

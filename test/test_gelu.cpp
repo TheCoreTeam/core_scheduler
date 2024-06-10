@@ -1,3 +1,4 @@
+#include <cuda_fp16.h>
 #include <gtest/gtest.h>
 #include <torch/torch.h>
 
@@ -6,8 +7,7 @@
 #include "logger.h"
 #include "memory/to_torch.h"
 #include "tensor.h"
-#include "threading/thread_pool_compute.h"
-#include "threading/thread_stream_cudart.h"
+#include "threading/dynamic_scheduler.h"
 
 template <typename T>
 struct TypeToTorch;
@@ -32,8 +32,7 @@ struct TypeToTorch<double> {
 
 class TestDLLMGelu : public ::testing::Test {
  protected:
-  dllm::ThreadPoolCompute tp{0, 2};
-  dllm::ThreadStreamCudart stream{0};
+  dllm::DynamicScheduler scheduler{0};
 
   template <typename Element>
   void TestRoutine(int T, double tol_forward, double tol_backward);
@@ -53,17 +52,17 @@ void TestDLLMGelu::TestRoutine(const int T, const double tol_forward,
   dllm::Tensor tensorOutput;
   dllm::Tensor GradOutput_;
   std::shared_ptr<dllm::compute::GeLU::State> state;
-  dllm::compute::Utils::randn(tp, input2, {B, T}, option);
-  dllm::compute::GeLU::init(tp, state);
-  dllm::compute::GeLU::forward(tp, state, tensorOutput, input2);
-  dllm::compute::Utils::randn_like(tp, GradOutput_, tensorOutput);
-  dllm::compute::GeLU::backward(tp, state, tensorGradInput, GradOutput_);
+  dllm::compute::Utils::randn(scheduler, input2, {B, T}, option);
+  dllm::compute::GeLU::init(scheduler, state);
+  dllm::compute::GeLU::forward(scheduler, state, tensorOutput, input2);
+  dllm::compute::Utils::randn_like(scheduler, GradOutput_, tensorOutput);
+  dllm::compute::GeLU::backward(scheduler, state, tensorGradInput, GradOutput_);
 
   torch::Tensor input;
   torch::Tensor GradOutput;
-  dllm::memory::toTorch(stream, input, input2);
+  dllm::memory::toTorch(scheduler, input, input2);
   input2.wait();
-  dllm::memory::toTorch(stream, GradOutput, GradOutput_);
+  dllm::memory::toTorch(scheduler, GradOutput, GradOutput_);
   GradOutput_.wait();
 
   auto input1 = input.detach().clone().set_requires_grad(true);

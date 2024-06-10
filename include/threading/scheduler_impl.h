@@ -1,13 +1,16 @@
 #pragma once
-#include "task_compute.h"
-#include "task_cudart.h"
-#include "task_mpi.h"
-#include "task_nccl.h"
 #include "threading/scheduler.h"
+#include "threading/task.h"
+#include "threading/task_compute.h"
+#include "threading/task_cudart.h"
+#include "threading/task_mpi.h"
+#include "threading/task_nccl.h"
 
 namespace dllm {
 struct Scheduler::Impl {
   virtual ~Impl() = default;
+
+  virtual void submit(Task &&task);
 
   virtual void submit(TaskCompute &&task);
 

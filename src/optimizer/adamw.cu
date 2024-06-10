@@ -76,7 +76,8 @@ __global__ void step(T *__restrict w, T *__restrict m, T *__restrict v,
 }  // namespace
 
 void stepKernel(cudaStream_t stream, const AdamW::State::Options &options,
-                Tensor &w, Tensor &m, Tensor &v, const ReadOnlyTensor &dw) {
+                const Tensor &w, const Tensor &m, const Tensor &v,
+                const ReadOnlyTensor &dw) {
   const auto size = [&] {
     const auto sizes = dw.impl()->tensor().sizes();
     int64_t s = 1;
@@ -102,8 +103,8 @@ void stepKernel(cudaStream_t stream, const AdamW::State::Options &options,
 }
 
 void stepKernelAmsgrad(cudaStream_t stream,
-                       const AdamW::State::Options &options, Tensor &w,
-                       Tensor &m, Tensor &v, Tensor &vMax,
+                       const AdamW::State::Options &options, const Tensor &w,
+                       const Tensor &m, const Tensor &v, const Tensor &vMax,
                        const ReadOnlyTensor &dw) {
   const auto size = [&] {
     const auto sizes = dw.impl()->tensor().sizes();

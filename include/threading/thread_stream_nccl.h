@@ -4,9 +4,6 @@
 
 #include "threading/context_nccl.h"
 #include "threading/scheduler.h"
-// ReSharper disable once CppUnusedIncludeDirective
-#include "threading/submit_task_macro.h"
-#include "threading/task_nccl.h"
 
 namespace dllm {
 struct ThreadStreamNccl : Scheduler {

@@ -4,12 +4,8 @@
 #include "threading/scheduler.h"
 
 namespace dllm::communication {
-template <Backend backend>
-struct AllReduce;
-
-template <>
-struct AllReduce<NCCL> {
-  static void runInplace(const Scheduler& scheduler,
+struct AllReduce {
+  static void runInplace(const Scheduler& scheduler, const Comm& comm,
                          const std::vector<Tensor>& tensors,
                          Operation operation);
 };

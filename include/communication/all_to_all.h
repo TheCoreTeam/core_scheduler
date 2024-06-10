@@ -4,12 +4,8 @@
 #include "threading/scheduler.h"
 
 namespace dllm::communication {
-template <Backend backend>
-struct AllToAll;
-
-template <>
-struct AllToAll<NCCL> {
-  static void run(const Scheduler &scheduler,
+struct AllToAll {
+  static void run(const Scheduler &scheduler, const Comm &comm,
                   const std::vector<Tensor> &tensorReceive,
                   const std::vector<ReadOnlyTensor> &tensorSend);
 };
