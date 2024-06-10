@@ -44,7 +44,11 @@ Event::Event() : impl_{popEvent()} {}
 
 Event::Event(std::shared_ptr<Impl> impl) : impl_{std::move(impl)} {}
 
-Event::~Event() { pushEvent(std::move(impl_)); }
+Event::~Event() {
+  if (impl_ != nullptr) {
+    pushEvent(std::move(impl_));
+  }
+}
 
 void Event::block() const { impl_->block(); }
 

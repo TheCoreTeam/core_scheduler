@@ -37,6 +37,39 @@ struct Impl_ final : Scheduler::Impl {
       std::make_shared<std::atomic<bool>>(false)};
 };
 
+struct EventVectorPair {
+  Event event{nullptr};
+  std::vector<at::Tensor> tensors;
+};
+
+void memoryWatchDog(const std::shared_ptr<std::atomic<bool>> shutDown,
+                    std::shared_ptr<std::queue<EventVectorPair>> queue,
+                    std::shared_ptr<std::mutex> queueMutex,
+                    std::shared_ptr<std::condition_variable> cv,
+                    std::shared_ptr<std::mutex> cvMutex) {
+  while (!shutDown->load()) {
+    EventVectorPair pair;
+    std::unique_lock lock{*queueMutex};
+    if (!queue->empty()) {
+      pair = std::move(queue->front());
+      queue->pop();
+    }
+    lock.unlock();
+    if (!pair.tensors.empty()) {
+      try {
+        pair.event.synchronize();
+        pair.tensors.clear();
+        pair.event = Event{nullptr};
+      } catch (const std::exception &e) {
+        DLLM_ASSERT_TRUE(false, "Task failed with error: {}", e.what());
+      }
+    } else {
+      std::unique_lock uniqueLock{*cvMutex};
+      cv->wait(uniqueLock, [&] { return shutDown->load() || !queue->empty(); });
+    }
+  }
+}
+
 void threadTask(const int localRank, const int8_t streamIdx,
                 std::shared_ptr<std::queue<Task>> taskQueue,
                 const std::shared_ptr<std::atomic<bool>> shutDown,
@@ -55,7 +88,21 @@ void threadTask(const int localRank, const int8_t streamIdx,
   c10::cuda::CUDAGuard deviceGuard{
       static_cast<c10::DeviceIndex>(context.deviceRank)};
 
+  struct WatchDogMeta {
+    std::shared_ptr<std::queue<EventVectorPair>> queue{
+        std::make_shared<std::queue<EventVectorPair>>()};
+    std::shared_ptr<std::mutex> queueMutex{std::make_shared<std::mutex>()};
+    std::shared_ptr<std::condition_variable> cv{
+        std::make_shared<std::condition_variable>()};
+    std::shared_ptr<std::mutex> cvMutex{std::make_shared<std::mutex>()};
+  } watchDogMeta;
+
+  std::jthread watchDog{memoryWatchDog,     shutDown,
+                        watchDogMeta.queue, watchDogMeta.queueMutex,
+                        watchDogMeta.cv,    watchDogMeta.cvMutex};
+
   while (true) {
+    Event event{nullptr};
     startBarrier->arrive_and_wait();
     if (shutDown->load()) {
       break;
@@ -72,6 +119,10 @@ void threadTask(const int localRank, const int8_t streamIdx,
       }
       DLLM_NVTX_RANGE_FN(task.name());
       task();
+      if (!task.impl()->intermediate().empty()) {
+        event = Event{};
+        event.record();
+      }
       for (auto &output = task.output(); auto &t : output) {
         t.impl()->streamIdx() = streamIdx;
         t.impl()->event().record();
@@ -80,12 +131,20 @@ void threadTask(const int localRank, const int8_t streamIdx,
       DLLM_ASSERT_TRUE(false, fmt::format("Task {} failed with error: {}",
                                           task.name(), e.what()));
     }
-    endBarrier->arrive_and_wait();
     for (auto &output = task.output(); auto &t : output) {
       t.impl()->stream() = context.cudaStream;
     }
+    endBarrier->arrive_and_wait();
+    if (!task.impl()->intermediate().empty()) {
+      std::lock_guard guard{*watchDogMeta.queueMutex};
+      watchDogMeta.queue->emplace(std::move(event),
+                                  std::move(task.impl()->intermediate()));
+      watchDogMeta.cv->notify_one();
+    }
     task.reset();
   }
+
+  watchDogMeta.cv->notify_one();
 }
 
 void threadCommTask(const int localRank, const int8_t streamIdx,
@@ -131,17 +190,75 @@ void threadCommTask(const int localRank, const int8_t streamIdx,
       DLLM_ASSERT_TRUE(false, fmt::format("Task {} failed with error: {}",
                                           task.name(), e.what()));
     }
-    endBarrier->arrive_and_wait();
     for (auto &output = task.output(); auto &t : output) {
       t.impl()->stream() = context.cudaStream;
     }
+    endBarrier->arrive_and_wait();
+    task.reset();
+  }
+}
+
+template <typename Impl, typename HostBuffer, typename TaskLoader>
+void threadLoaderTask(const std::function<void()> prepareData,
+                      const int localRank, const int8_t streamIdx,
+                      std::shared_ptr<std::queue<Task>> taskQueue,
+                      const std::shared_ptr<std::atomic<bool>> shutDown,
+                      const std::shared_ptr<std::barrier<>> startBarrier,
+                      const std::shared_ptr<std::barrier<>> endBarrier) {
+  CHECK_CUDART(cudaSetDevice(localRank));
+  HostBuffer xBuffer{}, yBuffer{};
+
+  prepareData();
+  struct ContextCompute {
+    int deviceRank{0};
+    cudaStream_t cudaStream{nullptr};
+  };
+  ContextCompute context{.deviceRank = localRank};
+  startBarrier->arrive_and_wait();
+  const auto stream = c10::cuda::getStreamFromPool(
+      false, static_cast<c10::DeviceIndex>(context.deviceRank));
+  context.cudaStream = stream.stream();
+  c10::cuda::CUDAStreamGuard streamGuard{stream};
+  c10::cuda::CUDAGuard deviceGuard{
+      static_cast<c10::DeviceIndex>(context.deviceRank)};
+
+  while (true) {
+    stream.synchronize();
+    startBarrier->arrive_and_wait();
+    if (shutDown->load()) {
+      break;
+    }
+    auto task = std::move(taskQueue->front());
+    taskQueue->pop();
+    try {
+      for (auto &input = task.input(); auto &t : input) {
+        if (t.impl()->streamIdx() != streamIdx) {
+          if (!t.impl()->event().query()) {
+            t.impl()->event().block();
+          }
+        }
+      }
+      DLLM_NVTX_RANGE_FN(task.name());
+      task();
+      for (auto &output = task.output(); auto &t : output) {
+        t.impl()->streamIdx() = streamIdx;
+        t.impl()->event().record();
+      }
+    } catch (const std::exception &e) {
+      DLLM_ASSERT_TRUE(false, fmt::format("Task {} failed with error: {}",
+                                          task.name(), e.what()));
+    }
+    for (auto &output = task.output(); auto &t : output) {
+      t.impl()->stream() = context.cudaStream;
+    }
+    endBarrier->arrive_and_wait();
     task.reset();
   }
 }
 }  // namespace
 
 Impl_::Impl_(int localRank) {
-  constexpr int threadNum = 3;
+  constexpr int threadNum = 2;
   taskQueue_.resize(threadNum);
   for (auto &queue : taskQueue_) {
     queue = std::make_shared<std::queue<Task>>();

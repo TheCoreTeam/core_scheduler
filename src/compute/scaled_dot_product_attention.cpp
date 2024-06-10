@@ -74,7 +74,7 @@ void ScaledDotProductFlashAttention::forward(
   state->backward.philox_offset = philox_offset;
   // TODO(Jie): support different attention algorithm
   // size
-  output.sizes() = query.sizes();
+  output_.sizes() = query.sizes();
   output = output_;
   scheduler.impl()->submit(Task{std::make_shared<Impl>(Impl{
       {output_, logsumexp, cum_seq_q, cum_seq_k, philox_seed, philox_offset},
