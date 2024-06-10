@@ -43,10 +43,12 @@ struct EventVectorPair {
 };
 
 void memoryWatchDog(const std::shared_ptr<std::atomic<bool>> shutDown,
+                    const int localRank,
                     std::shared_ptr<std::queue<EventVectorPair>> queue,
                     std::shared_ptr<std::mutex> queueMutex,
                     std::shared_ptr<std::condition_variable> cv,
                     std::shared_ptr<std::mutex> cvMutex) {
+  c10::cuda::CUDAGuard deviceGuard{static_cast<c10::DeviceIndex>(localRank)};
   while (!shutDown->load()) {
     EventVectorPair pair;
     std::unique_lock lock{*queueMutex};
@@ -97,9 +99,13 @@ void threadTask(const int localRank, const int8_t streamIdx,
     std::shared_ptr<std::mutex> cvMutex{std::make_shared<std::mutex>()};
   } watchDogMeta;
 
-  std::jthread watchDog{memoryWatchDog,     shutDown,
-                        watchDogMeta.queue, watchDogMeta.queueMutex,
-                        watchDogMeta.cv,    watchDogMeta.cvMutex};
+  std::jthread watchDog{memoryWatchDog,
+                        shutDown,
+                        localRank,
+                        watchDogMeta.queue,
+                        watchDogMeta.queueMutex,
+                        watchDogMeta.cv,
+                        watchDogMeta.cvMutex};
 
   while (true) {
     Event event{nullptr};
