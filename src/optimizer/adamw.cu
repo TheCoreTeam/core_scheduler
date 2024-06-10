@@ -1,12 +1,16 @@
 #include <ATen/Dispatch.h>
 #include <cuda_runtime.h>
 
-#include "internal_utils.h"
 #include "optimizer/adamw.h"
 #include "tensor_impl.h"
 
 namespace dllm::optimizer {
 namespace {
+template <typename TA, typename TB>
+constexpr __inline__ __attribute__((always_inline)) int ceil_div(TA a, TB b) {
+  return (a + b - 1) / b;
+}
+
 template <typename T>
 __device__ float cast_higher(const T v) {
   return static_cast<float>(v);
@@ -91,7 +95,7 @@ void stepKernel(cudaStream_t stream, const AdamW::State::Options &options,
       dw.impl()->tensor().scalar_type(), "AdamW w/o Amsgrad", [&] {
         using T = scalar_t;
         dim3 block(std::min<decltype(size)>(128, size));
-        dim3 grid(utils::ceil_div(size, std::min<decltype(size)>(128, size)));
+        dim3 grid(ceil_div(size, std::min<decltype(size)>(128, size)));
         step<T><<<grid, block, 0, stream>>>(
             w.impl()->tensor().data_ptr<T>(), m.impl()->tensor().data_ptr<T>(),
             v.impl()->tensor().data_ptr<T>(), dw.impl()->tensor().data_ptr<T>(),
@@ -119,7 +123,7 @@ void stepKernelAmsgrad(cudaStream_t stream,
       dw.impl()->tensor().scalar_type(), "AdamW w/o Amsgrad", [&] {
         using T = scalar_t;
         dim3 block(std::min<decltype(size)>(128, size));
-        dim3 grid(utils::ceil_div(size, std::min<decltype(size)>(128, size)));
+        dim3 grid(ceil_div(size, std::min<decltype(size)>(128, size)));
         step<T><<<grid, block, 0, stream>>>(
             w.impl()->tensor().data_ptr<T>(), m.impl()->tensor().data_ptr<T>(),
             v.impl()->tensor().data_ptr<T>(),

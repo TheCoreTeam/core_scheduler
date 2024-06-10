@@ -4,10 +4,8 @@
 
 #include <limits>
 
-#include "communication_impl.h"
-#include "internal_utils.h"
+#include "communication/communication_impl.h"
 #include "logger.h"
-#include "nvtx_helper.h"
 #include "tensor_impl.h"
 #include "threading/scheduler_impl.h"
 #include "threading/task_impl.h"

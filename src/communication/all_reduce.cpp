@@ -2,7 +2,7 @@
 
 #include <torch/csrc/autograd/generated/variable_factories.h>
 
-#include "communication_impl.h"
+#include "communication/communication_impl.h"
 #include "logger.h"
 #include "tensor_impl.h"
 #include "threading/scheduler_impl.h"

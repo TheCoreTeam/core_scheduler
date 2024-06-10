@@ -3,7 +3,7 @@
 #include <torch/csrc/distributed/c10d/ProcessGroupNCCL.hpp>
 #include <torch/csrc/distributed/c10d/TCPStore.hpp>
 
-#include "communication_impl.h"
+#include "communication/communication_impl.h"
 #include "logger.h"
 
 namespace dllm::communication {
