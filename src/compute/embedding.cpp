@@ -8,6 +8,20 @@
 #include "threading/task_impl.h"
 
 namespace dllm::compute {
+OrderedDict<std::string, Tensor> Embedding::State::parameters() const {
+  OrderedDict<std::string, Tensor> dict;
+  dict.insert("weight", forward.weight);
+  return dict;
+}
+
+OrderedDict<std::string, module::State::Increment>
+Embedding::State::increments() {
+  OrderedDict<std::string, Increment> dict;
+  dict.insert("weight",
+              {forward.weight, forward.grad_weight, forward.optimizer_weight});
+  return dict;
+}
+
 void Embedding::init(const Scheduler &scheduler, std::shared_ptr<State> &state,
                      const Options &options) {
   struct Impl : Task::Impl {

@@ -2,5 +2,6 @@ set(DLLM_MODULE_SRCS
         ${CMAKE_CURRENT_SOURCE_DIR}/module.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/linear.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/layer_norm.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/embedding.cpp
 )
 set(DLLM_MODULE_SRCS ${DLLM_MODULE_SRCS} PARENT_SCOPE)

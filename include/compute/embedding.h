@@ -1,14 +1,16 @@
 #pragma once
 #include "arg.h"
+#include "module/state.h"
 #include "tensor.h"
 #include "threading/scheduler.h"
 
 namespace dllm::compute {
 struct Embedding {
-  struct State {
+  struct State final : module::State {
     struct Forward {
       Tensor weight;
       Tensor grad_weight{};
+      std::shared_ptr<module::OptimizerState> optimizer_weight = nullptr;
     } forward;
     struct Backward {
       ReadOnlyTensor indices;
@@ -21,6 +23,13 @@ struct Embedding {
       bool scale_grad_by_freq;
       bool sparse;
     } args;
+
+    State(const Forward &forward, const Backward &backward, const Args &args)
+        : forward{forward}, backward{backward}, args{args} {}
+
+    [[nodiscard]] OrderedDict<std::string, Tensor> parameters() const override;
+
+    [[nodiscard]] OrderedDict<std::string, Increment> increments() override;
   };
 
   struct Options {
