@@ -11,6 +11,8 @@ struct DataLoader {
 
   [[nodiscard]] const std::shared_ptr<Impl> &impl() const;
 
+  [[nodiscard]] int64_t iterationsPerEpoch() const;
+
  protected:
   std::shared_ptr<Impl> impl_;
 };
@@ -19,7 +21,8 @@ struct DataLoader {
 struct LlmDataLoader : DataLoader {
   void load(const Scheduler &scheduler, Tensor &x, Tensor &y) const;
 
-  LlmDataLoader(const LlmDataset &dataset, int batchSize, int numWorkers,
-                bool shuffle);
+  LlmDataLoader(const LlmDataset &dataset, int64_t batchSize,
+                int64_t numWorkers, bool shuffle, int64_t rank,
+                int64_t worldSize);
 };
 }  // namespace dllm::data

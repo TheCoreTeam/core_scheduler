@@ -1,6 +1,8 @@
+#include <ATen/Context.h>
+#include <ATen/ops/embedding.h>
 #include <cuda_fp16.h>
 #include <gtest/gtest.h>
-#include <torch/torch.h>
+#include <torch/csrc/api/include/torch/types.h>
 
 #include "compute/embedding.h"
 #include "compute/utils.h"
@@ -13,19 +15,19 @@ struct TypeToTorch;
 template <>
 struct TypeToTorch<float> {
   using Type = float;
-  static const at::ScalarType type = torch::kFloat;
+  static const at::ScalarType type = at::kFloat;
 };
 
 template <>
 struct TypeToTorch<nv_half> {
   using Type = c10::Half;
-  static const at::ScalarType type = torch::kHalf;
+  static const at::ScalarType type = at::kHalf;
 };
 
 template <>
 struct TypeToTorch<double> {
   using Type = double;
-  static const at::ScalarType type = torch::kDouble;
+  static const at::ScalarType type = at::kDouble;
 };
 
 class TestEmbedding : public ::testing::Test {
@@ -39,7 +41,7 @@ class TestEmbedding : public ::testing::Test {
 template <typename Element>
 void TestEmbedding::TestRoutine(const double tol_forward,
                                 const double tol_backward) {
-  torch::manual_seed(1);
+  at::manual_seed(1);
   const int B = 2;
   const int T = 1024;
   const int MaxT = 1024;
@@ -51,7 +53,7 @@ void TestEmbedding::TestRoutine(const double tol_forward,
   //  const int vocab = 16;
   //  const int d = 8;
 
-  torch::Device device = torch::kCUDA;
+  at::Device device = at::kCUDA;
   torch::Dtype dtype = TypeToTorch<Element>::type;
 
   dllm::Tensor input;

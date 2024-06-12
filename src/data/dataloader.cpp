@@ -7,13 +7,11 @@
 
 #include <barrier>
 #include <future>
-#include <pcg_random.hpp>
 #include <queue>
 
 #include "data/dataloader_impl.h"
 #include "data/dataset.h"
 #include "logger.h"
-#include "random.h"
 #include "tensor_impl.h"
 #include "threading/scheduler_impl.h"
 #include "threading/task_impl.h"
@@ -22,14 +20,15 @@ namespace arrow {
 class ListArray;
 }
 
-namespace dllm::random {
-RandomState &getRandomState();
-}
-
 namespace dllm::data {
-inline DataLoader::Impl::Impl(const int batchSize, const int numWorkers,
-                              const bool shuffle)
-    : batchSize{batchSize}, numWorkers{numWorkers}, shuffle{shuffle} {}
+inline DataLoader::Impl::Impl(const int64_t batchSize, const int64_t numWorkers,
+                              const bool shuffle, const int64_t rank,
+                              const int64_t worldSize)
+    : batchSize{batchSize},
+      numWorkers{numWorkers},
+      shuffle{shuffle},
+      rank{rank},
+      worldSize{worldSize} {}
 
 struct LlmDataset::RowAccessor::Impl {
   const std::shared_ptr<const arrow::ListArray> inputIdsRow;
@@ -55,16 +54,20 @@ struct LlmBuffer {
 };
 
 struct LlmDataLoaderImpl final : DataLoader::Impl {
-  LlmDataLoaderImpl(const LlmDataset &dataset, const int batch_size,
-                    const int num_workers, const bool shuffle)
-      : Impl{batch_size, num_workers, shuffle}, dataset{dataset} {}
+  LlmDataLoaderImpl(const LlmDataset &dataset, const int64_t batch_size,
+                    const int64_t num_workers, const bool shuffle,
+                    const int64_t rank, const int64_t worldSize)
+      : Impl{batch_size, num_workers, shuffle, rank, worldSize},
+        dataset{dataset} {}
 
   const LlmDataset dataset;
 
-  [[nodiscard]] std::function<void(const std::shared_ptr<LlmBuffer> &)>
+  [[nodiscard]] std::function<void(const std::shared_ptr<LlmBuffer> &, int64_t)>
   getFiller(int64_t batchsize) const;
 
   ~LlmDataLoaderImpl() override;
+
+  [[nodiscard]] int64_t iterationsPerEpoch() const override;
 
   std::vector<std::shared_ptr<std::barrier<>>> startBarrier_{};
   std::vector<Event> events_{};
@@ -73,55 +76,52 @@ struct LlmDataLoaderImpl final : DataLoader::Impl {
   std::vector<std::jthread> threadVector_{};
   std::shared_ptr<std::atomic<bool>> shutDown_{nullptr};
   bool initialized_ = false;
-  std::size_t lastThreadIdx_ = 0;
+  std::int64_t lastThreadIdx_ = 0;
 };
 
-std::function<void(const std::shared_ptr<LlmBuffer> &)>
+std::function<void(const std::shared_ptr<LlmBuffer> &, int64_t)>
 LlmDataLoaderImpl::getFiller(int64_t batchsize) const {
-  return std::function{[batchsize = batchsize, dataset = dataset](
-                           const std::shared_ptr<LlmBuffer> &buffer) {
-    auto &[seed, offset] = random::getRandomState();
-    const auto rows = batchsize;
-    const auto cols = dataset.cols();
-    // TODO(Jie): maybe padding
-    const auto ld = cols;
-    pcg64 rng(seed);
-    rng.advance(offset.fetch_add(rows));
+  return std::function{
+      [batchsize = batchsize, dataset = dataset](
+          const std::shared_ptr<LlmBuffer> &buffer, const int64_t iteration) {
+        const auto rows = batchsize;
+        const auto cols = dataset.cols();
+        // TODO(Jie): maybe padding
+        const auto ld = cols;
 
-    buffer->x.options = buffer->x.options.dtype(at::kLong);
-    buffer->y.options = buffer->y.options.dtype(at::kLong);
+        buffer->x.options = buffer->x.options.dtype(at::kLong);
+        buffer->y.options = buffer->y.options.dtype(at::kLong);
 
-    const auto xSize = sizeof(std::int64_t) * rows * ld;
-    const auto ySize = sizeof(std::int64_t) * rows * ld;
-    if (buffer->x.size < xSize) {
-      CHECK_CUDART(cudaFreeHost(buffer->x.ptr));
-      CHECK_CUDART(cudaMallocHost(&buffer->x.ptr, xSize));
-      buffer->x.size = xSize;
-    }
-    if (buffer->y.size < ySize) {
-      CHECK_CUDART(cudaFreeHost(buffer->y.ptr));
-      CHECK_CUDART(cudaMallocHost(&buffer->y.ptr, ySize));
-      buffer->y.size = ySize;
-    }
+        const auto xSize = sizeof(std::int64_t) * rows * ld;
+        const auto ySize = sizeof(std::int64_t) * rows * ld;
+        if (buffer->x.size < xSize) {
+          CHECK_CUDART(cudaFreeHost(buffer->x.ptr));
+          CHECK_CUDART(cudaMallocHost(&buffer->x.ptr, xSize));
+          buffer->x.size = xSize;
+        }
+        if (buffer->y.size < ySize) {
+          CHECK_CUDART(cudaFreeHost(buffer->y.ptr));
+          CHECK_CUDART(cudaMallocHost(&buffer->y.ptr, ySize));
+          buffer->y.size = ySize;
+        }
 
-    buffer->x.validDataSize = xSize;
-    buffer->y.validDataSize = ySize;
+        buffer->x.validDataSize = xSize;
+        buffer->y.validDataSize = ySize;
 
-    const auto xPtr = static_cast<std::int64_t *>(buffer->x.ptr);
-    const auto yPtr = static_cast<std::int64_t *>(buffer->y.ptr);
+        const auto xPtr = static_cast<std::int64_t *>(buffer->x.ptr);
+        const auto yPtr = static_cast<std::int64_t *>(buffer->y.ptr);
 
-    std::uniform_int_distribution<int64_t> distribution(0, dataset.rows() - 1);
-    for (std::int64_t r = 0; r < rows; ++r) {
-      const auto rowAccessor = dataset.accessRow(distribution(rng));
-      for (std::int64_t c = 0; c < cols; ++c) {
-        const auto [input_id, target] = rowAccessor.accessCol(c);
-        xPtr[r * ld + c] = input_id;
-        yPtr[r * ld + c] = target;
-      }
-    }
-    buffer->x.sizes = {rows, cols};
-    buffer->y.sizes = {rows, cols};
-  }};
+        for (std::int64_t r = 0; r < rows; ++r) {
+          const auto rowAccessor = dataset.accessRow(iteration * batchsize + r);
+          for (std::int64_t c = 0; c < cols; ++c) {
+            const auto [input_id, target] = rowAccessor.accessCol(c);
+            xPtr[r * ld + c] = input_id;
+            yPtr[r * ld + c] = target;
+          }
+        }
+        buffer->x.sizes = {rows, cols};
+        buffer->y.sizes = {rows, cols};
+      }};
 }
 LlmDataLoaderImpl::~LlmDataLoaderImpl() {
   shutDown_->store(true);
@@ -132,6 +132,9 @@ LlmDataLoaderImpl::~LlmDataLoaderImpl() {
     (void)b->arrive();
   }
 }
+int64_t LlmDataLoaderImpl::iterationsPerEpoch() const {
+  return dataset.rows() / (batchSize * worldSize);
+}
 
 LlmBuffer::HostBuffer::~HostBuffer() { CHECK_CUDART(cudaFreeHost(ptr)); }
 
@@ -139,21 +142,33 @@ const std::shared_ptr<DataLoader::Impl> &DataLoader::impl() const {
   return impl_;
 }
 
+int64_t DataLoader::iterationsPerEpoch() const {
+  return impl()->iterationsPerEpoch();
+}
+
 void threadLoaderTask(
-    const std::function<void(const std::shared_ptr<LlmBuffer> &)> filler,
-    const std::shared_ptr<LlmBuffer> buffer, const Event event,
-    const std::shared_ptr<std::atomic<bool>> shutDown,
+    const std::function<void(const std::shared_ptr<LlmBuffer> &, int64_t)>
+        filler,
+    const int64_t threadRank, const int64_t threadNum,
+    const int64_t processRank, const int64_t worldSize,
+    const int64_t iterations, const std::shared_ptr<LlmBuffer> buffer,
+    const Event event, const std::shared_ptr<std::atomic<bool>> shutDown,
     const std::shared_ptr<std::barrier<>> startBarrier,
     const std::shared_ptr<std::barrier<>> endBarrier) {
+  int64_t iteration = processRank + threadRank * worldSize;
   startBarrier->arrive_and_wait();
   while (true) {
-    filler(buffer);
+    filler(buffer, iteration);
     startBarrier->arrive_and_wait();
     if (shutDown->load()) {
       break;
     }
     endBarrier->arrive_and_wait();
     event.synchronize();
+    iteration += threadNum * worldSize;
+    if (iteration > iterations) {
+      iteration = processRank + threadRank * worldSize;
+    }
   }
 }
 
@@ -189,9 +204,11 @@ void LlmDataLoader::load(const Scheduler &scheduler, Tensor &x,
       implCast->events_.emplace_back();
       implCast->buffers_.emplace_back(std::make_shared<LlmBuffer>());
       implCast->threadVector_.emplace_back(
-          threadLoaderTask, implCast->getFiller(implCast->batchSize),
-          implCast->buffers_[i], implCast->events_[i], implCast->shutDown_,
-          implCast->startBarrier_[i], implCast->endBarrier_[i]);
+          threadLoaderTask, implCast->getFiller(implCast->batchSize), i,
+          implCast->numWorkers, implCast->rank, implCast->worldSize,
+          implCast->iterationsPerEpoch(), implCast->buffers_[i],
+          implCast->events_[i], implCast->shutDown_, implCast->startBarrier_[i],
+          implCast->endBarrier_[i]);
       implCast->startBarrier_[i]->arrive_and_wait();
     }
     implCast->lastThreadIdx_ = 0;
@@ -252,9 +269,11 @@ void LlmDataLoader::load(const Scheduler &scheduler, Tensor &x,
       implCast->lastThreadIdx_ % implCast->threadVector_.size();
 }
 
-LlmDataLoader::LlmDataLoader(const LlmDataset &dataset, int batchSize,
-                             int numWorkers, bool shuffle) {
+LlmDataLoader::LlmDataLoader(const LlmDataset &dataset, int64_t batchSize,
+                             int64_t numWorkers, bool shuffle, int64_t rank,
+                             int64_t worldSize) {
+  DLLM_ASSERT_TRUE(shuffle == false, "We do not support shuffle now");
   impl_ = std::make_shared<LlmDataLoaderImpl>(dataset, batchSize, numWorkers,
-                                              shuffle);
+                                              shuffle, rank, worldSize);
 }
 }  // namespace dllm::data

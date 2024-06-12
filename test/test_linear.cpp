@@ -1,6 +1,5 @@
 #include <cuda_fp16.h>
 #include <gtest/gtest.h>
-#include <torch/torch.h>
 
 #include "compute/linear.h"
 #include "compute/utils.h"

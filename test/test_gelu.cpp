@@ -1,6 +1,8 @@
+#include <ATen/Context.h>
 #include <cuda_fp16.h>
 #include <gtest/gtest.h>
-#include <torch/torch.h>
+#include <torch/csrc/api/include/torch/types.h>
+#include <torch/csrc/autograd/autograd.h>
 
 #include "compute/gelu.h"
 #include "compute/utils.h"
@@ -68,7 +70,7 @@ void TestDLLMGelu::TestRoutine(const int T, const double tol_forward,
   auto input1 = input.detach().clone().set_requires_grad(true);
 
   // 应用GELU激活函数
-  auto Output1 = torch::gelu(input1);
+  auto Output1 = at::gelu(input1);
 
   const auto GradInput1 = torch::autograd::grad(
       {Output1}, {input1}, {GradOutput}, /*retain_graph=*/false,
@@ -89,10 +91,3 @@ TEST_F(TestDLLMGelu, TestF16_128) { TestRoutine<nv_half>(128, 1e-2, 1e-2); }
 TEST_F(TestDLLMGelu, TestF16_512) { TestRoutine<nv_half>(512, 1e-2, 1e-2); }
 
 TEST_F(TestDLLMGelu, TestF16_1024) { TestRoutine<nv_half>(1024, 1e-2, 1e-2); }
-
-// TEST_F(TestDLLMGelu, TestF64_128) { TestRoutine<double>(128, 1e-10, 1e-10); }
-
-// TEST_F(TestDLLMGelu, TestF64_512) { TestRoutine<double>(512, 1e-10, 1e-10); }
-
-// TEST_F(TestDLLMGelu, TestF64_1024) { TestRoutine<double>(1024, 1e-10, 1e-10);
-// }
