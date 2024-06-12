@@ -2,7 +2,7 @@
 #include <torch/csrc/distributed/c10d/Backend.hpp>
 #include <torch/csrc/distributed/c10d/Store.hpp>
 
-#include "communication.h"
+#include "communication/communication.h"
 
 namespace dllm::communication {
 struct Comm::Impl {

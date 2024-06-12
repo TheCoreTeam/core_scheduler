@@ -4,6 +4,15 @@
 #include <memory>
 
 namespace dllm::communication {
+struct Bucket {
+  struct Impl;
+
+  void apply() const;
+
+ protected:
+  std::shared_ptr<Impl> impl_;
+};
+
 struct Comm {
   struct Impl;
 

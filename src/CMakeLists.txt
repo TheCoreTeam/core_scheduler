@@ -22,7 +22,6 @@ add_subdirectory(data)
 add_library(dllm_core SHARED
         logger.cpp
         tensor.cpp
-        communication.cpp
         ${DLLM_MODULE_SRCS}
         ${DLLM_COMPUTE_SRCS}
         ${DLLM_MEMORY_SRCS}
