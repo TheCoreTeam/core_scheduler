@@ -3,16 +3,9 @@
 
 #include <memory>
 
+#include "threading/scheduler.h"
+
 namespace dllm::communication {
-struct Bucket {
-  struct Impl;
-
-  void apply() const;
-
- protected:
-  std::shared_ptr<Impl> impl_;
-};
-
 struct Comm {
   struct Impl;
 
@@ -25,6 +18,17 @@ struct Comm {
   [[nodiscard]] int64_t getSize() const;
 
  private:
+  std::shared_ptr<Impl> impl_;
+};
+
+struct Bucket {
+  struct Impl;
+
+  void apply(const Scheduler &scheduler, const Comm &comm) const;
+
+  const std::shared_ptr<Impl> &impl() const;
+
+ protected:
   std::shared_ptr<Impl> impl_;
 };
 

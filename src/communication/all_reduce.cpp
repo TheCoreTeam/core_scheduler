@@ -22,6 +22,41 @@ constexpr auto toC10dRedOp(const Operation operation) {
 }
 }  // namespace
 
+struct AllReduceBucketImpl final : Bucket::Impl {
+  AllReduceBucketImpl(const int64_t byteThreshold, const Operation operation)
+      : byteThreshold{byteThreshold}, operation{operation} {}
+
+  void apply(const Scheduler &scheduler, const Comm &comm) override;
+
+  const int64_t byteThreshold{};
+  const Operation operation{};
+  std::vector<Tensor> buffer{};
+  int64_t currentByte = 0;
+};
+
+void AllReduceBucketImpl::apply(const Scheduler &scheduler, const Comm &comm) {
+  AllReduce::runInplace(scheduler, comm, buffer, operation);
+  buffer.clear();
+  currentByte = 0;
+}
+
+AllReduceBucket::AllReduceBucket(const int64_t byteThreshold,
+                                 const Operation operation) {
+  impl_ = std::make_shared<AllReduceBucketImpl>(byteThreshold, operation);
+}
+
+void AllReduceBucket::push_back(const Scheduler &scheduler, const Comm &comm,
+                                Tensor tensor) const {
+  const auto impl = std::dynamic_pointer_cast<AllReduceBucketImpl>(impl_);
+  impl->buffer.push_back(std::move(tensor));
+  impl->currentByte += tensor.impl()->tensor().nbytes();
+  if (impl->currentByte >= impl->byteThreshold) {
+    AllReduce::runInplace(scheduler, comm, impl->buffer, impl->operation);
+    impl->buffer.clear();
+    impl->currentByte = 0;
+  }
+}
+
 void AllReduce::runInplace(const Scheduler &scheduler, const Comm &comm,
                            const std::vector<Tensor> &tensors,
                            const Operation operation) {

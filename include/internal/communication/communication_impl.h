@@ -5,6 +5,12 @@
 #include "communication/communication.h"
 
 namespace dllm::communication {
+struct Bucket::Impl {
+  virtual ~Impl() = default;
+
+  virtual void apply(const Scheduler &scheduler, const Comm &comm) = 0;
+};
+
 struct Comm::Impl {
   Impl(MPI_Comm group, c10::intrusive_ptr<c10d::Store> store,
        c10::intrusive_ptr<c10d::Backend> backend);

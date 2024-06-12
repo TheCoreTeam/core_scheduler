@@ -92,6 +92,11 @@ int64_t Comm::getRank() const { return impl_->backend()->getRank(); }
 
 int64_t Comm::getSize() const { return impl_->backend()->getSize(); }
 
+void Bucket::apply(const Scheduler &scheduler, const Comm &comm) const {
+  impl_->apply(scheduler, comm);
+}
+const std::shared_ptr<Bucket::Impl> &Bucket::impl() const { return impl_; }
+
 Comm getComm(const MPI_Comm group, const BackendType backendType) {
   return lookupMapOrCreate(group, backendType);
 }
