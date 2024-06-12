@@ -1,6 +1,4 @@
 set(DLLM_OPTIMIZER_SRCS
-#        ${CMAKE_CURRENT_SOURCE_DIR}/sgd.cpp
-#        ${CMAKE_CURRENT_SOURCE_DIR}/sgd.cu
         ${CMAKE_CURRENT_SOURCE_DIR}/adamw.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/adamw.cu
 )

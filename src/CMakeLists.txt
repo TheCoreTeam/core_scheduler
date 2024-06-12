@@ -42,6 +42,9 @@ target_compile_options(dllm_core PRIVATE
 target_include_directories(dllm_core PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/../include
 )
+target_include_directories(dllm_core PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/../include/internal
+)
 
 target_link_libraries(dllm_core PRIVATE CUDA::cudart_static CUDA::cublas CUDA::nvtx3)
 target_link_libraries(dllm_core PRIVATE fmt::fmt-header-only OpenMP::OpenMP_CXX)
