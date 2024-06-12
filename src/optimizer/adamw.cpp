@@ -32,7 +32,8 @@ void AdamW::init(const Scheduler &scheduler, const module::Module &module,
 }
 
 void AdamW::step(const Scheduler &scheduler, const module::Module &module) {
-  for (auto &kvState : module.named_states()) {
+  auto states = module.named_states();
+  for (auto &kvState : states) {
     for (auto &kvIncrement : kvState.value()->increments()) {
       step(scheduler,
            std::dynamic_pointer_cast<State>(kvIncrement->optimizerState),
