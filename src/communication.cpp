@@ -24,20 +24,42 @@ Comm createNccl(const MPI_Comm group) {
   MPI_Get_processor_name(processor_name, &name_len);
 
   char addr0[INET_ADDRSTRLEN];  // INET_ADDRSTRLEN is typically 16 for IPv4
+  uint16_t port = 29500;        // default port
 
   if (rank == 0) {
     const hostent *he = gethostbyname(processor_name);
     DLLM_ASSERT_TRUE(he != nullptr, fmt::format("Error resolving hostname: {}",
                                                 hstrerror(h_errno)));
-    // Convert the first host address to a string
     strcpy(addr0, inet_ntoa(*reinterpret_cast<in_addr *>(he->h_addr)));
+
+    // Try to find a free port
+    int sock = socket(AF_INET, SOCK_STREAM, 0);
+    DLLM_ASSERT_TRUE(sock != -1, "Socket creation failed");
+
+    sockaddr_in addr;
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = INADDR_ANY;
+
+    while (port < 30000) {  // try ports from 29500 to 29999
+      addr.sin_port = htons(port);
+      if (bind(sock, reinterpret_cast<sockaddr *>(&addr), sizeof(addr)) == 0) {
+        // Successfully bound to the port
+        break;
+      }
+      port++;
+    }
+
+    close(sock);
+    DLLM_ASSERT_TRUE(port < 30000, "Could not find a free port");
   }
 
-  // Broadcast the IP address from rank 0 to all other ranks
+  // Broadcast the IP address and port from rank 0 to all other ranks
   MPI_Bcast(addr0, INET_ADDRSTRLEN, MPI_CHAR, 0, group);
+  MPI_Bcast(&port, 1, MPI_UINT16_T, 0, group);
 
   auto store = c10::make_intrusive<c10d::TCPStore>(
-      addr0, c10d::TCPStoreOptions{.isServer = rank == 0, .numWorkers = size});
+      addr0, c10d::TCPStoreOptions{
+                 .port = port, .isServer = rank == 0, .numWorkers = size});
   auto backend = c10::make_intrusive<c10d::ProcessGroupNCCL>(store, rank, size);
   return Comm{std::make_shared<Comm::Impl>(group, std::move(store),
                                            std::move(backend))};
