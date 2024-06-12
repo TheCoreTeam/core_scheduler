@@ -48,21 +48,27 @@ void AllReduceNcclTestFixture::TestAllReduceT(const int m) {
   const auto comm =
       dllm::communication::getCommWorld(dllm::communication::NCCL);
   at::manual_seed(comm.getRank() + 1);
-  dllm::Tensor x;
+  dllm::Tensor x, y;
   dllm::compute::Utils::rand(scheduler, x, {m}, option);
-  dllm::communication::AllReduce::runInplace(scheduler, comm, {x},
+  dllm::compute::Utils::rand(scheduler, y, {m}, option);
+  dllm::communication::AllReduce::runInplace(scheduler, comm, {x, y},
                                              dllm::communication::SUM);
 
-  at::Tensor x_torch;
+  at::Tensor x_torch, y_torch;
   dllm::memory::toTorch(scheduler, x_torch, x);
+  dllm::memory::toTorch(scheduler, y_torch, y);
   x.wait();
+  y.wait();
 
-  auto accumulator = torch::zeros_like(x_torch);
+  auto accumulator_x = torch::zeros_like(x_torch);
+  auto accumulator_y = torch::zeros_like(y_torch);
   for (int i = 0; i < comm.getSize(); ++i) {
     at::manual_seed(i + 1);
-    accumulator += torch::rand({m}, option);
+    accumulator_x += torch::rand({m}, option);
+    accumulator_y += torch::rand({m}, option);
   }
   GTEST_ASSERT_TRUE(at::allclose(x, x_torch));
+  GTEST_ASSERT_TRUE(at::allclose(y, y_torch));
 }
 
 TEST_F(AllReduceNcclTestFixture, TestForwardF32) { TestAllReduceT<float>(128); }
