@@ -16,6 +16,9 @@ add_subdirectory(optimizer)
 set(DLLM_THREADING_SRCS "")
 add_subdirectory(threading)
 
+set(DLLM_DATASET_SRCS "")
+add_subdirectory(data)
+
 add_library(dllm_core SHARED
         logger.cpp
         tensor.cpp
@@ -27,6 +30,7 @@ add_library(dllm_core SHARED
         ${DLLM_COMMUNICATION_SRCS}
         ${DLLM_OPTIMIZER_SRCS}
         ${DLLM_THREADING_SRCS}
+        ${DLLM_DATA_SRCS}
 )
 
 target_compile_options(dllm_core PRIVATE
@@ -41,14 +45,14 @@ target_include_directories(dllm_core PUBLIC
 )
 
 target_link_libraries(dllm_core PRIVATE CUDA::cudart_static CUDA::cublas CUDA::nvtx3)
-target_link_libraries(dllm_core PRIVATE fmt::fmt-header-only)
-target_link_libraries(dllm_core PUBLIC spdlog::spdlog_header_only OpenMP::OpenMP_CXX nvidia::nccl MPI::MPI_C torch)
+target_link_libraries(dllm_core PRIVATE fmt::fmt-header-only OpenMP::OpenMP_CXX nvidia::nccl)
+target_link_libraries(dllm_core PRIVATE arrow_dataset Arrow::arrow_shared Parquet::parquet_shared)
+target_link_libraries(dllm_core PRIVATE hwloc CUDA::nvml)
+target_link_libraries(dllm_core PUBLIC spdlog::spdlog_header_only MPI::MPI_C torch)
+target_include_directories(dllm_core PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/pcg_cpp/include)
 
 target_compile_definitions(dllm_core PRIVATE -DDLLM_ENABLE_INTERNAL_BUILD)
 
-#add_subdirectory(dataset)
-
 add_library(dllm INTERFACE)
 
-#target_link_libraries(dllm INTERFACE dllm_core dllm_dataset)
 target_link_libraries(dllm INTERFACE dllm_core)

@@ -1,5 +1,6 @@
 #include "random.h"
 
+#include <ATen/Context.h>
 #include <mpi.h>
 
 #include "logger.h"
@@ -11,6 +12,7 @@ void manual_seed(const uint64_t seed) {
   auto &[_seed, offset] = getRandomState();
   _seed = seed;
   offset = 0;
+  at::manual_seed(seed);
 }
 
 RandomState &getRandomState() {

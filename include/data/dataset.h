@@ -3,9 +3,19 @@
 #include <memory>
 #include <vector>
 
-namespace dllm::dataset {
-struct LlmDataset {
-  LlmDataset(const std::vector<std::string> &path);
+namespace dllm::data {
+struct Dataset {
+  struct Impl;
+
+  [[nodiscard]] const std::shared_ptr<Impl> &impl() const;
+
+ protected:
+  std::shared_ptr<Impl> impl_;
+};
+
+// This API is not stable
+struct LlmDataset : Dataset {
+  explicit LlmDataset(const std::vector<std::string> &path);
 
   struct Element {
     std::int64_t input_id;
@@ -14,7 +24,9 @@ struct LlmDataset {
 
   struct RowAccessor {
     struct Impl;
-    RowAccessor(std::unique_ptr<Impl> impl) : impl_{std::move(impl)} {}
+
+    explicit RowAccessor(std::unique_ptr<Impl> impl);
+
     [[nodiscard]] Element accessCol(std::int64_t colIdx) const;
 
     [[nodiscard]] std::int64_t cols() const;
@@ -28,9 +40,5 @@ struct LlmDataset {
   [[nodiscard]] std::int64_t rows() const;
 
   [[nodiscard]] std::int64_t cols() const;
-
- private:
-  struct Impl;
-  std::unique_ptr<Impl> impl_;
 };
-}  // namespace dllm::dataset
+}  // namespace dllm::data

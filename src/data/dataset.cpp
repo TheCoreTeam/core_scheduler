@@ -1,4 +1,4 @@
-#include "dataset/dataset.h"
+#include "data/dataset.h"
 
 #include <arrow/api.h>
 #include <arrow/dataset/api.h>
@@ -6,23 +6,23 @@
 
 #include <memory>
 
+#include "data/dataset_impl.h"
 #include "logger.h"
 
-namespace dllm::dataset {
+namespace dllm::data {
 struct LlmDataset::RowAccessor::Impl {
   const std::shared_ptr<const arrow::ListArray> inputIdsRow;
   const std::int64_t inputIdsRowOffset;
   const std::shared_ptr<const arrow::ListArray> targetsRow;
   const std::int64_t targetsRowOffset;
 
-  [[nodiscard]] LlmDataset::Element accessCol(const std::int64_t colIdx) const;
+  [[nodiscard]] Element accessCol(std::int64_t colIdx) const;
 
   [[nodiscard]] std::int64_t cols() const;
 };
 
 LlmDataset::Element LlmDataset::RowAccessor::Impl::accessCol(
     const std::int64_t colIdx) const {
-  // TODO(Jie): maybe use template for the Accessor Class
   std::int64_t input_id;
   if (inputIdsRow->values()->type_id() == arrow::Type::INT64) {
     const auto inputsIdsValues =
@@ -55,24 +55,31 @@ std::int64_t LlmDataset::RowAccessor::Impl::cols() const {
   return inputIdsRow->length();
 }
 
-struct LlmDataset::Impl {
+struct LlmDatasetImpl final : Dataset::Impl {
   std::shared_ptr<const arrow::Table> table;
+
+  LlmDatasetImpl(std::shared_ptr<const arrow::Table> table)
+      : table{std::move(table)} {}
 
   [[nodiscard]] std::int64_t rows() const { return table->column(0)->length(); }
 
-  [[nodiscard]] RowAccessor accessRow(const std::int64_t rowIdx) const {
+  [[nodiscard]] LlmDataset::RowAccessor accessRow(
+      const std::int64_t rowIdx) const {
     const auto inputIdsArray =
         std::static_pointer_cast<arrow::ListArray>(table->column(0)->chunk(0));
     const auto targetsArray =
         std::static_pointer_cast<arrow::ListArray>(table->column(1)->chunk(0));
-    auto impl = std::make_unique<RowAccessor::Impl>(RowAccessor::Impl{
-        std::static_pointer_cast<arrow::ListArray>(inputIdsArray),
-        inputIdsArray->value_offset(rowIdx),
-        std::static_pointer_cast<arrow::ListArray>(targetsArray),
-        targetsArray->value_offset(rowIdx)});
-    return RowAccessor{std::move(impl)};
+    auto impl = std::make_unique<LlmDataset::RowAccessor::Impl>(
+        LlmDataset::RowAccessor::Impl{
+            std::static_pointer_cast<arrow::ListArray>(inputIdsArray),
+            inputIdsArray->value_offset(rowIdx),
+            std::static_pointer_cast<arrow::ListArray>(targetsArray),
+            targetsArray->value_offset(rowIdx)});
+    return LlmDataset::RowAccessor{std::move(impl)};
   }
 };
+
+const std::shared_ptr<Dataset::Impl> &Dataset::impl() const { return impl_; }
 
 LlmDataset::LlmDataset(const std::vector<std::string> &path) {
   const auto filesystem = std::make_shared<arrow::fs::LocalFileSystem>();
@@ -113,10 +120,13 @@ LlmDataset::LlmDataset(const std::vector<std::string> &path) {
       table_result.ok(),
       fmt::format("Error reading table: {}", table_result.status().ToString()));
   auto table = table_result.ValueOrDie();
-  impl_ = std::make_unique<Impl>(std::move(table));
+  impl_ = std::make_shared<LlmDatasetImpl>(std::move(table));
 }
 
 std::int64_t LlmDataset::RowAccessor::cols() const { return impl_->cols(); }
+
+LlmDataset::RowAccessor::RowAccessor(std::unique_ptr<Impl> impl)
+    : impl_{std::move(impl)} {}
 
 LlmDataset::Element LlmDataset::RowAccessor::accessCol(
     const std::int64_t colIdx) const {
@@ -124,13 +134,15 @@ LlmDataset::Element LlmDataset::RowAccessor::accessCol(
 }
 
 LlmDataset::RowAccessor LlmDataset::accessRow(const std::int64_t rowIdx) const {
-  return impl_->accessRow(rowIdx);
+  return std::dynamic_pointer_cast<LlmDatasetImpl>(impl_)->accessRow(rowIdx);
 }
 
-std::int64_t LlmDataset::rows() const { return impl_->rows(); }
+std::int64_t LlmDataset::rows() const {
+  return std::dynamic_pointer_cast<LlmDatasetImpl>(impl_)->rows();
+}
 
 std::int64_t LlmDataset::cols() const {
   const auto row = accessRow(0);
   return row.cols();
 }
-}  // namespace dllm::dataset
+}  // namespace dllm::data

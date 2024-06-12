@@ -1,13 +1,14 @@
 #include "threading/dynamic_scheduler.h"
 
 #include <c10/cuda/CUDAGuard.h>
+#include <hwloc.h>
+#include <hwloc/nvml.h>
 #include <tensor_impl.h>
 #include <threading/event.h>
 #include <threading/event_impl.h>
 #include <threading/task_impl.h>
 
 #include <barrier>
-#include <latch>
 #include <queue>
 #include <unordered_set>
 
@@ -16,6 +17,70 @@
 #include "threading/scheduler_impl.h"
 
 namespace dllm {
+namespace {
+hwloc_topology_t getHwlocTopology() {
+  static struct Topo {
+    hwloc_topology_t topo{};
+
+    Topo() {
+      nvmlInit();
+      hwloc_topology_init(&topo);
+      hwloc_topology_load(topo);
+    }
+
+    ~Topo() {
+      hwloc_topology_destroy(topo);
+      nvmlShutdown();
+    }
+  } topo;
+  return topo.topo;
+}
+
+template <typename Fn>
+std::shared_ptr<hwloc_cpuset_t> getBitmap(Fn &&fn) {
+  return std::shared_ptr<hwloc_cpuset_t>{fn(new hwloc_cpuset_t),
+                                         [](const hwloc_cpuset_t *bitmap) {
+                                           hwloc_bitmap_free(*bitmap);
+                                           delete bitmap;
+                                         }};
+}
+
+hwloc_cpuset_t getCurrentCpuSet() {
+  static auto guard = getBitmap([](hwloc_cpuset_t *bitmap) {
+    *bitmap = hwloc_bitmap_alloc();
+    const int num_cpus =
+        hwloc_get_nbobjs_by_type(getHwlocTopology(), HWLOC_OBJ_PU);
+    for (int i = 0; i < num_cpus; ++i) {
+      const hwloc_obj_t obj =
+          hwloc_get_obj_by_type(getHwlocTopology(), HWLOC_OBJ_PU, i);
+      hwloc_bitmap_set(*bitmap, obj->os_index);
+    }
+    return bitmap;
+  });
+  return *guard;
+}
+
+void setClosestCpuSetToGpu(const hwloc_cpuset_t bitmap,
+                           const unsigned int gpuRank) {
+  nvmlDevice_t nvml_device;
+  nvmlDeviceGetHandleByIndex(gpuRank, &nvml_device);
+  DLLM_ASSERT_TRUE(hwloc_nvml_get_device_cpuset(getHwlocTopology(), nvml_device,
+                                                bitmap) == 0,
+                   "device rank not found by NVML");
+}
+
+hwloc_cpuset_t getClosestCpuSetToGpu(const unsigned int gpuRank) {
+  static std::unordered_map<unsigned int, std::shared_ptr<hwloc_cpuset_t>> set;
+  if (const auto find = set.find(gpuRank); find == set.end()) {
+    auto bitmap = getBitmap([](hwloc_cpuset_t *bitmap) { return bitmap; });
+    setClosestCpuSetToGpu(*bitmap, gpuRank);
+    set.insert({gpuRank, bitmap});
+    return *bitmap;
+  } else {
+    return *find->second;
+  }
+}
+}  // namespace
 namespace {
 struct Impl_ final : Scheduler::Impl {
   explicit Impl_(int localRank);
@@ -203,67 +268,9 @@ void threadCommTask(const int localRank, const int8_t streamIdx,
     task.reset();
   }
 }
-
-template <typename Impl, typename HostBuffer, typename TaskLoader>
-void threadLoaderTask(const std::function<void()> prepareData,
-                      const int localRank, const int8_t streamIdx,
-                      std::shared_ptr<std::queue<Task>> taskQueue,
-                      const std::shared_ptr<std::atomic<bool>> shutDown,
-                      const std::shared_ptr<std::barrier<>> startBarrier,
-                      const std::shared_ptr<std::barrier<>> endBarrier) {
-  CHECK_CUDART(cudaSetDevice(localRank));
-  HostBuffer xBuffer{}, yBuffer{};
-
-  prepareData();
-  struct ContextCompute {
-    int deviceRank{0};
-    cudaStream_t cudaStream{nullptr};
-  };
-  ContextCompute context{.deviceRank = localRank};
-  startBarrier->arrive_and_wait();
-  const auto stream = c10::cuda::getStreamFromPool(
-      false, static_cast<c10::DeviceIndex>(context.deviceRank));
-  context.cudaStream = stream.stream();
-  c10::cuda::CUDAStreamGuard streamGuard{stream};
-  c10::cuda::CUDAGuard deviceGuard{
-      static_cast<c10::DeviceIndex>(context.deviceRank)};
-
-  while (true) {
-    stream.synchronize();
-    startBarrier->arrive_and_wait();
-    if (shutDown->load()) {
-      break;
-    }
-    auto task = std::move(taskQueue->front());
-    taskQueue->pop();
-    try {
-      for (auto &input = task.input(); auto &t : input) {
-        if (t.impl()->streamIdx() != streamIdx) {
-          if (!t.impl()->event().query()) {
-            t.impl()->event().block();
-          }
-        }
-      }
-      DLLM_NVTX_RANGE_FN(task.name());
-      task();
-      for (auto &output = task.output(); auto &t : output) {
-        t.impl()->streamIdx() = streamIdx;
-        t.impl()->event().record();
-      }
-    } catch (const std::exception &e) {
-      DLLM_ASSERT_TRUE(false, fmt::format("Task {} failed with error: {}",
-                                          task.name(), e.what()));
-    }
-    for (auto &output = task.output(); auto &t : output) {
-      t.impl()->stream() = context.cudaStream;
-    }
-    endBarrier->arrive_and_wait();
-    task.reset();
-  }
-}
 }  // namespace
 
-Impl_::Impl_(int localRank) {
+Impl_::Impl_(int localRank) : Impl{localRank} {
   constexpr int threadNum = 2;
   taskQueue_.resize(threadNum);
   for (auto &queue : taskQueue_) {
