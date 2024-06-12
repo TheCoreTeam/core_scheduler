@@ -1,11 +1,9 @@
 add_executable(dllm_tests
         main.cpp
         test_adamw.cpp
-        #        test_relu.cpp
         test_linear.cpp
         test_gelu.cpp
         test_flash_attention.cpp
-        #        test_add.cpp
         test_embedding.cpp
         test_cross_entropy.cpp
         test_utils.cpp
@@ -14,11 +12,7 @@ add_executable(dllm_tests
 
 target_link_libraries(dllm_tests PRIVATE
         dllm
-        spdlog::spdlog_header_only
-        CUDA::cudart_static
-        CUDA::cublas
         GTest::gtest
-        torch
 )
 
 target_compile_options(dllm_tests PRIVATE
@@ -40,16 +34,10 @@ target_include_directories(dllm_communication_tests PRIVATE
 
 target_link_libraries(dllm_communication_tests PRIVATE
         dllm
-        spdlog::spdlog_header_only
-        CUDA::cudart_static
-        CUDA::cublas
         GTest::gtest
-        MPI::MPI_C
-        nvidia::nccl
-        torch
 )
 
 target_compile_options(dllm_communication_tests PRIVATE
-        $<$<CONFIG:Release>:-O3>
+        $<$<CONFIG:Release>:-Ofast>
         $<$<CONFIG:Debug>:-O0>
 )

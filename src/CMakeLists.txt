@@ -44,7 +44,7 @@ target_include_directories(dllm_core PUBLIC
 )
 
 target_link_libraries(dllm_core PRIVATE CUDA::cudart_static CUDA::cublas CUDA::nvtx3)
-target_link_libraries(dllm_core PRIVATE fmt::fmt-header-only OpenMP::OpenMP_CXX nvidia::nccl)
+target_link_libraries(dllm_core PRIVATE fmt::fmt-header-only OpenMP::OpenMP_CXX)
 target_link_libraries(dllm_core PRIVATE arrow_dataset Arrow::arrow_shared Parquet::parquet_shared)
 target_link_libraries(dllm_core PRIVATE hwloc CUDA::nvml)
 target_link_libraries(dllm_core PUBLIC spdlog::spdlog_header_only MPI::MPI_C torch)
