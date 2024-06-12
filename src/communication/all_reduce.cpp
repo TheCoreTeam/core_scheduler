@@ -48,8 +48,8 @@ AllReduceBucket::AllReduceBucket(const int64_t byteThreshold,
 void AllReduceBucket::push_back(const Scheduler &scheduler, const Comm &comm,
                                 Tensor tensor) const {
   const auto impl = std::dynamic_pointer_cast<AllReduceBucketImpl>(impl_);
-  impl->buffer.push_back(std::move(tensor));
   impl->currentByte += tensor.impl()->tensor().nbytes();
+  impl->buffer.push_back(std::move(tensor));
   if (impl->currentByte >= impl->byteThreshold) {
     AllReduce::runInplace(scheduler, comm, impl->buffer, impl->operation);
     impl->buffer.clear();
