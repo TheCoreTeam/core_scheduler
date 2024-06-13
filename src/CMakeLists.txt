@@ -22,7 +22,6 @@ add_subdirectory(data)
 add_library(dllm_core SHARED
         logger.cpp
         tensor.cpp
-        communication.cpp
         ${DLLM_MODULE_SRCS}
         ${DLLM_COMPUTE_SRCS}
         ${DLLM_MEMORY_SRCS}
@@ -46,11 +45,11 @@ target_include_directories(dllm_core PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/../include/internal
 )
 
-target_link_libraries(dllm_core PRIVATE CUDA::cudart_static CUDA::cublas CUDA::nvtx3)
-target_link_libraries(dllm_core PRIVATE fmt::fmt-header-only OpenMP::OpenMP_CXX)
+target_link_libraries(dllm_core PRIVATE CUDA::cudart CUDA::nvtx3)
+target_link_libraries(dllm_core PRIVATE OpenMP::OpenMP_CXX)
 target_link_libraries(dllm_core PRIVATE arrow_dataset Arrow::arrow_shared Parquet::parquet_shared)
 target_link_libraries(dllm_core PRIVATE hwloc CUDA::nvml)
-target_link_libraries(dllm_core PUBLIC spdlog::spdlog_header_only MPI::MPI_C torch)
+target_link_libraries(dllm_core PUBLIC fmt::fmt-header-only spdlog::spdlog_header_only MPI::MPI_C torch)
 
 target_compile_definitions(dllm_core PRIVATE -DDLLM_ENABLE_INTERNAL_BUILD)
 

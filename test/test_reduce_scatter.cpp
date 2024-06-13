@@ -31,9 +31,13 @@ struct TypeToTorch<double> {
 
 class ReduceScatterNCCLTestFixture : public ::testing::Test {
  protected:
-  dllm::DynamicScheduler scheduler{0};
+  dllm::communication::Comm comm{
+      dllm::communication::getCommWorld(dllm::communication::NCCL)};
+  dllm::DynamicScheduler scheduler{static_cast<int>(comm.getRank())};
 
-  ReduceScatterNCCLTestFixture() { CHECK_CUDART(cudaSetDevice(0)); }
+  ReduceScatterNCCLTestFixture() {
+    CHECK_CUDART(cudaSetDevice(comm.getRank()));
+  }
 
   template <typename T>
   void TestlAllToAllT(int blockSize);
@@ -41,13 +45,11 @@ class ReduceScatterNCCLTestFixture : public ::testing::Test {
 
 template <typename T>
 void ReduceScatterNCCLTestFixture::TestlAllToAllT(const int blockSize) {
-  const at::Device device(at::kCUDA, 0);
+  const at::Device device(at::kCUDA, comm.getRank());
   const at::ScalarType dtype = TypeToTorch<T>::type;
   const auto option = at::TensorOptions().dtype(dtype).device(device);
-  const auto comm =
-      dllm::communication::getCommWorld(dllm::communication::NCCL);
-  const int m = blockSize * comm.getSize();
   at::manual_seed(comm.getRank() + 1);
+  const int m = blockSize * comm.getSize();
   std::vector<dllm::ReadOnlyTensor> vs;
   vs.reserve(comm.getSize());
   for (int i = 0; i < comm.getSize(); ++i) {

@@ -2,6 +2,8 @@
 
 #include <torch/csrc/autograd/generated/variable_factories.h>
 
+#include <torch/csrc/distributed/c10d/ProcessGroupNCCL.hpp>
+
 #include "communication/communication_impl.h"
 #include "logger.h"
 #include "tensor_impl.h"
@@ -20,45 +22,134 @@ constexpr auto toC10dRedOp(const Operation operation) {
 }
 }  // namespace
 
+struct AllReduceBucketImpl final : Bucket::Impl {
+  AllReduceBucketImpl(const int64_t byteThreshold, const Operation operation)
+      : byteThreshold{byteThreshold}, operation{operation} {}
+
+  void apply(const Scheduler &scheduler, const Comm &comm) override;
+
+  const int64_t byteThreshold{};
+  const Operation operation{};
+  std::vector<Tensor> buffer{};
+  int64_t currentByte = 0;
+};
+
+void AllReduceBucketImpl::apply(const Scheduler &scheduler, const Comm &comm) {
+  AllReduce::runInplace(scheduler, comm, buffer, operation);
+  buffer.clear();
+  currentByte = 0;
+}
+
+AllReduceBucket::AllReduceBucket(const int64_t byteThreshold,
+                                 const Operation operation) {
+  impl_ = std::make_shared<AllReduceBucketImpl>(byteThreshold, operation);
+}
+
+void AllReduceBucket::push_back(const Scheduler &scheduler, const Comm &comm,
+                                Tensor tensor) const {
+  const auto impl = std::dynamic_pointer_cast<AllReduceBucketImpl>(impl_);
+  impl->currentByte += tensor.impl()->tensor().nbytes();
+  impl->buffer.push_back(std::move(tensor));
+  if (impl->currentByte >= impl->byteThreshold) {
+    AllReduce::runInplace(scheduler, comm, impl->buffer, impl->operation);
+    impl->buffer.clear();
+    impl->currentByte = 0;
+  }
+}
+
 void AllReduce::runInplace(const Scheduler &scheduler, const Comm &comm,
                            const std::vector<Tensor> &tensors,
                            const Operation operation) {
-  struct Impl : Task::Impl {
-    const Comm comm;
-    const Operation operation;
+  if (tensors.size() == 1) {
+    struct Impl : Task::Impl {
+      const Comm comm;
+      const Operation operation;
 
-    explicit Impl(std::vector<Tensor> output /* tensors */,
-                  std::vector<ReadOnlyTensor> input /* tensors */, Comm comm,
-                  const Operation operation)
-        : Task::Impl{std::move(output), std::move(input), nccl},
-          comm{std::move(comm)},
-          operation{operation} {}
-    void operator()() const override {
-      std::vector<at::Tensor> v;
-      v.reserve(output().size());
-      for (const auto &t : output()) {
-        DLLM_ASSERT_TRUE(t.impl()->tensor().device().type() == at::kCUDA,
-                         "NCCL backend only support CUDA GPUs");
-        v.push_back(t.impl()->tensor());
+      explicit Impl(std::vector<Tensor> output /* tensors */,
+                    std::vector<ReadOnlyTensor> input /* tensors */, Comm comm,
+                    const Operation operation)
+          : Task::Impl{std::move(output), std::move(input), nccl},
+            comm{std::move(comm)},
+            operation{operation} {}
+      void operator()() const override {
+        std::vector<at::Tensor> v;
+        v.reserve(output().size());
+        for (const auto &t : output()) {
+          DLLM_ASSERT_TRUE(t.impl()->tensor().device().type() == at::kCUDA,
+                           "NCCL backend only support CUDA GPUs");
+          v.push_back(t.impl()->tensor());
+        }
+        const auto work = comm.impl()->backend()->allreduce(
+            v, c10d::AllreduceOptions{.reduceOp = toC10dRedOp(operation)});
+        const auto castedWork =
+            dynamic_cast<c10d::ProcessGroupNCCL::WorkNCCL *>(&*work);
+        if (castedWork != nullptr) {
+          castedWork->synchronizeStream();
+        }
       }
-      comm.impl()
-          ->backend()
-          ->allreduce(
-              v, c10d::AllreduceOptions{.reduceOp = toC10dRedOp(operation)})
-          ->wait();
-    }
-    [[nodiscard]] const char *name() const override {
-      return "dllm::communication::AllReduce::runInplace";
-    }
-  };
+      [[nodiscard]] const char *name() const override {
+        return "dllm::communication::AllReduce::runInplace";
+      }
+    };
 
-  std::vector<ReadOnlyTensor> input;
-  input.reserve(tensors.size());
-  for (auto &t : tensors) {
-    input.push_back(t);
+    scheduler.impl()->submit(Task{
+        std::make_shared<Impl>(Impl{tensors, {tensors[0]}, comm, operation})});
+  } else {
+    struct Impl : Task::Impl {
+      const Comm comm;
+      const Operation operation;
+
+      explicit Impl(std::vector<Tensor> output /* tensors */,
+                    std::vector<ReadOnlyTensor> input /* tensors */, Comm comm,
+                    const Operation operation)
+          : Task::Impl{std::move(output), std::move(input), nccl},
+            comm{std::move(comm)},
+            operation{operation} {}
+      void operator()() const override {
+        std::vector<at::Tensor> v;
+        v.reserve(output().size());
+        std::vector<int64_t> sizes;
+        sizes.reserve(output().size());
+        for (const auto &t : output()) {
+          DLLM_ASSERT_TRUE(t.impl()->tensor().device().type() == at::kCUDA,
+                           "NCCL backend only support CUDA GPUs");
+          auto &nakeTensor = t.impl()->tensor();
+          if (!nakeTensor.is_contiguous()) {
+            intermediate().push_back(nakeTensor);
+            nakeTensor = nakeTensor.contiguous();
+          }
+          v.push_back(nakeTensor.view(-1));
+          sizes.push_back(nakeTensor.numel());
+        }
+        std::vector vReduce{at::cat(v)};
+        const auto work = comm.impl()->backend()->allreduce(
+            {vReduce},
+            c10d::AllreduceOptions{.reduceOp = toC10dRedOp(operation)});
+        const auto castedWork =
+            dynamic_cast<c10d::ProcessGroupNCCL::WorkNCCL *>(&*work);
+        if (castedWork != nullptr) {
+          castedWork->synchronizeStream();
+        }
+        intermediate().push_back(vReduce[0]);
+        int64_t start = 0;
+        for (std::size_t i = 0; i + 1 < sizes.size(); ++i) {
+          v[i].copy_(vReduce[0].narrow(0, start, sizes[i]));
+          start += sizes[i];
+        }
+      }
+      [[nodiscard]] const char *name() const override {
+        return "dllm::communication::AllReduce::runInplace";
+      }
+    };
+
+    std::vector<ReadOnlyTensor> input;
+    input.reserve(tensors.size());
+    for (auto &t : tensors) {
+      input.push_back(t);
+    }
+
+    scheduler.impl()->submit(
+        Task{std::make_shared<Impl>(Impl{tensors, input, comm, operation})});
   }
-
-  scheduler.impl()->submit(
-      Task{std::make_shared<Impl>(Impl{tensors, input, comm, operation})});
 }
 }  // namespace dllm::communication

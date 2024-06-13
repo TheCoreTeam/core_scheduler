@@ -3,10 +3,6 @@
 #include <c10/cuda/CUDAGuard.h>
 #include <hwloc.h>
 #include <hwloc/nvml.h>
-#include <tensor_impl.h>
-#include <threading/event.h>
-#include <threading/event_impl.h>
-#include <threading/task_impl.h>
 
 #include <barrier>
 #include <queue>
@@ -14,7 +10,11 @@
 
 #include "logger.h"
 #include "nvtx_helper.h"
+#include "tensor_impl.h"
+#include "threading/event.h"
+#include "threading/event_impl.h"
 #include "threading/scheduler_impl.h"
+#include "threading/task_impl.h"
 
 namespace dllm {
 namespace {
