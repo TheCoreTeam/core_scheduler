@@ -35,6 +35,7 @@ struct LlmDataset::RowAccessor::Impl {
   const std::int64_t inputIdsRowOffset;
   const std::shared_ptr<const arrow::ListArray> targetsRow;
   const std::int64_t targetsRowOffset;
+  const std::int64_t cols_;
 
   [[nodiscard]] Element accessCol(std::int64_t colIdx) const;
 

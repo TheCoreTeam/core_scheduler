@@ -15,6 +15,7 @@ struct LlmDataset::RowAccessor::Impl {
   const std::int64_t inputIdsRowOffset;
   const std::shared_ptr<const arrow::ListArray> targetsRow;
   const std::int64_t targetsRowOffset;
+  const std::int64_t cols_;
 
   [[nodiscard]] Element accessCol(std::int64_t colIdx) const;
 
@@ -51,9 +52,7 @@ LlmDataset::Element LlmDataset::RowAccessor::Impl::accessCol(
   return {input_id, target};
 }
 
-std::int64_t LlmDataset::RowAccessor::Impl::cols() const {
-  return inputIdsRow->length();
-}
+std::int64_t LlmDataset::RowAccessor::Impl::cols() const { return cols_; }
 
 struct LlmDatasetImpl final : Dataset::Impl {
   std::shared_ptr<const arrow::Table> table;
@@ -74,7 +73,9 @@ struct LlmDatasetImpl final : Dataset::Impl {
             std::static_pointer_cast<arrow::ListArray>(inputIdsArray),
             inputIdsArray->value_offset(rowIdx),
             std::static_pointer_cast<arrow::ListArray>(targetsArray),
-            targetsArray->value_offset(rowIdx)});
+            targetsArray->value_offset(rowIdx),
+            inputIdsArray->value_offset(rowIdx + 1) -
+                inputIdsArray->value_offset(rowIdx)});
     return LlmDataset::RowAccessor{std::move(impl)};
   }
 };
@@ -83,7 +84,7 @@ const std::shared_ptr<Dataset::Impl> &Dataset::impl() const { return impl_; }
 
 LlmDataset::LlmDataset(const std::vector<std::string> &path) {
   const auto filesystem = std::make_shared<arrow::fs::LocalFileSystem>();
-  const auto format = std::make_shared<arrow::dataset::ParquetFileFormat>();
+  const auto format = std::make_shared<arrow::dataset::IpcFileFormat>();
 
   auto result = arrow::dataset::FileSystemDatasetFactory::Make(filesystem, path,
                                                                format, {});
