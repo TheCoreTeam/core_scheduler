@@ -31,10 +31,13 @@ struct TypeToTorch<double> {
 
 class ReduceScatterNCCLTestFixture : public ::testing::Test {
  protected:
-  dllm::communication::Comm comm{dllm::communication::getCommWorld(dllm::communication::NCCL)};
+  dllm::communication::Comm comm{
+      dllm::communication::getCommWorld(dllm::communication::NCCL)};
   dllm::DynamicScheduler scheduler{static_cast<int>(comm.getRank())};
 
-  ReduceScatterNCCLTestFixture() { CHECK_CUDART(cudaSetDevice(comm.getRank())); }
+  ReduceScatterNCCLTestFixture() {
+    CHECK_CUDART(cudaSetDevice(comm.getRank()));
+  }
 
   template <typename T>
   void TestlAllToAllT(int blockSize);

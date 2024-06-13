@@ -32,7 +32,8 @@ struct TypeToTorch<double> {
 
 class AllReduceNcclTestFixture : public ::testing::Test {
  protected:
-  dllm::communication::Comm comm{dllm::communication::getCommWorld(dllm::communication::NCCL)};
+  dllm::communication::Comm comm{
+      dllm::communication::getCommWorld(dllm::communication::NCCL)};
   dllm::DynamicScheduler scheduler{static_cast<int>(comm.getRank())};
 
   AllReduceNcclTestFixture() { CHECK_CUDART(cudaSetDevice(comm.getRank())); }
