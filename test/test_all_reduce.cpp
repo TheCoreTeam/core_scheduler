@@ -32,9 +32,10 @@ struct TypeToTorch<double> {
 
 class AllReduceNcclTestFixture : public ::testing::Test {
  protected:
-  dllm::DynamicScheduler scheduler{0};
+  dllm::communication::Comm comm{dllm::communication::getCommWorld(dllm::communication::NCCL)};
+  dllm::DynamicScheduler scheduler{static_cast<int>(comm.getRank())};
 
-  AllReduceNcclTestFixture() { CHECK_CUDART(cudaSetDevice(0)); }
+  AllReduceNcclTestFixture() { CHECK_CUDART(cudaSetDevice(comm.getRank())); }
 
   template <typename T>
   void TestAllReduceT(int m);
@@ -42,11 +43,9 @@ class AllReduceNcclTestFixture : public ::testing::Test {
 
 template <typename T>
 void AllReduceNcclTestFixture::TestAllReduceT(const int m) {
-  const at::Device device(at::kCUDA, 0);
+  const at::Device device(at::kCUDA, comm.getRank());
   const at::ScalarType dtype = TypeToTorch<T>::type;
   const auto option = at::TensorOptions().dtype(dtype).device(device);
-  const auto comm =
-      dllm::communication::getCommWorld(dllm::communication::NCCL);
   at::manual_seed(comm.getRank() + 1);
   dllm::Tensor x, y;
   dllm::compute::Utils::rand(scheduler, x, {m}, option);

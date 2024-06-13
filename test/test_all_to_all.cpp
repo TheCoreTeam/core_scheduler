@@ -32,9 +32,11 @@ struct TypeToTorch<double> {
 
 class AllToAllNCCLTestFixture : public ::testing::Test {
  protected:
-  dllm::DynamicScheduler scheduler{0};
+  dllm::communication::Comm comm{
+      dllm::communication::getCommWorld(dllm::communication::NCCL)};
+  dllm::DynamicScheduler scheduler{static_cast<int>(comm.getRank())};
 
-  AllToAllNCCLTestFixture() { CHECK_CUDART(cudaSetDevice(0)); }
+  AllToAllNCCLTestFixture() { CHECK_CUDART(cudaSetDevice(comm.getRank())); }
 
   template <typename T>
   void TestlAllToAllT(int blockSize);
@@ -42,11 +44,9 @@ class AllToAllNCCLTestFixture : public ::testing::Test {
 
 template <typename T>
 void AllToAllNCCLTestFixture::TestlAllToAllT(const int blockSize) {
-  const at::Device device(at::kCUDA, 0);
+  const at::Device device(at::kCUDA, comm.getRank());
   const at::ScalarType dtype = TypeToTorch<T>::type;
   const auto option = at::TensorOptions().dtype(dtype).device(device);
-  const auto comm =
-      dllm::communication::getCommWorld(dllm::communication::NCCL);
   at::manual_seed(comm.getRank() + 1);
   std::vector<dllm::ReadOnlyTensor> s;
   s.reserve(comm.getSize());
