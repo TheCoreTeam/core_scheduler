@@ -19,7 +19,8 @@ struct DataLoader {
 
 // This API is not stable
 struct LlmDataLoader : DataLoader {
-  void load(const Scheduler &scheduler, Tensor &x, Tensor &y) const;
+  std::unordered_map<std::string, Tensor> load(
+      const Scheduler &scheduler) const;
 
   LlmDataLoader(const LlmDataset &dataset, int64_t batchSize,
                 int64_t numWorkers, bool shuffle, int64_t rank,

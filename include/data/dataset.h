@@ -15,27 +15,15 @@ struct Dataset {
 
 // This API is not stable
 struct LlmDataset : Dataset {
-  explicit LlmDataset(const std::vector<std::string> &path);
+  explicit LlmDataset(const std::string &directory);
 
-  struct Element {
-    std::int64_t input_id;
-    std::int64_t target;
-  };
+  void fillBatch(const std::vector<std::int64_t *> &ptrs,
+                 const std::vector<std::int64_t> &ld, std::int64_t startingRow,
+                 std::int64_t batchSize) const;
 
-  struct RowAccessor {
-    struct Impl;
+  [[nodiscard]] std::int64_t attributeNum() const;
 
-    explicit RowAccessor(std::unique_ptr<Impl> impl);
-
-    [[nodiscard]] Element accessCol(std::int64_t colIdx) const;
-
-    [[nodiscard]] std::int64_t cols() const;
-
-   private:
-    std::unique_ptr<Impl> impl_;
-  };
-
-  [[nodiscard]] RowAccessor accessRow(std::int64_t rowIdx) const;
+  [[nodiscard]] const std::vector<std::string> &attributeNames() const;
 
   [[nodiscard]] std::int64_t rows() const;
 
