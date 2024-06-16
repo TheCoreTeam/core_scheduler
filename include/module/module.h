@@ -8,19 +8,14 @@
 
 #include "logger.h"
 #include "module/state.h"
-#include "tensor.h"
 
 namespace dllm::module {
 struct Module : std::enable_shared_from_this<Module> {
   virtual ~Module() = default;
-  // using ModuleApplyFunction = std::function<void(Module&)>;
-  // using ConstModuleApplyFunction = std::function<void(const Module&)>;
   using NamedModulePointerApplyFunction =
       std::function<void(const std::string&, const std::shared_ptr<Module>&)>;
   using ConstNamedModuleApplyFunction =
       std::function<void(const std::string&, const Module&)>;
-  // using NamedModuleApplyFunction =
-  //     std::function<void(const std::string&, Module&)>;
 
   void apply_to_submodules(
       const NamedModulePointerApplyFunction& function,
@@ -28,44 +23,8 @@ struct Module : std::enable_shared_from_this<Module> {
 
   std::shared_ptr<Module> shared_from_this_checked() const;
 
-  // void apply(const ModuleApplyFunction& function) {
-  //   function(*this);
-  //   apply_to_submodules(
-  //       [&function](const std::string&, const std::shared_ptr<Module>&
-  //       module) {
-  //         function(*module);
-  //       });
-  // }
-
-  // void apply(const ConstModuleApplyFunction& function) const {
-  //   function(*this);
-  //   apply_to_submodules(
-  //       [&function](const std::string&, const std::shared_ptr<Module>&
-  //       module) {
-  //         function(*module);
-  //       });
-  // }
-
-  // void apply(const NamedModulePointerApplyFunction& function,
-  //            const std::string& name_prefix = {}) const {
-  //   function(
-  //       /*name=*/name_prefix, shared_from_this_checked());
-  //   apply_to_submodules(function, name_prefix);
-  // }
-
   void apply(const ConstNamedModuleApplyFunction& function,
              const std::string& name_prefix = {}) const;
-
-  // void apply(const NamedModuleApplyFunction& function,
-  //            const std::string& name_prefix = {}) {
-  //   function(/*name=*/name_prefix, *this);
-  //   apply_to_submodules(
-  //       [&function](const std::string& name,
-  //                   const std::shared_ptr<Module>& module) {
-  //         function(name, *module);
-  //       },
-  //       name_prefix);
-  // }
 
   void register_state(std::string name, std::shared_ptr<State> state);
 
@@ -79,6 +38,10 @@ struct Module : std::enable_shared_from_this<Module> {
 
   OrderedDict<std::string, std::shared_ptr<State>> named_states(
       bool recurse = true) const;
+
+  OrderedDict<std::string, Tensor> named_parameters(bool recurse = true) const;
+
+  void to(TensorOptions options) const;
 
  protected:
   OrderedDict<std::string, std::shared_ptr<Module>> children_;
@@ -102,3 +65,23 @@ std::shared_ptr<ModuleType> Module::register_module(
   return register_module(std::move(name), module_holder.ptr());
 }
 }  // namespace dllm::module
+
+namespace dllm {
+void save(const module::Module& module, const std::string& path);
+
+template <typename Module, typename = std::enable_if_t<
+                               !std::is_base_of_v<module::Module, Module> &&
+                               !std::is_base_of_v<ReadOnlyTensor, Module>>>
+static void save(const Module& module, const std::string& path) {
+  save(*module, path);
+}
+
+void load(const module::Module& module, const std::string& path);
+
+template <typename Module, typename = std::enable_if_t<
+                               !std::is_base_of_v<module::Module, Module> &&
+                               !std::is_base_of_v<ReadOnlyTensor, Module>>>
+static void load(const Module& module, const std::string& path) {
+  load(*module, path);
+}
+}  // namespace dllm

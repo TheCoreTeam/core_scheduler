@@ -64,4 +64,8 @@ Tensor cat(const Scheduler &scheduler, const std::vector<ReadOnlyTensor> &input,
            int64_t dim);
 
 Tensor add(const Scheduler &scheduler, ReadOnlyTensor x, ReadOnlyTensor y);
+
+void zero_(const Scheduler &scheduler, const Tensor &tensor);
+
+Tensor clone(const Scheduler &scheduler, Tensor tensor);
 }  // namespace dllm::compute::Utils
