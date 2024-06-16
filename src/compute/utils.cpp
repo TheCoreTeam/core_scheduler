@@ -511,4 +511,36 @@ Tensor add(const Scheduler &scheduler, ReadOnlyTensor x, ReadOnlyTensor y) {
       Task{std::make_shared<Impl>(Impl{{output}, {x, y}})});
   return output;
 }
+
+void zero_(const Scheduler &scheduler, const Tensor &tensor) {
+  struct Impl : Task::Impl {
+    explicit Impl(Tensor tensor /* tensor */)
+        : Task::Impl{{tensor}, {tensor}, compute} {}
+    void operator()() const override {
+      (void)output()[0].impl()->tensor().zero_();
+    }
+    [[nodiscard]] const char *name() const override {
+      return "dllm::compute::Utils::zero_";
+    }
+  };
+
+  scheduler.impl()->submit(Task{std::make_shared<Impl>(Impl{tensor})});
+}
+
+Tensor clone(const Scheduler &scheduler, Tensor tensor) {
+  struct Impl : Task::Impl {
+    explicit Impl(Tensor result, ReadOnlyTensor input)
+        : Task::Impl{{result}, {input}, compute} {}
+    void operator()() const override {
+      output()[0].impl()->tensor() = input()[0].impl()->tensor().clone();
+    }
+    [[nodiscard]] const char *name() const override {
+      return "dllm::compute::Utils::clone";
+    }
+  };
+
+  Tensor result;
+  scheduler.impl()->submit(Task{std::make_shared<Impl>(Impl{result, tensor})});
+  return result;
+}
 }  // namespace dllm::compute::Utils
