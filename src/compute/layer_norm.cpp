@@ -34,8 +34,8 @@ LayerNorm::State::increments() {
   return dict;
 }
 
-void LayerNorm::init(const Scheduler& scheduler, std::shared_ptr<State>& state,
-                     const Options& options) {
+std::shared_ptr<LayerNorm::State> LayerNorm::init(const Scheduler& scheduler,
+                                                  const Options& options) {
   DLLM_ASSERT_TRUE(options.elementwise_affine() == true,
                    "elementwise_affine must be enabled now");
   at::TensorOptions tensorOptions{};
@@ -46,7 +46,6 @@ void LayerNorm::init(const Scheduler& scheduler, std::shared_ptr<State>& state,
     tensorOptions = tensorOptions.dtype(options.dtype());
   }
   Tensor weight;
-  Task task{nullptr};
   if (options.bias()) {
     struct Impl : Task::Impl {
       const Options options;
@@ -69,9 +68,10 @@ void LayerNorm::init(const Scheduler& scheduler, std::shared_ptr<State>& state,
     };
 
     Tensor bias;
-    task = Task{
+    auto task = Task{
         std::make_shared<Impl>(Impl{{weight, bias}, options, tensorOptions})};
-    state = std::make_shared<State>(
+    scheduler.impl()->submit(std::move(task));
+    return std::make_shared<State>(
         State::Forward{std::move(weight), std::move(bias)}, State::Backward{},
         State::Args{options.normalized_shape(), options.eps(),
                     options.elementwise_affine(), options.bias()});
@@ -94,22 +94,23 @@ void LayerNorm::init(const Scheduler& scheduler, std::shared_ptr<State>& state,
       }
     };
 
-    task = Task{std::make_shared<Impl>(Impl{{weight}, options, tensorOptions})};
-    state = std::make_shared<State>(
+    auto task =
+        Task{std::make_shared<Impl>(Impl{{weight}, options, tensorOptions})};
+    scheduler.impl()->submit(std::move(task));
+    return std::make_shared<State>(
         State::Forward{std::move(weight)}, State::Backward{},
         State::Args{options.normalized_shape(), options.eps(),
                     options.elementwise_affine(), options.bias()});
   }
-  scheduler.impl()->submit(std::move(task));
 }
 
-void LayerNorm::forward(const Scheduler& scheduler,
-                        const std::shared_ptr<State>& state, Tensor& output,
-                        const ReadOnlyTensor& input) {
+Tensor LayerNorm::forward(const Scheduler& scheduler,
+                          const std::shared_ptr<State>& state,
+                          const ReadOnlyTensor& input) {
   Tensor mean;
   Tensor rstd;
   Task task{nullptr};
-  Tensor output_;
+  Tensor output;
   if (state->args.bias) {
     struct Impl : Task::Impl {
       State::Args args;
@@ -134,7 +135,7 @@ void LayerNorm::forward(const Scheduler& scheduler,
     };
 
     task = Task{std::make_shared<Impl>(
-        Impl{{output_, mean, rstd},
+        Impl{{output, mean, rstd},
              {input, state->forward.weight, state->forward.bias},
              state->args})};
   } else {
@@ -160,21 +161,20 @@ void LayerNorm::forward(const Scheduler& scheduler,
     };
 
     task = Task{std::make_shared<Impl>(Impl{
-        {output_, mean, rstd}, {input, state->forward.weight}, state->args})};
+        {output, mean, rstd}, {input, state->forward.weight}, state->args})};
   }
   state->backward.input = input;
   state->backward.mean = mean;
   state->backward.rstd = rstd;
-  output = output_;
   scheduler.impl()->submit(std::move(task));
+  return output;
 }
 
-void LayerNorm::backward(const Scheduler& scheduler,
-                         const std::shared_ptr<State>& state,
-                         Tensor& grad_input,
-                         const ReadOnlyTensor& grad_output) {
+Tensor LayerNorm::backward(const Scheduler& scheduler,
+                           const std::shared_ptr<State>& state,
+                           const ReadOnlyTensor& grad_output) {
   auto weight = static_cast<const ReadOnlyTensor&>(state->forward.weight);
-  Tensor grad_input_;
+  Tensor grad_input;
   Task task{nullptr};
   if (state->args.bias) {
     struct Impl : Task::Impl {
@@ -213,11 +213,11 @@ void LayerNorm::backward(const Scheduler& scheduler,
       }
     };
 
-    task = Task{std::make_shared<Impl>(Impl{
-        {grad_input_, state->forward.grad_weight, state->forward.grad_bias},
-        {grad_output, state->backward.input, state->backward.mean,
-         state->backward.rstd, state->forward.weight, state->forward.bias},
-        state->args})};
+    task = Task{std::make_shared<Impl>(
+        Impl{{grad_input, state->forward.grad_weight, state->forward.grad_bias},
+             {grad_output, state->backward.input, state->backward.mean,
+              state->backward.rstd, state->forward.weight, state->forward.bias},
+             state->args})};
   } else {
     struct Impl : Task::Impl {
       State::Args args;
@@ -249,7 +249,7 @@ void LayerNorm::backward(const Scheduler& scheduler,
     };
 
     task = Task{std::make_shared<Impl>(
-        Impl{{grad_input_, state->forward.grad_weight},
+        Impl{{grad_input, state->forward.grad_weight},
              {grad_output, state->backward.input, state->backward.mean,
               state->backward.rstd, state->forward.weight},
              state->args})};
@@ -258,8 +258,8 @@ void LayerNorm::backward(const Scheduler& scheduler,
   state->backward.input.reset();
   state->backward.mean.reset();
   state->backward.rstd.reset();
-  grad_input = grad_input_;
   scheduler.impl()->submit(std::move(task));
+  return grad_input;
 }
 
 }  // namespace dllm::compute

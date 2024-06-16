@@ -5,15 +5,14 @@
 namespace dllm::module {
 EmbeddingImpl::EmbeddingImpl(const Scheduler& scheduler,
                              const Options& options) {
-  std::shared_ptr<compute::Embedding::State> state;
-  compute::Embedding::init(scheduler, state, options);
+  const auto state = compute::Embedding::init(scheduler, options);
   register_state("EmbeddingState", state);
   state_ = state;
 }
 
-void EmbeddingImpl::forward(const Scheduler& scheduler, Tensor& output,
-                            const ReadOnlyTensor& input) const {
-  compute::Embedding::forward(scheduler, state(), output, input);
+Tensor EmbeddingImpl::forward(const Scheduler& scheduler,
+                              const ReadOnlyTensor& input) const {
+  return compute::Embedding::forward(scheduler, state(), input);
 }
 
 void EmbeddingImpl::backward(const Scheduler& scheduler,

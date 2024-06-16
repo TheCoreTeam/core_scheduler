@@ -14,14 +14,14 @@ struct GeLU {
     } args;
   };
 
-  static void init(const Scheduler &scheduler, std::shared_ptr<State> &state);
+  static std::shared_ptr<State> init(const Scheduler &scheduler);
 
-  static void forward(const Scheduler &scheduler,
-                      const std::shared_ptr<State> &state, Tensor &output,
-                      const ReadOnlyTensor &input);
+  static Tensor forward(const Scheduler &scheduler,
+                        const std::shared_ptr<State> &state,
+                        const ReadOnlyTensor &input);
 
-  static void backward(const Scheduler &scheduler,
-                       const std::shared_ptr<State> &state, Tensor &grad_input,
-                       const ReadOnlyTensor &grad_output);
+  static Tensor backward(const Scheduler &scheduler,
+                         const std::shared_ptr<State> &state,
+                         const ReadOnlyTensor &grad_output);
 };
 }  // namespace dllm::compute

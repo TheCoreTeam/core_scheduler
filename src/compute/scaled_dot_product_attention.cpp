@@ -9,18 +9,18 @@
 #include "threading/task_impl.h"
 
 namespace dllm::compute {
-void ScaledDotProductFlashAttention::init(const Scheduler &scheduler,
-                                          std::shared_ptr<State> &state,
-                                          const Options &options) {
-  state = std::make_shared<State>(
+std::shared_ptr<ScaledDotProductFlashAttention::State>
+ScaledDotProductFlashAttention::init(const Scheduler &scheduler,
+                                     const Options &options) {
+  return std::make_shared<State>(
       State::Forward{}, State::Backward{},
       State::Args{options.dropout_p(), options.is_causal(),
                   options.return_debug_mask(), options.scale()});
 }
 
-void ScaledDotProductFlashAttention::forward(
+Tensor ScaledDotProductFlashAttention::forward(
     const Scheduler &scheduler, const std::shared_ptr<State> &state,
-    Tensor &output, const ReadOnlyTensor &query, const ReadOnlyTensor &key,
+    const ReadOnlyTensor &query, const ReadOnlyTensor &key,
     const ReadOnlyTensor &value) {
   struct Impl : Task::Impl {
     const State::Args args;
@@ -57,7 +57,7 @@ void ScaledDotProductFlashAttention::forward(
     }
   };
 
-  Tensor output_;
+  Tensor output;
   const Tensor logsumexp;
   const Tensor cum_seq_q;
   const Tensor cum_seq_k;
@@ -66,7 +66,7 @@ void ScaledDotProductFlashAttention::forward(
   state->backward.query = query;
   state->backward.key = key;
   state->backward.value = value;
-  state->backward.out = output_;
+  state->backward.out = output;
   state->backward.logsumexp = logsumexp;
   state->backward.cum_seq_q = cum_seq_q;
   state->backward.cum_seq_k = cum_seq_k;
@@ -74,17 +74,16 @@ void ScaledDotProductFlashAttention::forward(
   state->backward.philox_offset = philox_offset;
   // TODO(Jie): support different attention algorithm
   // size
-  output = output_;
   scheduler.impl()->submit(Task{std::make_shared<Impl>(Impl{
-      {output_, logsumexp, cum_seq_q, cum_seq_k, philox_seed, philox_offset},
+      {output, logsumexp, cum_seq_q, cum_seq_k, philox_seed, philox_offset},
       {query, key, value},
       state->args,
       state->backward.max})});
+  return output;
 }
 
-void ScaledDotProductFlashAttention::backward(
+std::array<Tensor, 3> ScaledDotProductFlashAttention::backward(
     const Scheduler &scheduler, const std::shared_ptr<State> &state,
-    Tensor &grad_query, Tensor &grad_key, Tensor &grad_value,
     const ReadOnlyTensor &grad_out) {
   struct Impl : Task::Impl {
     const State::Args args;
@@ -132,12 +131,12 @@ void ScaledDotProductFlashAttention::backward(
     }
   };
 
-  Tensor grad_query_;
-  Tensor grad_key_;
-  Tensor grad_value_;
+  Tensor grad_query;
+  Tensor grad_key;
+  Tensor grad_value;
 
   scheduler.impl()->submit(Task{std::make_shared<Impl>(Impl{
-      {grad_query_, grad_key_, grad_value_},
+      {grad_query, grad_key, grad_value},
       {grad_out, state->backward.query, state->backward.key,
        state->backward.value, state->backward.out, state->backward.logsumexp,
        state->backward.cum_seq_q, state->backward.cum_seq_k,
@@ -155,8 +154,6 @@ void ScaledDotProductFlashAttention::backward(
   state->backward.cum_seq_k.reset();
   state->backward.philox_seed.reset();
   state->backward.philox_offset.reset();
-  grad_query = grad_query_;
-  grad_key = grad_key_;
-  grad_value = grad_value_;
+  return {grad_query, grad_key, grad_value};
 }
 }  // namespace dllm::compute

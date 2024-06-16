@@ -56,31 +56,24 @@ void TestEmbedding::TestRoutine(const double tol_forward,
   at::Device device = at::kCUDA;
   torch::Dtype dtype = TypeToTorch<Element>::type;
 
-  dllm::Tensor input;
-  std::shared_ptr<dllm::compute::Embedding::State> state;
-  dllm::compute::Utils::randint(
-      scheduler, input, 0, 3, {B, T},
+  auto input = dllm::compute::Utils::randint(
+      scheduler, 0, 3, {B, T},
       torch::TensorOptions().dtype(torch::kInt).device(device));
-  dllm::compute::Embedding::init(
-      scheduler, state,
+  auto state = dllm::compute::Embedding::init(
+      scheduler,
       dllm::compute::Embedding::Options(vocab, d).device(device).dtype(dtype));
 
-  dllm::Tensor output;
-  dllm::compute::Embedding::forward(scheduler, state, output, input);
+  auto output = dllm::compute::Embedding::forward(scheduler, state, input);
   output.wait();
-  dllm::Tensor grad_output;
-  dllm::compute::Utils::randn_like(scheduler, grad_output, output);
+  auto grad_output = dllm::compute::Utils::randn_like(scheduler, output);
   dllm::compute::Embedding::backward(scheduler, state, grad_output);
-  torch::Tensor input_torch;
-  dllm::memory::toTorch(scheduler, input_torch, input);
+  auto input_torch = dllm::memory::toTorch(scheduler, input);
   input.wait();
-  torch::Tensor weight_torch;
-  dllm::memory::toTorch(scheduler, weight_torch, state->forward.weight);
+  auto weight_torch = dllm::memory::toTorch(scheduler, state->forward.weight);
   state->forward.weight.wait();
   weight_torch.requires_grad_(true);
   const auto output_torch = at::embedding(weight_torch, input_torch);
-  torch::Tensor grad_output_torch;
-  dllm::memory::toTorch(scheduler, grad_output_torch, grad_output);
+  auto grad_output_torch = dllm::memory::toTorch(scheduler, grad_output);
   grad_output.wait();
   output_torch.backward(grad_output_torch);
 

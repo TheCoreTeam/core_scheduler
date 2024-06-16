@@ -3,72 +3,65 @@
 #include "threading/scheduler.h"
 
 namespace dllm::compute::Utils {
-void sum(const Scheduler &scheduler, Tensor &output,
-         const ReadOnlyTensor &input, IntArrayRef dim,
-         bool keep_dim = false,
-         c10::optional<at::ScalarType> dtype = c10::nullopt);
+Tensor sum(const Scheduler &scheduler, const ReadOnlyTensor &input,
+           IntArrayRef dim, bool keep_dim = false,
+           c10::optional<at::ScalarType> dtype = c10::nullopt);
 
-inline void sum(const Scheduler &scheduler, Tensor &output,
-                const ReadOnlyTensor &input, const int64_t dim,
-                const bool keep_dim = false,
-                const c10::optional<at::ScalarType> dtype = c10::nullopt) {
-  return sum(scheduler, output, input, IntArrayRef{dim}, keep_dim, dtype);
+inline Tensor sum(const Scheduler &scheduler, const ReadOnlyTensor &input,
+                  const int64_t dim, const bool keep_dim = false,
+                  const c10::optional<at::ScalarType> dtype = c10::nullopt) {
+  return sum(scheduler, input, IntArrayRef{dim}, keep_dim, dtype);
 }
 
-void range(const Scheduler &scheduler, Tensor &tensor, const at::Scalar &start,
-           const at::Scalar &end, TensorOptions options = {});
+Tensor range(const Scheduler &scheduler, const at::Scalar &start,
+             const at::Scalar &end, TensorOptions options = {});
 
-void arange(const Scheduler &scheduler, Tensor &tensor, const at::Scalar &start,
-            const at::Scalar &end, TensorOptions options = {});
+Tensor arange(const Scheduler &scheduler, const at::Scalar &start,
+              const at::Scalar &end, TensorOptions options = {});
 
-void arange(const Scheduler &scheduler, Tensor &tensor, const at::Scalar &start,
-            const at::Scalar &end, const at::Scalar &step,
+Tensor arange(const Scheduler &scheduler, const at::Scalar &start,
+              const at::Scalar &end, const at::Scalar &step,
+              TensorOptions options = {});
+
+Tensor randint(const Scheduler &scheduler, int64_t low, int64_t high,
+               IntArrayRef size, TensorOptions options = at::kLong);
+
+Tensor empty(const Scheduler &scheduler, IntArrayRef size,
+             TensorOptions options = {});
+
+Tensor empty_like(const Scheduler &scheduler, const ReadOnlyTensor &src);
+
+Tensor ones(const Scheduler &scheduler, IntArrayRef size,
             TensorOptions options = {});
 
-void randint(const Scheduler &scheduler, Tensor &tensor, int64_t low,
-             int64_t high, IntArrayRef size,
-             TensorOptions options = at::kLong);
+Tensor ones_like(const Scheduler &scheduler, const ReadOnlyTensor &src);
 
-void empty(const Scheduler &scheduler, Tensor &tensor, IntArrayRef size,
-           TensorOptions options = {});
+Tensor zeros(const Scheduler &scheduler, IntArrayRef size,
+             TensorOptions options = {});
 
-void empty_like(const Scheduler &scheduler, Tensor &dst,
-                const ReadOnlyTensor &src);
+Tensor zeros_like(const Scheduler &scheduler, const ReadOnlyTensor &src);
 
-void ones(const Scheduler &scheduler, Tensor &tensor, IntArrayRef size,
-          TensorOptions options = {});
+Tensor rand(const Scheduler &scheduler, IntArrayRef size,
+            TensorOptions options = {});
 
-void ones_like(const Scheduler &scheduler, Tensor &dst,
-               const ReadOnlyTensor &src);
+Tensor rand_like(const Scheduler &scheduler, const ReadOnlyTensor &src);
 
-void zeros(const Scheduler &scheduler, Tensor &tensor, IntArrayRef size,
-           TensorOptions options = {});
+Tensor randn(const Scheduler &scheduler, IntArrayRef size,
+             TensorOptions options = {});
 
-void zeros_like(const Scheduler &scheduler, Tensor &dst,
-                const ReadOnlyTensor &src);
+Tensor randn_like(const Scheduler &scheduler, const ReadOnlyTensor &src);
 
-void rand(const Scheduler &scheduler, Tensor &tensor, IntArrayRef size,
-          TensorOptions options = {});
+std::vector<Tensor> split(const Scheduler &scheduler, const ReadOnlyTensor &src,
+                          const int64_t &split_size, const int64_t &dim);
 
-void rand_like(const Scheduler &scheduler, Tensor &dst,
-               const ReadOnlyTensor &src);
+Tensor view(const Scheduler &scheduler, const ReadOnlyTensor &input,
+            IntArrayRef size);
 
-void randn(const Scheduler &scheduler, Tensor &tensor, IntArrayRef size,
-           TensorOptions options = {});
+Tensor broadcast_to(const Scheduler &scheduler, const ReadOnlyTensor &input,
+                    IntArrayRef size);
 
-void randn_like(const Scheduler &scheduler, Tensor &dst,
-                const ReadOnlyTensor &src);
+Tensor cat(const Scheduler &scheduler, const std::vector<ReadOnlyTensor> &input,
+           int64_t dim);
 
-void split(const Scheduler &scheduler, std::vector<Tensor> &output,
-           const ReadOnlyTensor &src, const int64_t &split_size,
-           const int64_t &dim);
-
-void view(const Scheduler &scheduler, Tensor &output,
-          const ReadOnlyTensor &input, IntArrayRef size);
-
-void broadcast_to(const Scheduler &scheduler, Tensor &output,
-                  const ReadOnlyTensor &input, IntArrayRef size);
-
-void cat(const Scheduler &scheduler, Tensor &output,
-         const std::vector<ReadOnlyTensor> &input, int64_t dim);
+Tensor add(const Scheduler &scheduler, ReadOnlyTensor x, ReadOnlyTensor y);
 }  // namespace dllm::compute::Utils

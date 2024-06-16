@@ -48,15 +48,13 @@ void AllReduceNcclTestFixture::TestAllReduceT(const int m) {
   const at::ScalarType dtype = TypeToTorch<T>::type;
   const auto option = at::TensorOptions().dtype(dtype).device(device);
   at::manual_seed(comm.getRank() + 1);
-  dllm::Tensor x, y;
-  dllm::compute::Utils::rand(scheduler, x, {m}, option);
-  dllm::compute::Utils::rand(scheduler, y, {m}, option);
+  auto x = dllm::compute::Utils::rand(scheduler, {m}, option);
+  auto y = dllm::compute::Utils::rand(scheduler, {m}, option);
   dllm::communication::AllReduce::runInplace(scheduler, comm, {x, y},
                                              dllm::communication::SUM);
 
-  at::Tensor x_torch, y_torch;
-  dllm::memory::toTorch(scheduler, x_torch, x);
-  dllm::memory::toTorch(scheduler, y_torch, y);
+  auto x_torch = dllm::memory::toTorch(scheduler, x);
+  auto y_torch = dllm::memory::toTorch(scheduler, y);
   x.wait();
   y.wait();
 

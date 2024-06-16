@@ -40,17 +40,17 @@ struct ScaledDotProductFlashAttention {
     DLLM_ARG(c10::optional<double>, scale) = {};
   };
 
-  static void init(const Scheduler &scheduler, std::shared_ptr<State> &state,
-                   const Options &options = {});
+  static std::shared_ptr<State> init(const Scheduler &scheduler,
+                                     const Options &options = {});
 
-  static void forward(const Scheduler &scheduler,
-                      const std::shared_ptr<State> &state, Tensor &output,
-                      const ReadOnlyTensor &query, const ReadOnlyTensor &key,
-                      const ReadOnlyTensor &value);
+  static Tensor forward(const Scheduler &scheduler,
+                        const std::shared_ptr<State> &state,
+                        const ReadOnlyTensor &query, const ReadOnlyTensor &key,
+                        const ReadOnlyTensor &value);
 
-  static void backward(const Scheduler &scheduler,
-                       const std::shared_ptr<State> &state, Tensor &grad_query,
-                       Tensor &grad_key, Tensor &grad_value,
-                       const ReadOnlyTensor &grad_out);
+  // grad_query, grad_key, grad_value
+  static std::array<Tensor, 3> backward(const Scheduler &scheduler,
+                                        const std::shared_ptr<State> &state,
+                                        const ReadOnlyTensor &grad_out);
 };
 }  // namespace dllm::compute

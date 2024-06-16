@@ -31,15 +31,15 @@ struct CrossEntropy {
     DLLM_ARG(double, label_smoothing) = 0.0;
   };
 
-  static void init(const Scheduler &scheduler, std::shared_ptr<State> &state,
-                   const Options &options = {});
+  static std::shared_ptr<State> init(const Scheduler &scheduler,
+                                     const Options &options = {});
 
-  static void forward(const Scheduler &scheduler,
-                      const std::shared_ptr<State> &state, Tensor &loss,
-                      const ReadOnlyTensor &input,
-                      const ReadOnlyTensor &target);
+  static Tensor forward(const Scheduler &scheduler,
+                        const std::shared_ptr<State> &state,
+                        const ReadOnlyTensor &input,
+                        const ReadOnlyTensor &target);
 
-  static void backward(const Scheduler &scheduler,
-                       const std::shared_ptr<State> &state, Tensor &grad_input);
+  static Tensor backward(const Scheduler &scheduler,
+                         const std::shared_ptr<State> &state);
 };
 }  // namespace dllm::compute

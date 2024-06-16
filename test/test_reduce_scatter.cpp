@@ -53,17 +53,14 @@ void ReduceScatterNCCLTestFixture::TestlAllToAllT(const int blockSize) {
   std::vector<dllm::ReadOnlyTensor> vs;
   vs.reserve(comm.getSize());
   for (int i = 0; i < comm.getSize(); ++i) {
-    dllm::Tensor t;
-    dllm::compute::Utils::rand(scheduler, t, {blockSize}, option);
+    auto t = dllm::compute::Utils::rand(scheduler, {blockSize}, option);
     vs.push_back(t);
   }
-  dllm::Tensor r;
-  dllm::compute::Utils::empty(scheduler, r, {blockSize}, option);
+  auto r = dllm::compute::Utils::empty(scheduler, {blockSize}, option);
   dllm::communication::ReduceScatter::run(scheduler, comm, {r}, {vs},
                                           dllm::communication::SUM);
 
-  at::Tensor x_torch;
-  dllm::memory::toTorch(scheduler, x_torch, r);
+  auto x_torch = dllm::memory::toTorch(scheduler, r);
   r.wait();
 
   auto accumulator = torch::zeros({m}, option);

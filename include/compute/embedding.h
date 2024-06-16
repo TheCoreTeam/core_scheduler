@@ -46,12 +46,12 @@ struct Embedding {
     DLLM_ARG(c10::optional<at::ScalarType>, dtype) = {};
   };
 
-  static void init(const Scheduler &scheduler, std::shared_ptr<State> &state,
-                   const Options &options);
+  static std::shared_ptr<State> init(const Scheduler &scheduler,
+                                     const Options &options);
 
-  static void forward(const Scheduler &scheduler,
-                      const std::shared_ptr<State> &state, Tensor &output,
-                      const ReadOnlyTensor &indices);
+  static Tensor forward(const Scheduler &scheduler,
+                        const std::shared_ptr<State> &state,
+                        const ReadOnlyTensor &indices);
 
   static void backward(const Scheduler &scheduler,
                        const std::shared_ptr<State> &state,

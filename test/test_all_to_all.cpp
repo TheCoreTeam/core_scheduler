@@ -51,15 +51,13 @@ void AllToAllNCCLTestFixture::TestlAllToAllT(const int blockSize) {
   std::vector<dllm::ReadOnlyTensor> s;
   s.reserve(comm.getSize());
   for (int i = 0; i < comm.getSize(); ++i) {
-    dllm::Tensor t;
-    dllm::compute::Utils::rand(scheduler, t, {blockSize}, option);
+    auto t = dllm::compute::Utils::rand(scheduler, {blockSize}, option);
     s.push_back(t);
   }
   std::vector<dllm::Tensor> r;
   r.reserve(comm.getSize());
   for (int i = 0; i < comm.getSize(); ++i) {
-    dllm::Tensor t;
-    dllm::compute::Utils::empty(scheduler, t, {blockSize}, option);
+    auto t = dllm::compute::Utils::empty(scheduler, {blockSize}, option);
     r.push_back(t);
   }
   dllm::communication::AllToAll::run(scheduler, comm, r, s);
@@ -67,7 +65,7 @@ void AllToAllNCCLTestFixture::TestlAllToAllT(const int blockSize) {
   std::vector<at::Tensor> r_torch;
   r_torch.resize(r.size());
   for (int i = 0; i < comm.getSize(); ++i) {
-    dllm::memory::toTorch(scheduler, r_torch[i], r[i]);
+    r_torch[i] = dllm::memory::toTorch(scheduler, r[i]);
     r[i].wait();
   }
 

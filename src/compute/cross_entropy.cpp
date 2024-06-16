@@ -9,20 +9,20 @@
 #include "threading/task_impl.h"
 
 namespace dllm::compute {
-void CrossEntropy::init(const Scheduler &scheduler,
-                        std::shared_ptr<State> &state, const Options &options) {
+std::shared_ptr<CrossEntropy::State> CrossEntropy::init(
+    const Scheduler &scheduler, const Options &options) {
   DLLM_ASSERT_TRUE(options.label_smoothing() == 0.0,
                    "We do not support label_smoothing");
-  state = std::make_shared<State>(
+  return std::make_shared<State>(
       State::Forward{}, State::Backward{},
       State::Args{options.reduction(), options.ignore_index(),
                   options.label_smoothing()});
 }
 
-void CrossEntropy::forward(const Scheduler &scheduler,
-                           const std::shared_ptr<State> &state, Tensor &loss,
-                           const ReadOnlyTensor &input,
-                           const ReadOnlyTensor &target) {
+Tensor CrossEntropy::forward(const Scheduler &scheduler,
+                             const std::shared_ptr<State> &state,
+                             const ReadOnlyTensor &input,
+                             const ReadOnlyTensor &target) {
   struct Impl : Task::Impl {
     State::Args args;
 
@@ -50,7 +50,7 @@ void CrossEntropy::forward(const Scheduler &scheduler,
     }
   };
 
-  loss = Tensor{};
+  Tensor loss{};
   Tensor log_probs;
   Tensor total_weight;
   state->backward.log_probs = log_probs;
@@ -62,11 +62,11 @@ void CrossEntropy::forward(const Scheduler &scheduler,
       Task{std::make_shared<Impl>(Impl{{log_probs, loss, total_weight},
                                        {state->forward.weight, input, target},
                                        state->args})});
+  return loss;
 }
 
-void CrossEntropy::backward(const Scheduler &scheduler,
-                            const std::shared_ptr<State> &state,
-                            Tensor &grad_input) {
+Tensor CrossEntropy::backward(const Scheduler &scheduler,
+                              const std::shared_ptr<State> &state) {
   struct Impl : Task::Impl {
     State::Args args;
 
@@ -95,7 +95,7 @@ void CrossEntropy::backward(const Scheduler &scheduler,
     }
   };
 
-  grad_input = Tensor{};
+  Tensor grad_input{};
   // size
   scheduler.impl()->submit(Task{std::make_shared<Impl>(Impl{
       {grad_input},
@@ -107,5 +107,6 @@ void CrossEntropy::backward(const Scheduler &scheduler,
   state->backward.total_weight.reset();
   state->backward.target.reset();
   state->backward.loss.reset();
+  return grad_input;
 }
 }  // namespace dllm::compute
