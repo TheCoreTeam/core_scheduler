@@ -141,7 +141,7 @@ void threadLoaderTask(
     endBarrier->arrive_and_wait();
     event.synchronize();
     iteration += threadNum * worldSize;
-    if (iteration > iterations) {
+    if (iteration >= iterations) {
       iteration = processRank + threadRank * worldSize;
     }
   }
