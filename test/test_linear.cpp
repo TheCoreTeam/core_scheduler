@@ -41,33 +41,25 @@ void TestBackwardT(dllm::Scheduler &scheduler) {
   const torch::Device device = torch::kCUDA;
   const torch::Dtype dtype = TypeToTorch<Element>::type;
   const auto option = torch::TensorOptions().dtype(dtype).device(device);
-  dllm::Tensor y;
-  dllm::Tensor dx;
-  dllm::Tensor x;
-  dllm::compute::Utils::randn(scheduler, x, {m, s, k}, option);
-  std::shared_ptr<dllm::compute::Linear::State> state;
-  dllm::compute::Linear::init(
-      scheduler, state,
+  auto x = dllm::compute::Utils::randn(scheduler, {m, s, k}, option);
+  auto state = dllm::compute::Linear::init(
+      scheduler,
       dllm::compute::Linear::Options{k, n}.bias(false).device(device).dtype(
           dtype));
-  dllm::compute::Linear::forward(scheduler, state, y, x);
-  dllm::Tensor yGrad;
-  dllm::compute::Utils::randn_like(scheduler, yGrad, y);
-  dllm::compute::Linear::backwardInput(scheduler, state, dx, yGrad);
+  auto y = dllm::compute::Linear::forward(scheduler, state, x);
+  auto yGrad = dllm::compute::Utils::randn_like(scheduler, y);
+  auto dx = dllm::compute::Linear::backwardInput(scheduler, state, yGrad);
   dllm::compute::Linear::backwardParameter(scheduler, state, yGrad);
   dx.wait();
   state->forward.grad_weight.wait();
-  torch::Tensor xRef;
-  dllm::memory::toTorch(scheduler, xRef, x);
+  auto xRef = dllm::memory::toTorch(scheduler, x);
   x.wait();
   xRef.requires_grad_(true);
-  torch::Tensor wRef;
-  dllm::memory::toTorch(scheduler, wRef, state->forward.weight);
+  auto wRef = dllm::memory::toTorch(scheduler, state->forward.weight);
   state->forward.weight.wait();
   wRef.requires_grad_(true);
   auto yRef = torch::linear(xRef, wRef);
-  torch::Tensor yGradRef;
-  dllm::memory::toTorch(scheduler, yGradRef, yGrad);
+  auto yGradRef = dllm::memory::toTorch(scheduler, yGrad);
   yGrad.wait();
   yRef.backward(yGradRef);
 
@@ -92,31 +84,24 @@ void TestModuleT(dllm::Scheduler &scheduler) {
   const torch::Device device = torch::kCUDA;
   const torch::Dtype dtype = TypeToTorch<Element>::type;
   const auto option = torch::TensorOptions().dtype(dtype).device(device);
-  dllm::Tensor y;
-  dllm::Tensor dx;
-  dllm::Tensor x;
-  dllm::compute::Utils::randn(scheduler, x, {m, s, k}, option);
+  auto x = dllm::compute::Utils::randn(scheduler, {m, s, k}, option);
   dllm::module::Linear fc{
       scheduler,
       dllm::module::Linear::Options{k, n}.bias(false).device(device).dtype(
           dtype)};
-  fc->forward(scheduler, y, x);
-  dllm::Tensor yGrad;
-  dllm::compute::Utils::randn_like(scheduler, yGrad, y);
-  fc->backward(scheduler, dx, yGrad);
+  auto y = fc->forward(scheduler, x);
+  auto yGrad = dllm::compute::Utils::randn_like(scheduler, y);
+  auto dx = fc->backward(scheduler, yGrad);
   dx.wait();
   fc->state()->forward.grad_weight.wait();
-  torch::Tensor xRef;
-  dllm::memory::toTorch(scheduler, xRef, x);
+  auto xRef = dllm::memory::toTorch(scheduler, x);
   x.wait();
   xRef.requires_grad_(true);
-  torch::Tensor wRef;
-  dllm::memory::toTorch(scheduler, wRef, fc->state()->forward.weight);
+  auto wRef = dllm::memory::toTorch(scheduler, fc->state()->forward.weight);
   fc->state()->forward.weight.wait();
   wRef.requires_grad_(true);
   auto yRef = torch::linear(xRef, wRef);
-  torch::Tensor yGradRef;
-  dllm::memory::toTorch(scheduler, yGradRef, yGrad);
+  auto yGradRef = dllm::memory::toTorch(scheduler, yGrad);
   yGrad.wait();
   yRef.backward(yGradRef);
 

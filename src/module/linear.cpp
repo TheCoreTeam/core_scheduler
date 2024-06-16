@@ -4,21 +4,22 @@
 
 namespace dllm::module {
 LinearImpl::LinearImpl(const Scheduler& scheduler, const Options& options) {
-  std::shared_ptr<compute::Linear::State> state;
-  compute::Linear::init(scheduler, state, options);
+  const auto state = compute::Linear::init(scheduler, options);
   register_state("LinearState", state);
   state_ = state;
 }
 
-void LinearImpl::forward(const Scheduler& scheduler, Tensor& output,
-                         const ReadOnlyTensor& input) const {
-  compute::Linear::forward(scheduler, state(), output, input);
+Tensor LinearImpl::forward(const Scheduler& scheduler,
+                           const ReadOnlyTensor& input) const {
+  return compute::Linear::forward(scheduler, state(), input);
 }
 
-void LinearImpl::backward(const Scheduler& scheduler, Tensor& grad_input,
-                          const ReadOnlyTensor& grad_output) const {
-  compute::Linear::backwardInput(scheduler, state(), grad_input, grad_output);
+Tensor LinearImpl::backward(const Scheduler& scheduler,
+                            const ReadOnlyTensor& grad_output) const {
+  auto grad_input =
+      compute::Linear::backwardInput(scheduler, state(), grad_output);
   compute::Linear::backwardParameter(scheduler, state(), grad_output);
+  return grad_input;
 }
 
 void LinearImpl::backwardParameter(const Scheduler& scheduler,
@@ -26,9 +27,9 @@ void LinearImpl::backwardParameter(const Scheduler& scheduler,
   compute::Linear::backwardParameter(scheduler, state(), grad_output);
 }
 
-void LinearImpl::backwardInput(const Scheduler& scheduler, Tensor& grad_input,
-                               const ReadOnlyTensor& grad_output) const {
-  compute::Linear::backwardInput(scheduler, state(), grad_input, grad_output);
+Tensor LinearImpl::backwardInput(const Scheduler& scheduler,
+                                 const ReadOnlyTensor& grad_output) const {
+  return compute::Linear::backwardInput(scheduler, state(), grad_output);
 }
 
 std::shared_ptr<compute::Linear::State> LinearImpl::state() const {

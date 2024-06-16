@@ -29,8 +29,8 @@ OrderedDict<std::string, module::State::Increment> Linear::State::increments() {
   return dict;
 }
 
-void Linear::init(const Scheduler &scheduler, std::shared_ptr<State> &state,
-                  const Options &options) {
+std::shared_ptr<Linear::State> Linear::init(const Scheduler &scheduler,
+                                            const Options &options) {
   DLLM_ASSERT_TRUE(options.bias() == false, "we do not supprot bias now");
   // ReSharper disable once CppDFAUnreachableCode
   TensorOptions tensorOptions{};
@@ -78,7 +78,7 @@ void Linear::init(const Scheduler &scheduler, std::shared_ptr<State> &state,
                                          tensorOptions,
                                          options.in_futures(),
                                          options.out_futures()})});
-    state = std::make_shared<State>(
+    return std::make_shared<State>(
         State::Forward{std::move(weight), std::move(bias)}, State::Backward{},
         State::Args{options.bias()});
   } else {
@@ -111,15 +111,15 @@ void Linear::init(const Scheduler &scheduler, std::shared_ptr<State> &state,
                                          tensorOptions,
                                          options.in_futures(),
                                          options.out_futures()})});
-    state =
-        std::make_shared<State>(State::Forward{std::move(weight)},
-                                State::Backward{}, State::Args{options.bias()});
+    return std::make_shared<State>(State::Forward{std::move(weight)},
+                                   State::Backward{},
+                                   State::Args{options.bias()});
   }
 }
 
-void Linear::forward(const Scheduler &scheduler,
-                     const std::shared_ptr<State> &state, Tensor &output,
-                     const ReadOnlyTensor &input) {
+Tensor Linear::forward(const Scheduler &scheduler,
+                       const std::shared_ptr<State> &state,
+                       const ReadOnlyTensor &input) {
   struct Impl : Task::Impl {
     explicit Impl(std::vector<Tensor> output /* output */,
                   std::vector<ReadOnlyTensor> input /* input, weight */)
@@ -133,18 +133,17 @@ void Linear::forward(const Scheduler &scheduler,
     }
   };
 
-  Tensor output_;
+  Tensor output;
   state->backward.input = input;
   // size
-  output = output_;
   scheduler.impl()->submit(Task{
       std::make_shared<Impl>(Impl{{output}, {input, state->forward.weight}})});
+  return output;
 }
 
-void Linear::backwardInput(const Scheduler &scheduler,
-                           const std::shared_ptr<State> &state,
-                           Tensor &grad_input,
-                           const ReadOnlyTensor &grad_output) {
+Tensor Linear::backwardInput(const Scheduler &scheduler,
+                             const std::shared_ptr<State> &state,
+                             const ReadOnlyTensor &grad_output) {
   struct Impl : Task::Impl {
     explicit Impl(std::vector<Tensor> output /* grad_input */,
                   std::vector<ReadOnlyTensor> input /* grad_output, weight */)
@@ -158,11 +157,11 @@ void Linear::backwardInput(const Scheduler &scheduler,
     }
   };
 
-  Tensor grad_input_;
+  Tensor grad_input;
   // size
-  grad_input = grad_input_;
   scheduler.impl()->submit(Task{std::make_shared<Impl>(
       Impl{{grad_input}, {grad_output, state->forward.weight}})});
+  return grad_input;
 }
 
 void Linear::backwardParameter(const Scheduler &scheduler,

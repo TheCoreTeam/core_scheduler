@@ -52,7 +52,8 @@ struct AdamW {
                    const Options &options);
 
   template <typename Module, typename = std::enable_if_t<
-                                 !std::is_base_of_v<module::Module, Module>>>
+                                 !std::is_base_of_v<module::Module, Module> &&
+                                 !std::is_base_of_v<ReadOnlyTensor, Module>>>
   static void init(const Scheduler &scheduler, const Module &module,
                    const Options &options) {
     init(scheduler, *module, options);
@@ -66,8 +67,9 @@ struct AdamW {
     step(scheduler, *module);
   }
 
-  static void init(const Scheduler &scheduler, std::shared_ptr<State> &state,
-                   const ReadOnlyTensor &parameter, const Options &options);
+  static std::shared_ptr<State> init(const Scheduler &scheduler,
+                                     const ReadOnlyTensor &parameter,
+                                     const Options &options);
 
   static void step(const Scheduler &scheduler,
                    const std::shared_ptr<State> &state, Tensor &w,

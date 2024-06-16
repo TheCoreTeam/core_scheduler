@@ -49,20 +49,18 @@ void AllGatherNCCLTestFixture::TestlAllToAllT(const int blockSize) {
   const at::ScalarType dtype = TypeToTorch<T>::type;
   const auto option = at::TensorOptions().dtype(dtype).device(device);
   at::manual_seed(comm.getRank() + 1);
-  dllm::Tensor x;
-  dllm::compute::Utils::rand(scheduler, x, {blockSize}, option);
+  auto x = dllm::compute::Utils::rand(scheduler, {blockSize}, option);
   std::vector<dllm::Tensor> r;
   r.reserve(comm.getSize());
   for (int i = 0; i < comm.getSize(); ++i) {
-    dllm::Tensor t;
-    dllm::compute::Utils::empty(scheduler, t, {blockSize}, option);
+    auto t = dllm::compute::Utils::empty(scheduler, {blockSize}, option);
     r.push_back(t);
   }
   dllm::communication::AllGather::run(scheduler, comm, {r}, {x});
   std::vector<at::Tensor> r_torch;
   r_torch.resize(r.size());
   for (int i = 0; i < r.size(); ++i) {
-    dllm::memory::toTorch(scheduler, r_torch[i], r[i]);
+    r_torch[i] = dllm::memory::toTorch(scheduler, r[i]);
     r[i].wait();
   }
 

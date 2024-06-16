@@ -8,13 +8,13 @@
 #include "threading/task_impl.h"
 
 namespace dllm::compute {
-void GeLU::init(const Scheduler &scheduler, std::shared_ptr<State> &state) {
-  state = std::make_shared<State>();
+std::shared_ptr<GeLU::State> GeLU::init(const Scheduler &scheduler) {
+  return std::make_shared<State>();
 }
 
-void GeLU::forward(const Scheduler &scheduler,
-                   const std::shared_ptr<State> &state, Tensor &output,
-                   const ReadOnlyTensor &input) {
+Tensor GeLU::forward(const Scheduler &scheduler,
+                     const std::shared_ptr<State> &state,
+                     const ReadOnlyTensor &input) {
   struct Impl : Task::Impl {
     Impl(std::vector<Tensor> output /* output */,
          std::vector<ReadOnlyTensor> input /* input */)
@@ -27,16 +27,16 @@ void GeLU::forward(const Scheduler &scheduler,
     }
   };
 
-  Tensor output_{};
+  Tensor output{};
   state->backward.input = input;
   scheduler.impl()->submit(
-      Task{std::make_shared<Impl>(Impl{{output_}, {input}})});
-  output = output_;
+      Task{std::make_shared<Impl>(Impl{{output}, {input}})});
+  return output;
 }
 
-void GeLU::backward(const Scheduler &scheduler,
-                    const std::shared_ptr<State> &state, Tensor &grad_input,
-                    const ReadOnlyTensor &grad_output) {
+Tensor GeLU::backward(const Scheduler &scheduler,
+                      const std::shared_ptr<State> &state,
+                      const ReadOnlyTensor &grad_output) {
   struct Impl : Task::Impl {
     Impl(std::vector<Tensor> output /* grad_input */,
          std::vector<ReadOnlyTensor> input /* grad_ouput, input */)
@@ -50,11 +50,11 @@ void GeLU::backward(const Scheduler &scheduler,
     }
   };
 
-  Tensor grad_input_{};
+  Tensor grad_input{};
   // decrease counter
   scheduler.impl()->submit(Task{std::make_shared<Impl>(
-      Impl{{grad_input_}, {grad_output, state->backward.input}})});
+      Impl{{grad_input}, {grad_output, state->backward.input}})});
   state->backward.input.reset();
-  grad_input = grad_input_;
+  return grad_input;
 }
 }  // namespace dllm::compute

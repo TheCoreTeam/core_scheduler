@@ -24,8 +24,7 @@ void AdamW::init(const Scheduler &scheduler, const module::Module &module,
                  const Options &options) {
   for (auto &kvState : module.named_states()) {
     for (auto &kvIncrement : kvState.value()->increments()) {
-      std::shared_ptr<State> state;
-      init(scheduler, state, kvIncrement->parameter, options);
+      auto state = init(scheduler, kvIncrement->parameter, options);
       kvIncrement->optimizerState = state;
     }
   }
@@ -43,8 +42,9 @@ void AdamW::step(const Scheduler &scheduler, const module::Module &module) {
   }
 }
 
-void AdamW::init(const Scheduler &scheduler, std::shared_ptr<State> &state,
-                 const ReadOnlyTensor &parameter, const Options &options) {
+std::shared_ptr<AdamW::State> AdamW::init(const Scheduler &scheduler,
+                                          const ReadOnlyTensor &parameter,
+                                          const Options &options) {
   Tensor m;
   Tensor v;
   if (options.amsgrad()) {
@@ -66,14 +66,15 @@ void AdamW::init(const Scheduler &scheduler, std::shared_ptr<State> &state,
     };
 
     Tensor vMax;
-    state = std::make_shared<State>(
+
+    scheduler.impl()->submit(
+        Task{std::make_shared<Impl>(Impl{{m, v, vMax}, {parameter}})});
+
+    return std::make_shared<State>(
         State::Tensors{m, v, vMax},
         State::Options{options.lr(), options.beta1(), options.beta2(),
                        options.eps(), options.weight_decay(), options.amsgrad(),
                        options.t()});
-
-    scheduler.impl()->submit(
-        Task{std::make_shared<Impl>(Impl{{m, v, vMax}, {parameter}})});
   } else {
     struct Impl : Task::Impl {
       explicit Impl(std::vector<Tensor> output /* m, v */,
@@ -90,14 +91,14 @@ void AdamW::init(const Scheduler &scheduler, std::shared_ptr<State> &state,
       }
     };
 
-    state = std::make_shared<State>(
+    scheduler.impl()->submit(
+        Task{std::make_shared<Impl>(Impl{{m, v}, {parameter}})});
+
+    return std::make_shared<State>(
         State::Tensors{m, v},
         State::Options{options.lr(), options.beta1(), options.beta2(),
                        options.eps(), options.weight_decay(), options.amsgrad(),
                        options.t()});
-
-    scheduler.impl()->submit(
-        Task{std::make_shared<Impl>(Impl{{m, v}, {parameter}})});
   }
 }
 

@@ -1,7 +1,6 @@
 #include <ATen/Context.h>
 #include <ATen/ops/allclose.h>
 #include <ATen/ops/cat.h>
-#include <ATen/ops/cross_entropy_loss.h>
 #include <cuda_fp16.h>
 #include <gtest/gtest.h>
 #include <torch/nn/modules/normalization.h>
@@ -51,26 +50,21 @@ void TestLayerNormFixture::TestFunctional(const int size) {
   const at::ScalarType dtype = TypeToTorch<T>::type;
   const auto option = at::TensorOptions().dtype(dtype).device(device);
 
-  std::shared_ptr<dllm::compute::LayerNorm::State> state;
-  dllm::Tensor x;
-  dllm::Tensor dx;
-  dllm::Tensor y;
-  dllm::Tensor dy;
-  dllm::compute::LayerNorm::init(
-      scheduler, state,
+  auto state = dllm::compute::LayerNorm::init(
+      scheduler,
       dllm::compute::LayerNorm::Options{{3 * size}}.device(device).dtype(
           dtype));
-  dllm::compute::Utils::rand(scheduler, x, {size, 2 * size, 3 * size}, option);
-  dllm::compute::LayerNorm::forward(scheduler, state, y, x);
-  dllm::compute::Utils::rand_like(scheduler, dy, y);
-  dllm::compute::LayerNorm::backward(scheduler, state, dx, dy);
+  auto x =
+      dllm::compute::Utils::rand(scheduler, {size, 2 * size, 3 * size}, option);
+  auto y = dllm::compute::LayerNorm::forward(scheduler, state, x);
+  auto dy = dllm::compute::Utils::rand_like(scheduler, y);
+  auto dx = dllm::compute::LayerNorm::backward(scheduler, state, dy);
 
-  at::Tensor x_torch, dx_torch, y_ref_torch, dy_torch;
-  dllm::memory::toTorch(scheduler, x_torch, x);
+  auto x_torch = dllm::memory::toTorch(scheduler, x);
   x.wait();
-  dllm::memory::toTorch(scheduler, y_ref_torch, y);
+  auto y_ref_torch = dllm::memory::toTorch(scheduler, y);
   y.wait();
-  dllm::memory::toTorch(scheduler, dy_torch, dy);
+  auto dy_torch = dllm::memory::toTorch(scheduler, dy);
   dy.wait();
   x_torch.set_requires_grad(true);
   torch::nn::LayerNorm ln{torch::nn::LayerNormOptions({3 * size})};
@@ -93,24 +87,20 @@ void TestLayerNormFixture::TestModule(const int size) {
   const at::ScalarType dtype = TypeToTorch<T>::type;
   const auto option = at::TensorOptions().dtype(dtype).device(device);
 
-  dllm::Tensor x;
-  dllm::Tensor dx;
-  dllm::Tensor y;
-  dllm::Tensor dy;
   dllm::module::LayerNorm lnOurs{
       scheduler,
       dllm::module::LayerNorm::Options{{3 * size}}.device(device).dtype(dtype)};
-  dllm::compute::Utils::rand(scheduler, x, {size, 2 * size, 3 * size}, option);
-  lnOurs->forward(scheduler, y, x);
-  dllm::compute::Utils::rand_like(scheduler, dy, y);
-  lnOurs->backward(scheduler, dx, dy);
+  auto x =
+      dllm::compute::Utils::rand(scheduler, {size, 2 * size, 3 * size}, option);
+  auto y = lnOurs->forward(scheduler, x);
+  auto dy = dllm::compute::Utils::rand_like(scheduler, y);
+  auto dx = lnOurs->backward(scheduler, dy);
 
-  at::Tensor x_torch, dx_torch, y_ref_torch, dy_torch;
-  dllm::memory::toTorch(scheduler, x_torch, x);
+  auto x_torch = dllm::memory::toTorch(scheduler, x);
   x.wait();
-  dllm::memory::toTorch(scheduler, y_ref_torch, y);
+  auto y_ref_torch = dllm::memory::toTorch(scheduler, y);
   y.wait();
-  dllm::memory::toTorch(scheduler, dy_torch, dy);
+  auto dy_torch = dllm::memory::toTorch(scheduler, dy);
   dy.wait();
   x_torch.set_requires_grad(true);
   torch::nn::LayerNorm ln{torch::nn::LayerNormOptions({3 * size})};

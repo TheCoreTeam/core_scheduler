@@ -8,9 +8,9 @@
 #include "threading/task_impl.h"
 
 namespace dllm::compute::Utils {
-void sum(const Scheduler &scheduler, Tensor &output,
-         const ReadOnlyTensor &input, const IntArrayRef dim,
-         const bool keep_dim, const c10::optional<at::ScalarType> dtype) {
+Tensor sum(const Scheduler &scheduler, const ReadOnlyTensor &input,
+           const IntArrayRef dim, const bool keep_dim,
+           const c10::optional<at::ScalarType> dtype) {
   struct Impl : Task::Impl {
     const IntArrayRef dim;
     const bool keep_dim;
@@ -33,16 +33,16 @@ void sum(const Scheduler &scheduler, Tensor &output,
     }
   };
 
-  Tensor output_{};
+  Tensor output{};
   DLLM_ASSERT_TRUE(!dim.empty(), "dim should not be empty");
 
   scheduler.impl()->submit(Task{
-      std::make_shared<Impl>(Impl{{output_}, {input}, dim, keep_dim, dtype})});
-  output = output_;
+      std::make_shared<Impl>(Impl{{output}, {input}, dim, keep_dim, dtype})});
+  return output;
 }
 
-void range(const Scheduler &scheduler, Tensor &tensor, const at::Scalar &start,
-           const at::Scalar &end, const TensorOptions options) {
+Tensor range(const Scheduler &scheduler, const at::Scalar &start,
+             const at::Scalar &end, const TensorOptions options) {
   struct Impl : Task::Impl {
     const at::Scalar start, end;
     const TensorOptions options;
@@ -62,13 +62,14 @@ void range(const Scheduler &scheduler, Tensor &tensor, const at::Scalar &start,
     }
   };
 
-  tensor = Tensor{};
+  Tensor tensor{};
   scheduler.impl()->submit(
       Task{std::make_shared<Impl>(Impl{{tensor}, start, end, options})});
+  return tensor;
 }
 
-void arange(const Scheduler &scheduler, Tensor &tensor, const at::Scalar &start,
-            const at::Scalar &end, const TensorOptions options) {
+Tensor arange(const Scheduler &scheduler, const at::Scalar &start,
+              const at::Scalar &end, const TensorOptions options) {
   struct Impl : Task::Impl {
     const at::Scalar start, end;
     const TensorOptions options;
@@ -88,14 +89,15 @@ void arange(const Scheduler &scheduler, Tensor &tensor, const at::Scalar &start,
     }
   };
 
-  tensor = Tensor{};
+  Tensor tensor{};
   scheduler.impl()->submit(
       Task{std::make_shared<Impl>(Impl{{tensor}, start, end, options})});
+  return tensor;
 }
 
-void arange(const Scheduler &scheduler, Tensor &tensor, const at::Scalar &start,
-            const at::Scalar &end, const at::Scalar &step,
-            const TensorOptions options) {
+Tensor arange(const Scheduler &scheduler, const at::Scalar &start,
+              const at::Scalar &end, const at::Scalar &step,
+              const TensorOptions options) {
   struct Impl : Task::Impl {
     const at::Scalar start, end, step;
     const TensorOptions options;
@@ -116,14 +118,15 @@ void arange(const Scheduler &scheduler, Tensor &tensor, const at::Scalar &start,
     }
   };
 
-  tensor = Tensor{};
+  Tensor tensor{};
   scheduler.impl()->submit(
       Task{std::make_shared<Impl>(Impl{{tensor}, start, end, step, options})});
+  return tensor;
 }
 
-void randint(const Scheduler &scheduler, Tensor &tensor, const int64_t low,
-             const int64_t high, const IntArrayRef size,
-             const TensorOptions options) {
+Tensor randint(const Scheduler &scheduler, const int64_t low,
+               const int64_t high, const IntArrayRef size,
+               const TensorOptions options) {
   struct Impl : Task::Impl {
     const int64_t low, high;
     const IntArrayRef size;
@@ -145,13 +148,14 @@ void randint(const Scheduler &scheduler, Tensor &tensor, const int64_t low,
     }
   };
 
-  tensor = Tensor{};
+  Tensor tensor{};
   scheduler.impl()->submit(
       Task{std::make_shared<Impl>(Impl{{tensor}, low, high, size, options})});
+  return tensor;
 }
 
-auto empty(const Scheduler &scheduler, Tensor &tensor, const IntArrayRef size,
-           const TensorOptions options) -> void {
+Tensor empty(const Scheduler &scheduler, const IntArrayRef size,
+             const TensorOptions options) {
   struct Impl : Task::Impl {
     const IntArrayRef size;
     const TensorOptions options;
@@ -169,14 +173,13 @@ auto empty(const Scheduler &scheduler, Tensor &tensor, const IntArrayRef size,
     }
   };
 
-  Tensor tensor_{};
+  Tensor tensor{};
   scheduler.impl()->submit(
-      Task{std::make_shared<Impl>(Impl{{tensor_}, size, options})});
-  tensor = tensor_;
+      Task{std::make_shared<Impl>(Impl{{tensor}, size, options})});
+  return tensor;
 }
 
-void empty_like(const Scheduler &scheduler, Tensor &dst,
-                const ReadOnlyTensor &src) {
+Tensor empty_like(const Scheduler &scheduler, const ReadOnlyTensor &src) {
   struct Impl : Task::Impl {
     explicit Impl(std::vector<Tensor> output /* tensor */,
                   std::vector<ReadOnlyTensor> input /* input */)
@@ -190,13 +193,13 @@ void empty_like(const Scheduler &scheduler, Tensor &dst,
     }
   };
 
-  Tensor dst_{};
-  scheduler.impl()->submit(Task{std::make_shared<Impl>(Impl{{dst_}, {src}})});
-  dst = dst_;
+  Tensor dst{};
+  scheduler.impl()->submit(Task{std::make_shared<Impl>(Impl{{dst}, {src}})});
+  return dst;
 }
 
-void ones(const Scheduler &scheduler, Tensor &tensor, const IntArrayRef size,
-          const TensorOptions options) {
+Tensor ones(const Scheduler &scheduler, const IntArrayRef size,
+            const TensorOptions options) {
   struct Impl : Task::Impl {
     const IntArrayRef size;
     const TensorOptions options;
@@ -214,14 +217,13 @@ void ones(const Scheduler &scheduler, Tensor &tensor, const IntArrayRef size,
     }
   };
 
-  Tensor tensor_{};
+  Tensor tensor{};
   scheduler.impl()->submit(
-      Task{std::make_shared<Impl>(Impl{{tensor_}, size, options})});
-  tensor = tensor_;
+      Task{std::make_shared<Impl>(Impl{{tensor}, size, options})});
+  return tensor;
 }
 
-void ones_like(const Scheduler &scheduler, Tensor &dst,
-               const ReadOnlyTensor &src) {
+Tensor ones_like(const Scheduler &scheduler, const ReadOnlyTensor &src) {
   struct Impl : Task::Impl {
     explicit Impl(std::vector<Tensor> output /* tensor */,
                   std::vector<ReadOnlyTensor> input /* input */)
@@ -235,13 +237,13 @@ void ones_like(const Scheduler &scheduler, Tensor &dst,
     }
   };
 
-  Tensor dst_{};
-  scheduler.impl()->submit(Task{std::make_shared<Impl>(Impl{{dst_}, {src}})});
-  dst = dst_;
+  Tensor dst{};
+  scheduler.impl()->submit(Task{std::make_shared<Impl>(Impl{{dst}, {src}})});
+  return dst;
 }
 
-void zeros(const Scheduler &scheduler, Tensor &tensor, const IntArrayRef size,
-           const TensorOptions options) {
+Tensor zeros(const Scheduler &scheduler, const IntArrayRef size,
+             const TensorOptions options) {
   struct Impl : Task::Impl {
     const IntArrayRef size;
     const TensorOptions options;
@@ -259,14 +261,13 @@ void zeros(const Scheduler &scheduler, Tensor &tensor, const IntArrayRef size,
     }
   };
 
-  Tensor tensor_{};
+  Tensor tensor{};
   scheduler.impl()->submit(
-      Task{std::make_shared<Impl>(Impl{{tensor_}, size, options})});
-  tensor = tensor_;
+      Task{std::make_shared<Impl>(Impl{{tensor}, size, options})});
+  return tensor;
 }
 
-void zeros_like(const Scheduler &scheduler, Tensor &dst,
-                const ReadOnlyTensor &src) {
+Tensor zeros_like(const Scheduler &scheduler, const ReadOnlyTensor &src) {
   struct Impl : Task::Impl {
     explicit Impl(std::vector<Tensor> output /* tensor */,
                   std::vector<ReadOnlyTensor> input /* input */)
@@ -280,13 +281,13 @@ void zeros_like(const Scheduler &scheduler, Tensor &dst,
     }
   };
 
-  Tensor dst_{};
-  scheduler.impl()->submit(Task{std::make_shared<Impl>(Impl{{dst_}, {src}})});
-  dst = dst_;
+  Tensor dst{};
+  scheduler.impl()->submit(Task{std::make_shared<Impl>(Impl{{dst}, {src}})});
+  return dst;
 }
 
-void rand(const Scheduler &scheduler, Tensor &tensor, const IntArrayRef size,
-          const TensorOptions options) {
+Tensor rand(const Scheduler &scheduler, const IntArrayRef size,
+            const TensorOptions options) {
   struct Impl : Task::Impl {
     const IntArrayRef size;
     const TensorOptions options;
@@ -304,14 +305,13 @@ void rand(const Scheduler &scheduler, Tensor &tensor, const IntArrayRef size,
     }
   };
 
-  Tensor tensor_{};
+  Tensor tensor{};
   scheduler.impl()->submit(
-      Task{std::make_shared<Impl>(Impl{{tensor_}, size, options})});
-  tensor = tensor_;
+      Task{std::make_shared<Impl>(Impl{{tensor}, size, options})});
+  return tensor;
 }
 
-void rand_like(const Scheduler &scheduler, Tensor &dst,
-               const ReadOnlyTensor &src) {
+Tensor rand_like(const Scheduler &scheduler, const ReadOnlyTensor &src) {
   struct Impl : Task::Impl {
     explicit Impl(std::vector<Tensor> output /* tensor */,
                   std::vector<ReadOnlyTensor> input /* input */)
@@ -325,13 +325,13 @@ void rand_like(const Scheduler &scheduler, Tensor &dst,
     }
   };
 
-  Tensor dst_{};
-  scheduler.impl()->submit(Task{std::make_shared<Impl>(Impl{{dst_}, {src}})});
-  dst = dst_;
+  Tensor dst{};
+  scheduler.impl()->submit(Task{std::make_shared<Impl>(Impl{{dst}, {src}})});
+  return dst;
 }
 
-void randn(const Scheduler &scheduler, Tensor &tensor, const IntArrayRef size,
-           const TensorOptions options) {
+Tensor randn(const Scheduler &scheduler, const IntArrayRef size,
+             const TensorOptions options) {
   struct Impl : Task::Impl {
     const IntArrayRef size;
     const TensorOptions options;
@@ -349,14 +349,13 @@ void randn(const Scheduler &scheduler, Tensor &tensor, const IntArrayRef size,
     }
   };
 
-  Tensor tensor_{};
+  Tensor tensor{};
   scheduler.impl()->submit(
-      Task{std::make_shared<Impl>(Impl{{tensor_}, size, options})});
-  tensor = tensor_;
+      Task{std::make_shared<Impl>(Impl{{tensor}, size, options})});
+  return tensor;
 }
 
-void randn_like(const Scheduler &scheduler, Tensor &dst,
-                const ReadOnlyTensor &src) {
+Tensor randn_like(const Scheduler &scheduler, const ReadOnlyTensor &src) {
   struct Impl : Task::Impl {
     explicit Impl(std::vector<Tensor> output /* tensor */,
                   std::vector<ReadOnlyTensor> input /* input */)
@@ -370,14 +369,13 @@ void randn_like(const Scheduler &scheduler, Tensor &dst,
     }
   };
 
-  Tensor dst_{};
-  scheduler.impl()->submit(Task{std::make_shared<Impl>(Impl{{dst_}, {src}})});
-  dst = dst_;
+  Tensor dst{};
+  scheduler.impl()->submit(Task{std::make_shared<Impl>(Impl{{dst}, {src}})});
+  return dst;
 }
 
-void split(const Scheduler &scheduler, std::vector<Tensor> &output,
-           const ReadOnlyTensor &src, const int64_t &split_size,
-           const int64_t &dim) {
+std::vector<Tensor> split(const Scheduler &scheduler, const ReadOnlyTensor &src,
+                          const int64_t &split_size, const int64_t &dim) {
   struct Impl : Task::Impl {
     const int64_t split_size;
     const int64_t dim;
@@ -402,6 +400,7 @@ void split(const Scheduler &scheduler, std::vector<Tensor> &output,
   const auto input_size = src.sizes();
   const auto split_num =
       input_size[dim > 0 ? dim : input_size.size() + dim] / split_size;
+  std::vector<Tensor> output;
   output.resize(split_num);
   at::SmallVector<Tensor> outputNew;
   outputNew.reserve(split_size);
@@ -412,10 +411,11 @@ void split(const Scheduler &scheduler, std::vector<Tensor> &output,
   }
   scheduler.impl()->submit(
       Task{std::make_shared<Impl>(Impl{output, {src}, split_size, dim})});
+  return output;
 }
 
-void view(const Scheduler &scheduler, Tensor &output,
-          const ReadOnlyTensor &input, const IntArrayRef size) {
+Tensor view(const Scheduler &scheduler, const ReadOnlyTensor &input,
+            const IntArrayRef size) {
   struct Impl : Task::Impl {
     const IntArrayRef size;
 
@@ -432,15 +432,15 @@ void view(const Scheduler &scheduler, Tensor &output,
     }
   };
 
-  Tensor output_{};
+  Tensor output{};
 
   scheduler.impl()->submit(
-      Task{std::make_shared<Impl>(Impl{{output_}, {input}, size})});
-  output = output_;
+      Task{std::make_shared<Impl>(Impl{{output}, {input}, size})});
+  return output;
 }
 
-void broadcast_to(const Scheduler &scheduler, Tensor &output,
-                  const ReadOnlyTensor &input, const IntArrayRef size) {
+Tensor broadcast_to(const Scheduler &scheduler, const ReadOnlyTensor &input,
+                    const IntArrayRef size) {
   struct Impl : Task::Impl {
     const IntArrayRef size;
 
@@ -458,14 +458,14 @@ void broadcast_to(const Scheduler &scheduler, Tensor &output,
     }
   };
 
-  Tensor output_{};
+  Tensor output{};
   scheduler.impl()->submit(
-      Task{std::make_shared<Impl>(Impl{{output_}, {input}, size})});
-  output = output_;
+      Task{std::make_shared<Impl>(Impl{{output}, {input}, size})});
+  return output;
 }
 
-void cat(const Scheduler &scheduler, Tensor &output,
-         const std::vector<ReadOnlyTensor> &input, const int64_t dim) {
+Tensor cat(const Scheduler &scheduler, const std::vector<ReadOnlyTensor> &input,
+           const int64_t dim) {
   struct Impl : Task::Impl {
     const int64_t dim;
 
@@ -486,10 +486,29 @@ void cat(const Scheduler &scheduler, Tensor &output,
     }
   };
 
-  Tensor output_{};
+  Tensor output{};
 
   scheduler.impl()->submit(
-      Task{std::make_shared<Impl>(Impl{{output_}, input, dim})});
-  output = output_;
+      Task{std::make_shared<Impl>(Impl{{output}, input, dim})});
+  return output;
+}
+
+Tensor add(const Scheduler &scheduler, ReadOnlyTensor x, ReadOnlyTensor y) {
+  Tensor output;
+  struct Impl : Task::Impl {
+    explicit Impl(std::vector<Tensor> output /* tensor */,
+                  std::vector<ReadOnlyTensor> input /* A, B */)
+        : Task::Impl{std::move(output), std::move(input), compute} {}
+    void operator()() const override {
+      output()[0].impl()->tensor() =
+          at::add(input()[0].impl()->tensor(), input()[1].impl()->tensor());
+    }
+    [[nodiscard]] const char *name() const override {
+      return "dllm::compute::Utils::Add";
+    }
+  };
+  scheduler.impl()->submit(
+      Task{std::make_shared<Impl>(Impl{{output}, {x, y}})});
+  return output;
 }
 }  // namespace dllm::compute::Utils

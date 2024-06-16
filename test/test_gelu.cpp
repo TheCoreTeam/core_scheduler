@@ -49,22 +49,16 @@ void TestDLLMGelu::TestRoutine(const int T, const double tol_forward,
   const torch::Dtype dtype = TypeToTorch<Element>::type;
   const auto option = torch::TensorOptions().dtype(dtype).device(device);
 
-  dllm::Tensor input2;
-  dllm::Tensor tensorGradInput;
-  dllm::Tensor tensorOutput;
-  dllm::Tensor GradOutput_;
-  std::shared_ptr<dllm::compute::GeLU::State> state;
-  dllm::compute::Utils::randn(scheduler, input2, {B, T}, option);
-  dllm::compute::GeLU::init(scheduler, state);
-  dllm::compute::GeLU::forward(scheduler, state, tensorOutput, input2);
-  dllm::compute::Utils::randn_like(scheduler, GradOutput_, tensorOutput);
-  dllm::compute::GeLU::backward(scheduler, state, tensorGradInput, GradOutput_);
+  auto input2 = dllm::compute::Utils::randn(scheduler, {B, T}, option);
+  auto state = dllm::compute::GeLU::init(scheduler);
+  auto tensorOutput = dllm::compute::GeLU::forward(scheduler, state, input2);
+  auto GradOutput_ = dllm::compute::Utils::randn_like(scheduler, tensorOutput);
+  auto tensorGradInput =
+      dllm::compute::GeLU::backward(scheduler, state, GradOutput_);
 
-  torch::Tensor input;
-  torch::Tensor GradOutput;
-  dllm::memory::toTorch(scheduler, input, input2);
+  auto input = dllm::memory::toTorch(scheduler, input2);
   input2.wait();
-  dllm::memory::toTorch(scheduler, GradOutput, GradOutput_);
+  auto GradOutput = dllm::memory::toTorch(scheduler, GradOutput_);
   GradOutput_.wait();
 
   auto input1 = input.detach().clone().set_requires_grad(true);

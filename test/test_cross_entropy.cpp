@@ -45,27 +45,22 @@ void TestCrossEntropyFixture::Test(const int size) {
   const at::Device device(at::kCUDA, 0);
   const at::ScalarType dtype = TypeToTorch<T>::type;
   const auto option = at::TensorOptions().dtype(dtype).device(device);
-  dllm::Tensor loss;
-  dllm::Tensor x;
-  dllm::Tensor dx;
-  dllm::Tensor target;
-  dllm::compute::Utils::rand(scheduler, x, {size, 2 * size, 3 * size}, option);
-  dllm::compute::Utils::view(scheduler, x, x, {-1, x.size(-1)});
-  dllm::compute::Utils::randint(scheduler, target, 0, 3 * size,
-                                {size, 2 * size}, option.dtype(at::kLong));
-  dllm::compute::Utils::view(scheduler, target, target, {-1});
-  std::shared_ptr<dllm::compute::CrossEntropy::State> state;
-  dllm::compute::CrossEntropy::init(scheduler, state);
-  dllm::compute::CrossEntropy::forward(scheduler, state, loss, x, target);
-  dllm::compute::CrossEntropy::backward(scheduler, state, dx);
-  at::Tensor loss_ref_torch, x_torch, dx_torch, target_torch;
-  dllm::memory::toTorch(scheduler, loss_ref_torch, loss);
+  auto x =
+      dllm::compute::Utils::rand(scheduler, {size, 2 * size, 3 * size}, option);
+  x = dllm::compute::Utils::view(scheduler, x, {-1, x.size(-1)});
+  auto target = dllm::compute::Utils::randint(
+      scheduler, 0, 3 * size, {size, 2 * size}, option.dtype(at::kLong));
+  target = dllm::compute::Utils::view(scheduler, target, {-1});
+  auto state = dllm::compute::CrossEntropy::init(scheduler);
+  auto loss = dllm::compute::CrossEntropy::forward(scheduler, state, x, target);
+  auto dx = dllm::compute::CrossEntropy::backward(scheduler, state);
+  auto loss_ref_torch = dllm::memory::toTorch(scheduler, loss);
   loss.wait();
-  dllm::memory::toTorch(scheduler, x_torch, x);
+  auto x_torch = dllm::memory::toTorch(scheduler, x);
   x.wait();
-  dllm::memory::toTorch(scheduler, dx_torch, dx);
+  auto dx_torch = dllm::memory::toTorch(scheduler, dx);
   dx.wait();
-  dllm::memory::toTorch(scheduler, target_torch, target);
+  auto target_torch = dllm::memory::toTorch(scheduler, target);
   target.wait();
   x_torch.set_requires_grad(true);
   const auto loss_torch = at::cross_entropy_loss(x_torch, target_torch);

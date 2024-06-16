@@ -4,6 +4,5 @@
 
 namespace dllm::memory {
 // dst is not ready immediately! you should wait for src
-void toTorch(const Scheduler &scheduler, at::Tensor &dst,
-             const ReadOnlyTensor &src);
+at::Tensor toTorch(const Scheduler &scheduler, const ReadOnlyTensor &src);
 }  // namespace dllm::memory

@@ -22,8 +22,8 @@ Embedding::State::increments() {
   return dict;
 }
 
-void Embedding::init(const Scheduler &scheduler, std::shared_ptr<State> &state,
-                     const Options &options) {
+std::shared_ptr<Embedding::State> Embedding::init(const Scheduler &scheduler,
+                                                  const Options &options) {
   struct Impl : Task::Impl {
     const Options options;
 
@@ -63,16 +63,16 @@ void Embedding::init(const Scheduler &scheduler, std::shared_ptr<State> &state,
   scheduler.impl()->submit(
       Task{std::make_shared<Impl>(Impl{{weight}, options})});
 
-  state = std::make_shared<State>(
+  return std::make_shared<State>(
       State::Forward{std::move(weight)}, State::Backward{},
       State::Args{options.num_embeddings(), padding_idx, options.max_norm(),
                   options.norm_type(), options.scale_grad_by_freq(),
                   options.sparse()});
 }
 
-void Embedding::forward(const Scheduler &scheduler,
-                        const std::shared_ptr<State> &state, Tensor &output,
-                        const ReadOnlyTensor &indices) {
+Tensor Embedding::forward(const Scheduler &scheduler,
+                          const std::shared_ptr<State> &state,
+                          const ReadOnlyTensor &indices) {
   struct Impl : Task::Impl {
     State::Args args;
 
@@ -93,10 +93,11 @@ void Embedding::forward(const Scheduler &scheduler,
     }
   };
 
-  output = Tensor{};
+  Tensor output{};
   state->backward.indices = indices;
   scheduler.impl()->submit(Task{std::make_shared<Impl>(
       Impl{{output}, {state->forward.weight, indices}, state->args})});
+  return output;
 }
 
 void Embedding::backward(const Scheduler &scheduler,

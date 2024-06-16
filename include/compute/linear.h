@@ -40,16 +40,16 @@ struct Linear {
     DLLM_ARG(c10::optional<at::ScalarType>, dtype) = {};
   };
 
-  static void init(const Scheduler &scheduler, std::shared_ptr<State> &state,
-                   const Options &options);
+  static std::shared_ptr<State> init(const Scheduler &scheduler,
+                                     const Options &options);
 
-  static void forward(const Scheduler &scheduler,
-                      const std::shared_ptr<State> &state, Tensor &output,
-                      const ReadOnlyTensor &input);
+  static Tensor forward(const Scheduler &scheduler,
+                        const std::shared_ptr<State> &state,
+                        const ReadOnlyTensor &input);
 
-  static void backwardInput(const Scheduler &scheduler,
-                            const std::shared_ptr<State> &state, Tensor &dinput,
-                            const ReadOnlyTensor &grad_output);
+  static Tensor backwardInput(const Scheduler &scheduler,
+                              const std::shared_ptr<State> &state,
+                              const ReadOnlyTensor &grad_output);
 
   static void backwardParameter(const Scheduler &scheduler,
                                 const std::shared_ptr<State> &state,

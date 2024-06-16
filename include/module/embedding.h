@@ -9,8 +9,7 @@ struct DLLM_API EmbeddingImpl : Module {
 
   explicit EmbeddingImpl(const Scheduler &scheduler, const Options &options);
 
-  void forward(const Scheduler &scheduler, Tensor &output,
-               const ReadOnlyTensor &input) const;
+  Tensor forward(const Scheduler &scheduler, const ReadOnlyTensor &input) const;
 
   void backward(const Scheduler &scheduler,
                 const ReadOnlyTensor &grad_output) const;

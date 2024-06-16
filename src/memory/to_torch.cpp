@@ -7,8 +7,7 @@
 #include "threading/task_impl.h"
 
 namespace dllm::memory {
-void toTorch(const Scheduler &scheduler, at::Tensor &dst,
-             const ReadOnlyTensor &src) {
+at::Tensor toTorch(const Scheduler &scheduler, const ReadOnlyTensor &src) {
   struct Impl : Task::Impl {
     explicit Impl(std::vector<Tensor> output /* tensor */,
                   std::vector<ReadOnlyTensor> input /* input */)
@@ -30,6 +29,8 @@ void toTorch(const Scheduler &scheduler, at::Tensor &dst,
   };
   Tensor dst_;
   scheduler.impl()->submit(Task{std::make_shared<Impl>(Impl{{dst_}, {src}})});
-  dst = dst_.impl()->tensor();
+  auto dst = dst_.impl()->tensor();
+  dst_.wait();
+  return dst;
 }
 }  // namespace dllm::memory
