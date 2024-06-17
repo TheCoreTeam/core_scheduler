@@ -495,8 +495,8 @@ void train() {
            modelConfig.pad_size});
       target = cs::compute::Utils::view(
           scheduler, target, {modelConfig.batch_size * modelConfig.block_size});
-      loss = cs::compute::CrossEntropy::forward(scheduler, loss_state,
-                                                     output, target);
+      loss = cs::compute::CrossEntropy::forward(scheduler, loss_state, output,
+                                                target);
 
       // Backward
       grad_output = cs::compute::CrossEntropy::backward(scheduler, loss_state);
