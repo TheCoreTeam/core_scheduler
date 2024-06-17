@@ -15,8 +15,6 @@
  */
 
 #include <c10/core/ScalarType.h>
-#include <c10/cuda/CUDACachingAllocator.h>
-#include <fmt/core.h>
 #include <gtest/gtest.h>
 #include <torch/torch.h>
 
@@ -36,7 +34,6 @@
 #include "data/dataloader.h"
 #include "data/dataset.h"
 #include "logger.h"
-#include "memory/to_torch.h"
 #include "module/embedding.h"
 #include "module/layer_norm.h"
 #include "module/linear.h"

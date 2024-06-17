@@ -15,7 +15,6 @@
  */
 
 #include <c10/core/ScalarType.h>
-#include <gtest/gtest.h>
 #include <mpi.h>
 #include <torch/torch.h>
 
@@ -38,7 +37,6 @@
 #include "data/dataloader.h"
 #include "data/dataset.h"
 #include "logger.h"
-#include "memory/to_torch.h"
 #include "module/embedding.h"
 #include "module/layer_norm.h"
 #include "module/linear.h"
