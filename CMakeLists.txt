@@ -16,10 +16,10 @@ cmake_minimum_required(VERSION 3.25)
 cmake_policy(SET CMP0146 OLD)
 project(CoreScheduler LANGUAGES C CXX CUDA)
 
-option(CS_ENABLE_TESTS "" ON)
-option(CS_ENABLE_EXAMPLES "" ON)
-option(CS_ENABLE_BUILTIN_TOOLCHAIN "" ON)
-if (CS_ENABLE_BUILTIN_TOOLCHAIN)
+option(CORE_SCHEDULER_ENABLE_TESTS "" ON)
+option(CORE_SCHEDULER_ENABLE_EXAMPLES "" ON)
+option(CORE_SCHEDULER_ENABLE_BUILTIN_TOOLCHAIN "" ON)
+if (CORE_SCHEDULER_ENABLE_BUILTIN_TOOLCHAIN)
     include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/toolchain.cmake)
 endif ()
 
@@ -66,12 +66,12 @@ find_package(MPI COMPONENTS C REQUIRED)
 
 add_subdirectory(src)
 
-if (CS_ENABLE_TESTS)
+if (CORE_SCHEDULER_ENABLE_TESTS)
     find_package(GTest REQUIRED)
     add_subdirectory(test)
 endif ()
 
-if (CS_ENABLE_EXAMPLES)
+if (CORE_SCHEDULER_ENABLE_EXAMPLES)
     add_subdirectory(example)
 endif ()
 

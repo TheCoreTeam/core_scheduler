@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-set(CS_COMPUTE_SRCS
+set(CORE_SCHEDULER_COMPUTE_SRCS
         ${CMAKE_CURRENT_SOURCE_DIR}/utils.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/cross_entropy.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/gelu.cpp
@@ -21,4 +21,4 @@ set(CS_COMPUTE_SRCS
         ${CMAKE_CURRENT_SOURCE_DIR}/scaled_dot_product_attention.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/layer_norm.cpp
 )
-set(CS_COMPUTE_SRCS ${CS_COMPUTE_SRCS} PARENT_SCOPE)
+set(CORE_SCHEDULER_COMPUTE_SRCS ${CORE_SCHEDULER_COMPUTE_SRCS} PARENT_SCOPE)

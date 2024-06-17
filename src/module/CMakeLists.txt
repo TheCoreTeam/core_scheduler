@@ -12,10 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-set(CS_MODULE_SRCS
+set(CORE_SCHEDULER_MODULE_SRCS
         ${CMAKE_CURRENT_SOURCE_DIR}/module.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/linear.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/layer_norm.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/embedding.cpp
 )
-set(CS_MODULE_SRCS ${CS_MODULE_SRCS} PARENT_SCOPE)
+set(CORE_SCHEDULER_MODULE_SRCS ${CORE_SCHEDULER_MODULE_SRCS} PARENT_SCOPE)

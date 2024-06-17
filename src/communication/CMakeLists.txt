@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-set(CS_COMMUNICATION_SRCS
+set(CORE_SCHEDULER_COMMUNICATION_SRCS
         ${CMAKE_CURRENT_SOURCE_DIR}/communication.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/all_gather.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/all_reduce.cpp
@@ -20,4 +20,4 @@ set(CS_COMMUNICATION_SRCS
         ${CMAKE_CURRENT_SOURCE_DIR}/reduce_scatter.cpp
 )
 
-set(CS_COMMUNICATION_SRCS ${CS_COMMUNICATION_SRCS} PARENT_SCOPE)
+set(CORE_SCHEDULER_COMMUNICATION_SRCS ${CORE_SCHEDULER_COMMUNICATION_SRCS} PARENT_SCOPE)

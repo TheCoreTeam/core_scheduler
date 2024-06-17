@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-set(CS_MEMORY_SRCS
+set(CORE_SCHEDULER_MEMORY_SRCS
         ${CMAKE_CURRENT_SOURCE_DIR}/to_torch.cpp
 )
-set(CS_MEMORY_SRCS ${CS_MEMORY_SRCS} PARENT_SCOPE)
+set(CORE_SCHEDULER_MEMORY_SRCS ${CORE_SCHEDULER_MEMORY_SRCS} PARENT_SCOPE)
