@@ -15,7 +15,7 @@
  */
 
 #pragma once
-#ifdef CS_ENABLE_INTERNAL_BUILD
+#ifdef CORE_SCHEDULER_ENABLE_INTERNAL_BUILD
 // This is an internal file, never use it unless you know what you are doing
 #include <ATen/core/TensorBody.h>
 #include <cuda_runtime.h>

@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_executable(cs_tests
+add_executable(core_scheduler_tests
         main.cpp
         test_adamw.cpp
         test_linear.cpp
@@ -25,17 +25,17 @@ add_executable(cs_tests
         test_load_save.cpp
 )
 
-target_link_libraries(cs_tests PRIVATE
-        cs
+target_link_libraries(core_scheduler_tests PRIVATE
+        core_scheduler
         GTest::gtest
 )
 
-target_compile_options(cs_tests PRIVATE
+target_compile_options(core_scheduler_tests PRIVATE
         $<$<CONFIG:Release>:-Ofast>
         $<$<CONFIG:Debug>:-O0>
 )
 
-add_executable(cs_communication_tests
+add_executable(core_scheduler_communication_tests
         main_communication.cpp
         test_all_reduce.cpp
         test_all_gather.cpp
@@ -43,16 +43,16 @@ add_executable(cs_communication_tests
         test_reduce_scatter.cpp
 )
 
-target_include_directories(cs_communication_tests PRIVATE
+target_include_directories(core_scheduler_communication_tests PRIVATE
         ${TORCH_INCLUDE_PATH}
 )
 
-target_link_libraries(cs_communication_tests PRIVATE
-        cs
+target_link_libraries(core_scheduler_communication_tests PRIVATE
+        core_scheduler
         GTest::gtest
 )
 
-target_compile_options(cs_communication_tests PRIVATE
+target_compile_options(core_scheduler_communication_tests PRIVATE
         $<$<CONFIG:Release>:-Ofast>
         $<$<CONFIG:Debug>:-O0>
 )
