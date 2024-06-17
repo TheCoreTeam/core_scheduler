@@ -15,8 +15,6 @@
  */
 
 #include <c10/core/ScalarType.h>
-#include <c10/cuda/CUDACachingAllocator.h>
-#include <fmt/core.h>
 #include <gtest/gtest.h>
 #include <mpi.h>
 #include <torch/torch.h>
@@ -30,7 +28,6 @@
 
 #include "communication/all_reduce.h"
 #include "communication/communication.h"
-#include "compute/add.h"
 #include "compute/cross_entropy.h"
 #include "compute/embedding.h"
 #include "compute/gelu.h"
@@ -61,10 +58,10 @@ struct ModelConfig {
   const bool use_bias = false;
   const float dropout = 0.0;
   const float epsilon = 1e-5;
-  torch::Device device{torch::kCUDA,
-                       (torch::DeviceIndex)cs::communication::getCommWorld(
-                           cs::communication::NCCL)
-                           .getRank()};
+  torch::Device device{
+      torch::kCUDA,
+      static_cast<torch::DeviceIndex>(
+          cs::communication::getCommWorld(cs::communication::NCCL).getRank())};
   torch::Dtype dtype = torch::kBFloat16;
 };
 
@@ -114,13 +111,13 @@ void display_progress(int completed, int total, const std::string &prefix = "",
 }
 
 struct Attn : cs::module::Module {
-  cs::Scheduler scheduler;
+  const cs::Scheduler &scheduler;
   const ModelConfig &config;
   cs::module::Linear c_attn{nullptr}, c_proj{nullptr};
   std::shared_ptr<cs::compute::ScaledDotProductFlashAttention::State>
       attn_state;
 
-  Attn(cs::Scheduler scheduler, const ModelConfig &config)
+  Attn(const cs::Scheduler &scheduler, const ModelConfig &config)
       : scheduler(scheduler), config{config} {
     c_attn = register_module(
         "c_attn", cs::module::Linear(
@@ -131,8 +128,8 @@ struct Attn : cs::module::Module {
                                      .dtype(config.dtype)));
     // we don't need to register flash attention to module because it does not
     // have parameters.
-    cs::compute::ScaledDotProductFlashAttention::init(
-        scheduler, attn_state,
+    attn_state = cs::compute::ScaledDotProductFlashAttention::init(
+        scheduler,
         cs::compute::ScaledDotProductFlashAttention::Options{}.is_causal(true));
     c_proj = register_module(
         "c_proj", cs::module::Linear(
@@ -143,55 +140,51 @@ struct Attn : cs::module::Module {
                           .dtype(config.dtype)));
   }
 
-  void forward(cs::Scheduler scheduler, cs::Tensor &Output, cs::Tensor &Input) {
+  cs::Tensor forward(const cs::Scheduler &scheduler, cs::Tensor &Input) {
     // Fc Attn
-    cs::Tensor FcAttnOut;
-    c_attn->forward(scheduler, FcAttnOut, Input);
+    auto FcAttnOut = c_attn->forward(scheduler, Input);
 
     // Attn
     cs::Tensor AttnOutView;
     {
-      std::vector<cs::Tensor> qkvSplit;
-      cs::compute::Utils::split(scheduler, qkvSplit, FcAttnOut, config.n_embd,
-                                -1);
+      auto qkvSplit =
+          cs::compute::Utils::split(scheduler, FcAttnOut, config.n_embd, -1);
 
       auto &q = qkvSplit[0];
       auto &k = qkvSplit[1];
       auto &v = qkvSplit[2];
 
-      cs::Tensor qview;
-      cs::compute::Utils::view(scheduler, qview, q,
-                               {config.batch_size, config.block_size,
-                                config.n_head, config.n_embd / config.n_head});
-      cs::Tensor kview;
-      cs::compute::Utils::view(scheduler, kview, k,
-                               {config.batch_size, config.block_size,
-                                config.n_head, config.n_embd / config.n_head});
-      cs::Tensor vview;
-      cs::compute::Utils::view(scheduler, vview, v,
-                               {config.batch_size, config.block_size,
-                                config.n_head, config.n_embd / config.n_head});
+      auto qview = cs::compute::Utils::view(
+          scheduler, q,
+          {config.batch_size, config.block_size, config.n_head,
+           config.n_embd / config.n_head});
+      auto kview = cs::compute::Utils::view(
+          scheduler, k,
+          {config.batch_size, config.block_size, config.n_head,
+           config.n_embd / config.n_head});
+      auto vview = cs::compute::Utils::view(
+          scheduler, v,
+          {config.batch_size, config.block_size, config.n_head,
+           config.n_embd / config.n_head});
 
-      cs::Tensor AttnOut;
-      cs::compute::ScaledDotProductFlashAttention::forward(
-          scheduler, attn_state, AttnOut, qview, kview, vview);
+      auto AttnOut = cs::compute::ScaledDotProductFlashAttention::forward(
+          scheduler, attn_state, qview, kview, vview);
 
-      cs::compute::Utils::view(
-          scheduler, AttnOutView, AttnOut,
+      AttnOutView = cs::compute::Utils::view(
+          scheduler, AttnOut,
           {config.batch_size, config.block_size, config.n_embd});
     }
 
     // Fc Proj
-    c_proj->forward(scheduler, Output, AttnOutView);
+    return c_proj->forward(scheduler, AttnOutView);
   }
 
-  void backward(cs::Scheduler scheduler, const cs::communication::Comm &comm,
-                cs::communication::AllReduceBucket allreduce_bucket,
-                cs::Tensor &DInput, cs::Tensor &DOutput,
-                bool require_backward_grad_sync = false) {
+  cs::Tensor backward(
+      const cs::Scheduler &scheduler, const cs::communication::Comm &comm,
+      const cs::communication::AllReduceBucket &allreduce_bucket,
+      cs::Tensor &DOutput, bool require_backward_grad_sync = false) {
     // Fc Proj, we first run backward for input and then backward for parameter.
-    cs::Tensor DAttnOut;
-    c_proj->backwardInput(scheduler, DAttnOut, DOutput);
+    auto DAttnOut = c_proj->backwardInput(scheduler, DOutput);
     c_proj->backwardParameter(scheduler, DOutput);
     if (require_backward_grad_sync) {
       allreduce_bucket.push_back(scheduler, comm,
@@ -201,43 +194,41 @@ struct Attn : cs::module::Module {
     // Attn
     cs::Tensor DFcAttnOut;
     {
-      cs::compute::Utils::view(scheduler, DAttnOut, DAttnOut,
-                               {config.batch_size, config.block_size,
-                                config.n_head, config.n_embd / config.n_head});
+      DAttnOut = cs::compute::Utils::view(
+          scheduler, DAttnOut,
+          {config.batch_size, config.block_size, config.n_head,
+           config.n_embd / config.n_head});
 
-      cs::Tensor dq, dk, dv;
-      cs::compute::ScaledDotProductFlashAttention::backward(
-          scheduler, attn_state, dq, dk, dv, DAttnOut);
+      auto [dq, dk, dv] = cs::compute::ScaledDotProductFlashAttention::backward(
+          scheduler, attn_state, DAttnOut);
 
-      cs::compute::Utils::view(
-          scheduler, dq, dq,
-          {config.batch_size, config.block_size, config.n_embd});
-      cs::compute::Utils::view(
-          scheduler, dk, dk,
-          {config.batch_size, config.block_size, config.n_embd});
-      cs::compute::Utils::view(
-          scheduler, dv, dv,
-          {config.batch_size, config.block_size, config.n_embd});
-      cs::compute::Utils::cat(scheduler, DFcAttnOut, {dq, dk, dv}, -1);
+      dq = cs::compute::Utils::view(
+          scheduler, dq, {config.batch_size, config.block_size, config.n_embd});
+      dk = cs::compute::Utils::view(
+          scheduler, dk, {config.batch_size, config.block_size, config.n_embd});
+      dv = cs::compute::Utils::view(
+          scheduler, dv, {config.batch_size, config.block_size, config.n_embd});
+      DFcAttnOut = cs::compute::Utils::cat(scheduler, {dq, dk, dv}, -1);
     }
 
     // Fc Attn, we first run backward for input and then backward for parameter.
-    c_attn->backwardInput(scheduler, DInput, DFcAttnOut);
+    auto DInput = c_attn->backwardInput(scheduler, DFcAttnOut);
     c_attn->backwardParameter(scheduler, DFcAttnOut);
     if (require_backward_grad_sync) {
       allreduce_bucket.push_back(scheduler, comm,
                                  c_attn->state()->forward.grad_weight);
     }
+    return DInput;
   }
 };
 
 struct MLP : cs::module::Module {
-  cs::Scheduler scheduler;
+  const cs::Scheduler &scheduler;
   const ModelConfig &config;
   cs::module::Linear fc1{nullptr}, fc2{nullptr};
   std::shared_ptr<cs::compute::GeLU::State> gelu_state;
 
-  MLP(cs::Scheduler scheduler, const ModelConfig &config)
+  MLP(const cs::Scheduler &scheduler, const ModelConfig &config)
       : scheduler(scheduler), config{config} {
     fc1 = register_module(
         "fc1", cs::module::Linear(
@@ -246,7 +237,7 @@ struct MLP : cs::module::Module {
                                   .bias(config.use_bias)
                                   .device(config.device)
                                   .dtype(config.dtype)));
-    cs::compute::GeLU::init(scheduler, gelu_state);
+    gelu_state = cs::compute::GeLU::init(scheduler);
     fc2 = register_module(
         "fc2", cs::module::Linear(
                    scheduler, cs::compute::Linear::Options{4 * config.n_embd,
@@ -256,48 +247,44 @@ struct MLP : cs::module::Module {
                                   .dtype(config.dtype)));
   }
 
-  void forward(cs::Scheduler scheduler, cs::Tensor &Output, cs::Tensor &Input) {
-    cs::Tensor Fc1Out;
-    fc1->forward(scheduler, Fc1Out, Input);
-    cs::Tensor GeluOut;
-    cs::compute::GeLU::forward(scheduler, gelu_state, GeluOut, Fc1Out);
-    fc2->forward(scheduler, Output, GeluOut);
+  cs::Tensor forward(const cs::Scheduler &scheduler, const cs::Tensor &Input) {
+    auto Fc1Out = fc1->forward(scheduler, Input);
+    auto GeluOut = cs::compute::GeLU::forward(scheduler, gelu_state, Fc1Out);
+    return fc2->forward(scheduler, GeluOut);
   }
 
-  void backward(const cs::Scheduler &scheduler,
-                const cs::communication::Comm &comm,
-                cs::communication::AllReduceBucket allreduce_bucket,
-                cs::Tensor &DInput, cs::Tensor &DOutput,
-                bool require_backward_grad_sync = false) {
+  cs::Tensor backward(
+      const cs::Scheduler &scheduler, const cs::communication::Comm &comm,
+      const cs::communication::AllReduceBucket &allreduce_bucket,
+      cs::Tensor &DOutput, bool require_backward_grad_sync = false) {
     // Fc2
-    cs::Tensor DGeluOut;
-    fc2->backwardInput(scheduler, DGeluOut, DOutput);
+    auto DGeluOut = fc2->backwardInput(scheduler, DOutput);
     fc2->backwardParameter(scheduler, DOutput);
     if (require_backward_grad_sync) {
       allreduce_bucket.push_back(scheduler, comm,
                                  fc2->state()->forward.grad_weight);
     }
     // GeLU
-    cs::Tensor DFc1Out;
-    cs::compute::GeLU::backward(scheduler, gelu_state, DFc1Out, DGeluOut);
+    auto DFc1Out = cs::compute::GeLU::backward(scheduler, gelu_state, DGeluOut);
     // Fc1
-    fc1->backwardInput(scheduler, DInput, DFc1Out);
+    auto DInput = fc1->backwardInput(scheduler, DFc1Out);
     fc1->backwardParameter(scheduler, DFc1Out);
     if (require_backward_grad_sync) {
       allreduce_bucket.push_back(scheduler, comm,
                                  fc1->state()->forward.grad_weight);
     }
+    return DInput;
   }
 };
 
 struct Block : cs::module::Module {
   const ModelConfig &config;
-  cs::Scheduler scheduler;
+  const cs::Scheduler &scheduler;
   cs::module::LayerNorm ln1{nullptr}, ln2{nullptr};
   std::shared_ptr<Attn> attn;
   std::shared_ptr<MLP> mlp;
 
-  Block(cs::Scheduler scheduler, const ModelConfig &config)
+  Block(const cs::Scheduler &scheduler, const ModelConfig &config)
       : scheduler(scheduler), config{config} {
     ln1 = register_module(
         "ln1", cs::module::LayerNorm(
@@ -313,67 +300,56 @@ struct Block : cs::module::Module {
     mlp = register_module("mlp", std::make_shared<MLP>(scheduler, config));
   }
 
-  void forward(cs::Scheduler scheduler, cs::Tensor &Output, cs::Tensor &Input) {
-    cs::Tensor LN1Out;
-    ln1->forward(scheduler, LN1Out, Input);
-    cs::Tensor AttnOut;
-    attn->forward(scheduler, AttnOut, LN1Out);
-    cs::Tensor ResAttnOut;
-    cs::compute::Add::forward(scheduler, ResAttnOut, Input, AttnOut);
-    cs::Tensor LN2Out;
-    ln2->forward(scheduler, LN2Out, ResAttnOut);
-    cs::Tensor MLPOut;
-    mlp->forward(scheduler, MLPOut, LN2Out);
-    cs::compute::Add::forward(scheduler, Output, ResAttnOut, MLPOut);
+  cs::Tensor forward(const cs::Scheduler &scheduler, cs::Tensor &Input) {
+    auto LN1Out = ln1->forward(scheduler, Input);
+    auto AttnOut = attn->forward(scheduler, LN1Out);
+    auto ResAttnOut = cs::compute::Utils::add(scheduler, Input, AttnOut);
+    auto LN2Out = ln2->forward(scheduler, ResAttnOut);
+    auto MLPOut = mlp->forward(scheduler, LN2Out);
+    return cs::compute::Utils::add(scheduler, ResAttnOut, MLPOut);
   }
 
-  void backward(const cs::Scheduler &scheduler,
-                const cs::communication::Comm &comm,
-                cs::communication::AllReduceBucket allreduce_bucket,
-                cs::Tensor &DInput, cs::Tensor &DOutput,
-                bool require_backward_grad_sync = false) {
+  cs::Tensor backward(
+      const cs::Scheduler &scheduler, const cs::communication::Comm &comm,
+      const cs::communication::AllReduceBucket &allreduce_bucket,
+      cs::Tensor &DOutput, bool require_backward_grad_sync = false) {
     auto DMLPOut = DOutput;
-    cs::Tensor DLN2Out;
-    mlp->backward(scheduler, comm, allreduce_bucket, DLN2Out, DMLPOut,
-                  require_backward_grad_sync);
-    cs::Tensor DResAttnOut;
-    ln2->backward(scheduler, DResAttnOut, DLN2Out);
+    auto DLN2Out = mlp->backward(scheduler, comm, allreduce_bucket, DMLPOut,
+                                 require_backward_grad_sync);
+    auto DResAttnOut = ln2->backward(scheduler, DLN2Out);
     if (require_backward_grad_sync) {
       allreduce_bucket.push_back(scheduler, comm,
                                  ln2->state()->forward.grad_weight);
       allreduce_bucket.push_back(scheduler, comm,
                                  ln2->state()->forward.grad_bias);
     }
-    cs::Tensor DAttnOut;
-    cs::compute::Add::forward(scheduler, DAttnOut, DResAttnOut, DMLPOut);
-    cs::Tensor DLN1Out;
-    attn->backward(scheduler, comm, allreduce_bucket, DLN1Out, DAttnOut,
-                   require_backward_grad_sync);
-    cs::Tensor DInput_;
-    ln1->backward(scheduler, DInput_, DLN1Out);
+    auto DAttnOut = cs::compute::Utils::add(scheduler, DResAttnOut, DMLPOut);
+    auto DLN1Out = attn->backward(scheduler, comm, allreduce_bucket, DAttnOut,
+                                  require_backward_grad_sync);
+    auto DInput = ln1->backward(scheduler, DLN1Out);
     if (require_backward_grad_sync) {
       allreduce_bucket.push_back(scheduler, comm,
                                  ln1->state()->forward.grad_weight);
       allreduce_bucket.push_back(scheduler, comm,
                                  ln1->state()->forward.grad_bias);
     }
-    cs::compute::Add::forward(scheduler, DInput, DInput_, DAttnOut);
+    return cs::compute::Utils::add(scheduler, DInput, DAttnOut);
   }
 };
 
 struct GPT2 : cs::module::Module {
   const ModelConfig &config;
-  cs::Scheduler scheduler;
+  const cs::Scheduler &scheduler;
   cs::module::Embedding wte{nullptr}, wpe{nullptr};
   std::vector<std::shared_ptr<Block>> h;
   cs::module::LayerNorm lnf{nullptr};
   cs::module::Linear lm_head{nullptr};
   cs::Tensor Pos;
 
-  GPT2(cs::Scheduler scheduler, const ModelConfig &config)
+  GPT2(const cs::Scheduler &scheduler, const ModelConfig &config)
       : scheduler(scheduler), config{config} {
-    cs::compute::Utils::arange(
-        scheduler, Pos, 0, config.block_size,
+    Pos = cs::compute::Utils::arange(
+        scheduler, 0, config.block_size,
         torch::TensorOptions().dtype(torch::kInt64).device(config.device));
     wte = register_module(
         "wte",
@@ -407,39 +383,34 @@ struct GPT2 : cs::module::Module {
                                           .dtype(config.dtype)));
   }
 
-  void forward(cs::Scheduler scheduler, cs::Tensor &Output, cs::Tensor &Input) {
+  cs::Tensor forward(const cs::Scheduler &scheduler, cs::Tensor &Input) {
     cs::Tensor EmbOut;
     {
-      cs::Tensor WteOut, WpeOut;
-      wte->forward(scheduler, WteOut, Input);
-      wpe->forward(scheduler, WpeOut, Pos);
-      cs::Tensor PeOutBroadcast;
-      cs::compute::Utils::broadcast_to(scheduler, PeOutBroadcast, WpeOut,
-                                       WteOut.sizes());
-      cs::compute::Add::forward(scheduler, EmbOut, WteOut, PeOutBroadcast);
+      auto WteOut = wte->forward(scheduler, Input);
+      auto WpeOut = wpe->forward(scheduler, Pos);
+      auto PeOutBroadcast =
+          cs::compute::Utils::broadcast_to(scheduler, WpeOut, WteOut.sizes());
+      EmbOut = cs::compute::Utils::add(scheduler, WteOut, PeOutBroadcast);
     }
     auto BlockOut = EmbOut;
     for (auto &block : h) {
-      block->forward(scheduler, BlockOut, BlockOut);
+      BlockOut = block->forward(scheduler, BlockOut);
     }
-    cs::Tensor LNfOut;
-    lnf->forward(scheduler, LNfOut, BlockOut);
-    lm_head->forward(scheduler, Output, LNfOut);
+    auto LNfOut = lnf->forward(scheduler, BlockOut);
+    return lm_head->forward(scheduler, LNfOut);
   }
 
   void backward(const cs::Scheduler &scheduler,
                 const cs::communication::Comm &comm,
-                cs::communication::AllReduceBucket allreduce_bucket,
+                const cs::communication::AllReduceBucket &allreduce_bucket,
                 cs::Tensor &DOutput, bool require_backward_grad_sync = false) {
-    cs::Tensor DLNfOut;
-    lm_head->backwardInput(scheduler, DLNfOut, DOutput);
+    auto DLNfOut = lm_head->backwardInput(scheduler, DOutput);
     lm_head->backwardParameter(scheduler, DOutput);
     if (require_backward_grad_sync) {
       allreduce_bucket.push_back(scheduler, comm,
                                  lm_head->state()->forward.grad_weight);
     }
-    cs::Tensor DBlockOut;
-    lnf->backward(scheduler, DBlockOut, DLNfOut);
+    auto DBlockOut = lnf->backward(scheduler, DLNfOut);
     if (require_backward_grad_sync) {
       allreduce_bucket.push_back(scheduler, comm,
                                  lnf->state()->forward.grad_weight);
@@ -447,13 +418,12 @@ struct GPT2 : cs::module::Module {
                                  lnf->state()->forward.grad_bias);
     }
     for (auto &block : h) {
-      block->backward(scheduler, comm, allreduce_bucket, DBlockOut, DBlockOut,
-                      require_backward_grad_sync);
+      DBlockOut = block->backward(scheduler, comm, allreduce_bucket, DBlockOut,
+                                  require_backward_grad_sync);
     }
     auto DEmbOut = DBlockOut;
     {
-      cs::Tensor DEmbOutSum0;
-      cs::compute::Utils::sum(scheduler, DEmbOutSum0, DEmbOut, 0);
+      auto DEmbOutSum0 = cs::compute::Utils::sum(scheduler, DEmbOut, 0);
       wpe->backward(scheduler, DEmbOutSum0);
       if (require_backward_grad_sync) {
         allreduce_bucket.push_back(scheduler, comm,
@@ -474,7 +444,6 @@ void train() {
   TrainConfig trainConfig;
   DataConfig dataConfig;
   std::unique_ptr<GPT2> model;
-  cs::Tensor input, target;
   cs::Tensor loss;
   cs::Tensor output, grad_output;
   const cs::communication::Comm comm =
@@ -495,8 +464,7 @@ void train() {
 
   std::cout << "Init" << std::endl;
   model = std::make_unique<GPT2>(scheduler, modelConfig);
-  std::shared_ptr<cs::compute::CrossEntropy::State> loss_state;
-  cs::compute::CrossEntropy::init(scheduler, loss_state);
+  auto loss_state = cs::compute::CrossEntropy::init(scheduler);
 
   bool require_backward_grad_sync = true;
   cs::communication::AllReduceBucket allreduce_bucket(trainConfig.bucket_size,
@@ -516,22 +484,24 @@ void train() {
       display_progress(j, dataloader.iterationsPerEpoch(), " Training: ",
                        comm.getRank());  // Display progress for the inner loop
 
-      dataloader.load(scheduler, input, target);
+      auto data = dataloader.load(scheduler);
+      auto input = data["input_ids"];
+      auto target = data["labels"];
       // Forward
-      model->forward(scheduler, output, input);
+      output = model->forward(scheduler, input);
 
       // compute loss
-      cs::compute::Utils::view(scheduler, output, output,
-                               {modelConfig.batch_size * modelConfig.block_size,
-                                modelConfig.pad_size});
-      cs::compute::Utils::view(
-          scheduler, target, target,
-          {modelConfig.batch_size * modelConfig.block_size});
-      cs::compute::CrossEntropy::forward(scheduler, loss_state, loss, output,
-                                         target);
+      output = cs::compute::Utils::view(
+          scheduler, output,
+          {modelConfig.batch_size * modelConfig.block_size,
+           modelConfig.pad_size});
+      target = cs::compute::Utils::view(
+          scheduler, target, {modelConfig.batch_size * modelConfig.block_size});
+      loss = cs::compute::CrossEntropy::forward(scheduler, loss_state,
+                                                     output, target);
 
       // Backward
-      cs::compute::CrossEntropy::backward(scheduler, loss_state, grad_output);
+      grad_output = cs::compute::CrossEntropy::backward(scheduler, loss_state);
 
       model->backward(scheduler, comm, allreduce_bucket, grad_output,
                       require_backward_grad_sync);

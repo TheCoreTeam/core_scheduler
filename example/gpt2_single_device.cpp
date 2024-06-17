@@ -26,7 +26,6 @@
 #include <string>
 #include <vector>
 
-#include "compute/add.h"
 #include "compute/cross_entropy.h"
 #include "compute/embedding.h"
 #include "compute/gelu.h"
@@ -123,8 +122,8 @@ struct Attn : cs::module::Module {
                                      .dtype(config.dtype)));
     // we don't need to register flash attention to module because it does not
     // have parameters.
-    cs::compute::ScaledDotProductFlashAttention::init(
-        scheduler, attn_state,
+    attn_state = cs::compute::ScaledDotProductFlashAttention::init(
+        scheduler,
         cs::compute::ScaledDotProductFlashAttention::Options{}.is_causal(true));
     c_proj = register_module(
         "c_proj", cs::module::Linear(
@@ -135,82 +134,75 @@ struct Attn : cs::module::Module {
                           .dtype(config.dtype)));
   }
 
-  void forward(cs::DynamicScheduler scheduler, cs::Tensor &Output,
-               cs::Tensor &Input) {
+  cs::Tensor forward(const cs::DynamicScheduler &scheduler, cs::Tensor &Input) {
     // Fc Attn
-    cs::Tensor FcAttnOut;
-    c_attn->forward(scheduler, FcAttnOut, Input);
+    auto FcAttnOut = c_attn->forward(scheduler, Input);
 
     // Attn
     cs::Tensor AttnOutView;
     {
-      std::vector<cs::Tensor> qkvSplit;
-      cs::compute::Utils::split(scheduler, qkvSplit, FcAttnOut, config.n_embd,
-                                -1);
+      auto qkvSplit =
+          cs::compute::Utils::split(scheduler, FcAttnOut, config.n_embd, -1);
 
       auto &q = qkvSplit[0];
       auto &k = qkvSplit[1];
       auto &v = qkvSplit[2];
 
-      cs::Tensor qview;
-      cs::compute::Utils::view(scheduler, qview, q,
-                               {config.batch_size, config.block_size,
-                                config.n_head, config.n_embd / config.n_head});
-      cs::Tensor kview;
-      cs::compute::Utils::view(scheduler, kview, k,
-                               {config.batch_size, config.block_size,
-                                config.n_head, config.n_embd / config.n_head});
-      cs::Tensor vview;
-      cs::compute::Utils::view(scheduler, vview, v,
-                               {config.batch_size, config.block_size,
-                                config.n_head, config.n_embd / config.n_head});
+      auto qview = cs::compute::Utils::view(
+          scheduler, q,
+          {config.batch_size, config.block_size, config.n_head,
+           config.n_embd / config.n_head});
+      auto kview = cs::compute::Utils::view(
+          scheduler, k,
+          {config.batch_size, config.block_size, config.n_head,
+           config.n_embd / config.n_head});
+      auto vview = cs::compute::Utils::view(
+          scheduler, v,
+          {config.batch_size, config.block_size, config.n_head,
+           config.n_embd / config.n_head});
 
-      cs::Tensor AttnOut;
-      cs::compute::ScaledDotProductFlashAttention::forward(
-          scheduler, attn_state, AttnOut, qview, kview, vview);
+      auto AttnOut = cs::compute::ScaledDotProductFlashAttention::forward(
+          scheduler, attn_state, qview, kview, vview);
 
-      cs::compute::Utils::view(
-          scheduler, AttnOutView, AttnOut,
+      AttnOutView = cs::compute::Utils::view(
+          scheduler, AttnOut,
           {config.batch_size, config.block_size, config.n_embd});
     }
 
     // Fc Proj
-    c_proj->forward(scheduler, Output, AttnOutView);
+    return c_proj->forward(scheduler, AttnOutView);
   }
 
-  void backward(cs::DynamicScheduler scheduler, cs::Tensor &DInput,
-                cs::Tensor &DOutput) {
+  cs::Tensor backward(const cs::DynamicScheduler &scheduler,
+                      cs::Tensor &DOutput) {
     // Fc Proj, we first run backward for input and then backward for parameter.
-    cs::Tensor DAttnOut;
-    c_proj->backwardInput(scheduler, DAttnOut, DOutput);
+    auto DAttnOut = c_proj->backwardInput(scheduler, DOutput);
     c_proj->backwardParameter(scheduler, DOutput);
 
-    // Attn
     cs::Tensor DFcAttnOut;
+    // Attn
     {
-      cs::compute::Utils::view(scheduler, DAttnOut, DAttnOut,
-                               {config.batch_size, config.block_size,
-                                config.n_head, config.n_embd / config.n_head});
+      DAttnOut = cs::compute::Utils::view(
+          scheduler, DAttnOut,
+          {config.batch_size, config.block_size, config.n_head,
+           config.n_embd / config.n_head});
 
-      cs::Tensor dq, dk, dv;
-      cs::compute::ScaledDotProductFlashAttention::backward(
-          scheduler, attn_state, dq, dk, dv, DAttnOut);
+      auto [dq, dk, dv] = cs::compute::ScaledDotProductFlashAttention::backward(
+          scheduler, attn_state, DAttnOut);
 
-      cs::compute::Utils::view(
-          scheduler, dq, dq,
-          {config.batch_size, config.block_size, config.n_embd});
-      cs::compute::Utils::view(
-          scheduler, dk, dk,
-          {config.batch_size, config.block_size, config.n_embd});
-      cs::compute::Utils::view(
-          scheduler, dv, dv,
-          {config.batch_size, config.block_size, config.n_embd});
-      cs::compute::Utils::cat(scheduler, DFcAttnOut, {dq, dk, dv}, -1);
+      dq = cs::compute::Utils::view(
+          scheduler, dq, {config.batch_size, config.block_size, config.n_embd});
+      dk = cs::compute::Utils::view(
+          scheduler, dk, {config.batch_size, config.block_size, config.n_embd});
+      dv = cs::compute::Utils::view(
+          scheduler, dv, {config.batch_size, config.block_size, config.n_embd});
+      DFcAttnOut = cs::compute::Utils::cat(scheduler, {dq, dk, dv}, -1);
     }
 
     // Fc Attn, we first run backward for input and then backward for parameter.
-    c_attn->backwardInput(scheduler, DInput, DFcAttnOut);
+    auto DInput = c_attn->backwardInput(scheduler, DFcAttnOut);
     c_attn->backwardParameter(scheduler, DFcAttnOut);
+    return DInput;
   }
 };
 
@@ -229,7 +221,7 @@ struct MLP : cs::module::Module {
                                   .bias(config.use_bias)
                                   .device(config.device)
                                   .dtype(config.dtype)));
-    cs::compute::GeLU::init(scheduler, gelu_state);
+    gelu_state = cs::compute::GeLU::init(scheduler);
     fc2 = register_module(
         "fc2", cs::module::Linear(
                    scheduler, cs::compute::Linear::Options{4 * config.n_embd,
@@ -239,26 +231,21 @@ struct MLP : cs::module::Module {
                                   .dtype(config.dtype)));
   }
 
-  void forward(cs::DynamicScheduler scheduler, cs::Tensor &Output,
-               cs::Tensor &Input) {
-    cs::Tensor Fc1Out;
-    fc1->forward(scheduler, Fc1Out, Input);
-    cs::Tensor GeluOut;
-    cs::compute::GeLU::forward(scheduler, gelu_state, GeluOut, Fc1Out);
-    fc2->forward(scheduler, Output, GeluOut);
+  cs::Tensor forward(const cs::DynamicScheduler &scheduler, cs::Tensor &Input) {
+    auto Fc1Out = fc1->forward(scheduler, Input);
+    auto GeluOut = cs::compute::GeLU::forward(scheduler, gelu_state, Fc1Out);
+    return fc2->forward(scheduler, GeluOut);
   }
 
-  void backward(cs::DynamicScheduler scheduler, cs::Tensor &DInput,
+  void backward(const cs::DynamicScheduler &scheduler, cs::Tensor &DInput,
                 cs::Tensor &DOutput) {
     // Fc2
-    cs::Tensor DGeluOut;
-    fc2->backwardInput(scheduler, DGeluOut, DOutput);
+    auto DGeluOut = fc2->backwardInput(scheduler, DOutput);
     fc2->backwardParameter(scheduler, DOutput);
     // GeLU
-    cs::Tensor DFc1Out;
-    cs::compute::GeLU::backward(scheduler, gelu_state, DFc1Out, DGeluOut);
+    auto DFc1Out = cs::compute::GeLU::backward(scheduler, gelu_state, DGeluOut);
     // Fc1
-    fc1->backwardInput(scheduler, DInput, DFc1Out);
+    DInput = fc1->backwardInput(scheduler, DFc1Out);
     fc1->backwardParameter(scheduler, DFc1Out);
   }
 };
@@ -286,35 +273,25 @@ struct Block : cs::module::Module {
     mlp = register_module("mlp", std::make_shared<MLP>(scheduler, config));
   }
 
-  void forward(cs::DynamicScheduler scheduler, cs::Tensor &Output,
-               cs::Tensor &Input) {
-    cs::Tensor LN1Out;
-    ln1->forward(scheduler, LN1Out, Input);
-    cs::Tensor AttnOut;
-    attn->forward(scheduler, AttnOut, LN1Out);
-    cs::Tensor ResAttnOut;
-    cs::compute::Add::forward(scheduler, ResAttnOut, Input, AttnOut);
-    cs::Tensor LN2Out;
-    ln2->forward(scheduler, LN2Out, ResAttnOut);
-    cs::Tensor MLPOut;
-    mlp->forward(scheduler, MLPOut, LN2Out);
-    cs::compute::Add::forward(scheduler, Output, ResAttnOut, MLPOut);
+  cs::Tensor forward(const cs::DynamicScheduler &scheduler, cs::Tensor &Input) {
+    auto LN1Out = ln1->forward(scheduler, Input);
+    auto AttnOut = attn->forward(scheduler, LN1Out);
+    auto ResAttnOut = cs::compute::Utils::add(scheduler, Input, AttnOut);
+    auto LN2Out = ln2->forward(scheduler, ResAttnOut);
+    auto MLPOut = mlp->forward(scheduler, LN2Out);
+    return cs::compute::Utils::add(scheduler, ResAttnOut, MLPOut);
   }
 
-  void backward(cs::DynamicScheduler scheduler, cs::Tensor &DInput,
-                cs::Tensor &DOutput) {
+  cs::Tensor backward(const cs::DynamicScheduler &scheduler,
+                      cs::Tensor &DOutput) {
     auto DMLPOut = DOutput;
     cs::Tensor DLN2Out;
     mlp->backward(scheduler, DLN2Out, DMLPOut);
-    cs::Tensor DResAttnOut;
-    ln2->backward(scheduler, DResAttnOut, DLN2Out);
-    cs::Tensor DAttnOut;
-    cs::compute::Add::forward(scheduler, DAttnOut, DResAttnOut, DMLPOut);
-    cs::Tensor DLN1Out;
-    attn->backward(scheduler, DLN1Out, DAttnOut);
-    cs::Tensor DInput_;
-    ln1->backward(scheduler, DInput_, DLN1Out);
-    cs::compute::Add::forward(scheduler, DInput, DInput_, DAttnOut);
+    auto DResAttnOut = ln2->backward(scheduler, DLN2Out);
+    auto DAttnOut = cs::compute::Utils::add(scheduler, DResAttnOut, DMLPOut);
+    auto DLN1Out = attn->backward(scheduler, DAttnOut);
+    auto DInput = ln1->backward(scheduler, DLN1Out);
+    return cs::compute::Utils::add(scheduler, DInput, DAttnOut);
   }
 };
 
@@ -329,8 +306,8 @@ struct GPT2 : cs::module::Module {
 
   GPT2(cs::DynamicScheduler scheduler, const ModelConfig &config)
       : scheduler(scheduler), config{config} {
-    cs::compute::Utils::arange(
-        scheduler, Pos, 0, config.block_size,
+    Pos = cs::compute::Utils::arange(
+        scheduler, 0, config.block_size,
         torch::TensorOptions().dtype(torch::kInt64).device(config.device));
     wte = register_module(
         "wte",
@@ -368,36 +345,30 @@ struct GPT2 : cs::module::Module {
                cs::Tensor &Input) {
     cs::Tensor EmbOut;
     {
-      cs::Tensor WteOut, WpeOut;
-      wte->forward(scheduler, WteOut, Input);
-      wpe->forward(scheduler, WpeOut, Pos);
-      cs::Tensor PeOutBroadcast;
-      cs::compute::Utils::broadcast_to(scheduler, PeOutBroadcast, WpeOut,
-                                       WteOut.sizes());
-      cs::compute::Add::forward(scheduler, EmbOut, WteOut, PeOutBroadcast);
+      auto WteOut = wte->forward(scheduler, Input);
+      auto WpeOut = wpe->forward(scheduler, Pos);
+      auto PeOutBroadcast =
+          cs::compute::Utils::broadcast_to(scheduler, WpeOut, WteOut.sizes());
+      EmbOut = cs::compute::Utils::add(scheduler, WteOut, PeOutBroadcast);
     }
     auto BlockOut = EmbOut;
     for (auto &block : h) {
-      block->forward(scheduler, BlockOut, BlockOut);
+      BlockOut = block->forward(scheduler, BlockOut);
     }
-    cs::Tensor LNfOut;
-    lnf->forward(scheduler, LNfOut, BlockOut);
-    lm_head->forward(scheduler, Output, LNfOut);
+    auto LNfOut = lnf->forward(scheduler, BlockOut);
+    Output = lm_head->forward(scheduler, LNfOut);
   }
 
-  void backward(cs::DynamicScheduler scheduler, cs::Tensor &DOutput) {
-    cs::Tensor DLNfOut;
-    lm_head->backwardInput(scheduler, DLNfOut, DOutput);
+  void backward(const cs::DynamicScheduler &scheduler, cs::Tensor &DOutput) {
+    auto DLNfOut = lm_head->backwardInput(scheduler, DOutput);
     lm_head->backwardParameter(scheduler, DOutput);
-    cs::Tensor DBlockOut;
-    lnf->backward(scheduler, DBlockOut, DLNfOut);
+    auto DBlockOut = lnf->backward(scheduler, DLNfOut);
     for (auto &block : h) {
-      block->backward(scheduler, DBlockOut, DBlockOut);
+      DBlockOut = block->backward(scheduler, DBlockOut);
     }
     auto DEmbOut = DBlockOut;
     {
-      cs::Tensor DEmbOutSum0;
-      cs::compute::Utils::sum(scheduler, DEmbOutSum0, DEmbOut, 0);
+      auto DEmbOutSum0 = cs::compute::Utils::sum(scheduler, DEmbOut, 0);
       wpe->backward(scheduler, DEmbOutSum0);
       wte->backward(scheduler, DEmbOut);
     }
@@ -411,7 +382,6 @@ void train() {
   TrainConfig trainConfig;
   DataConfig dataConfig;
   std::unique_ptr<GPT2> model;
-  cs::Tensor input, target;
   cs::Tensor loss;
   const torch::TensorOptions option =
       torch::TensorOptions().dtype(torch::kInt64).device(modelConfig.device);
@@ -428,8 +398,7 @@ void train() {
   std::cout << "Init" << std::endl;
   model = std::make_unique<GPT2>(scheduler, modelConfig);
 
-  std::shared_ptr<cs::compute::CrossEntropy::State> loss_state;
-  cs::compute::CrossEntropy::init(scheduler, loss_state);
+  auto loss_state = cs::compute::CrossEntropy::init(scheduler);
 
   cs::optimizer::AdamW::init(scheduler, model,
                              cs::optimizer::AdamW::Options{}
@@ -445,24 +414,26 @@ void train() {
       display_progress(j, dataloader.iterationsPerEpoch(),
                        " Training: ");  // Display progress for the inner loop
 
-      dataloader.load(scheduler, input, target);
+      auto data = dataloader.load(scheduler);
+      auto input = data["input_ids"];
+      auto target = data["labels"];
       // Forward
       cs::Tensor output;
       model->forward(scheduler, output, input);
 
       // compute loss
-      cs::compute::Utils::view(scheduler, output, output,
-                               {modelConfig.batch_size * modelConfig.block_size,
-                                modelConfig.pad_size});
-      cs::compute::Utils::view(
-          scheduler, target, target,
-          {modelConfig.batch_size * modelConfig.block_size});
-      cs::compute::CrossEntropy::forward(scheduler, loss_state, loss, output,
-                                         target);
+      output = cs::compute::Utils::view(
+          scheduler, output,
+          {modelConfig.batch_size * modelConfig.block_size,
+           modelConfig.pad_size});
+      target = cs::compute::Utils::view(
+          scheduler, target, {modelConfig.batch_size * modelConfig.block_size});
+      loss = cs::compute::CrossEntropy::forward(scheduler, loss_state, output,
+                                                target);
 
       // Backward
-      cs::Tensor grad_output;
-      cs::compute::CrossEntropy::backward(scheduler, loss_state, grad_output);
+      auto grad_output =
+          cs::compute::CrossEntropy::backward(scheduler, loss_state);
 
       model->backward(scheduler, grad_output);
 
