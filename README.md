@@ -21,6 +21,7 @@ conda env create -f env.yaml
 Compile & Run Tests
 
 ```bash
+conda activate core_scheduler
 mkdir build
 cd build
 cmake ..
