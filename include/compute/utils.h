@@ -1,8 +1,24 @@
+/*
+ * Copyright (c) 2024 The Core team
+ *
+ * Licensed under the Apache License, Version 2.0;
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an 'AS IS' BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 #pragma once
 #include "tensor.h"
 #include "threading/scheduler.h"
 
-namespace dllm::compute::Utils {
+namespace cs::compute::Utils {
 Tensor sum(const Scheduler &scheduler, const ReadOnlyTensor &input,
            IntArrayRef dim, bool keep_dim = false,
            c10::optional<at::ScalarType> dtype = c10::nullopt);
@@ -68,4 +84,4 @@ Tensor add(const Scheduler &scheduler, ReadOnlyTensor x, ReadOnlyTensor y);
 void zero_(const Scheduler &scheduler, const Tensor &tensor);
 
 Tensor clone(const Scheduler &scheduler, Tensor tensor);
-}  // namespace dllm::compute::Utils
+}  // namespace cs::compute::Utils

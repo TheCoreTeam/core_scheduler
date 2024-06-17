@@ -1,3 +1,19 @@
+/*
+ * Copyright (c) 2024 The Core team
+ *
+ * Licensed under the Apache License, Version 2.0;
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an 'AS IS' BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 #include <ATen/Context.h>
 #include <ATen/ops/allclose.h>
 #include <ATen/ops/cat.h>
@@ -38,7 +54,7 @@ struct TypeToTorch<double> {
 
 class TestLoadSaveFixture : public ::testing::Test {
  protected:
-  dllm::DynamicScheduler scheduler{0};
+  cs::DynamicScheduler scheduler{0};
 
   template <typename T>
   void TestRoutine(int size);
@@ -73,18 +89,18 @@ void TestLoadSaveFixture::TestRoutine(const int size) {
   const at::Device device(at::kCUDA, 0);
   const at::ScalarType dtype = TypeToTorch<T>::type;
 
-  dllm::module::LayerNorm ln{
+  cs::module::LayerNorm ln{
       scheduler,
-      dllm::module::LayerNorm::Options{{3 * size}}.device(device).dtype(dtype)};
+      cs::module::LayerNorm::Options{{3 * size}}.device(device).dtype(dtype)};
 
   const auto weightClone =
-      dllm::compute::Utils::clone(scheduler, ln->state()->forward.weight);
+      cs::compute::Utils::clone(scheduler, ln->state()->forward.weight);
 
-  dllm::save(ln, path);
+  cs::save(ln, path);
 
-  dllm::compute::Utils::zero_(scheduler, ln->state()->forward.weight);
+  cs::compute::Utils::zero_(scheduler, ln->state()->forward.weight);
 
-  dllm::load(ln, path);
+  cs::load(ln, path);
 
   std::remove(path.c_str());
 

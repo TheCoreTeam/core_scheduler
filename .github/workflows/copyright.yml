@@ -1,0 +1,27 @@
+name: Check License Header
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  check-license-header:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Check Headers
+        run: |
+          MISSING_HEADERS=`find ./ -type f \( -iname "*.cpp" -o -iname "*.h" -o -iname "*.cu" -o -iname "*.py" -o -iname "*.cmake" -o -name "CMakeLists.txt" \) | xargs grep -L "Licensed under the Apache License, Version 2.0"`
+          if [ -n "$MISSING_HEADERS" ]; then
+            echo "These files are missing license headers:"
+            echo "$MISSING_HEADERS"
+            exit 1
+          fi
+      - name: Fix Missing Headers
+        if: failure()  # 如果上一个步骤失败，即存在未含版权信息的文件
+        run: python ./script/add-copyright.py
+        continue-on-error: true  # 即使修复脚本执行失败也继续运行

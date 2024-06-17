@@ -1,3 +1,19 @@
+/*
+ * Copyright (c) 2024 The Core team
+ *
+ * Licensed under the Apache License, Version 2.0;
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an 'AS IS' BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 #include "tensor.h"
 
 #include <ATen/ops/allclose.h>
@@ -9,11 +25,11 @@
 #include "tensor_impl.h"
 #include "threading/task_impl.h"
 
-namespace dllm {
+namespace cs {
 template <typename T1, typename T2>
 static bool allclose_impl(const T1 &t1_, const T2 &t2_, const double rtol,
                           const double atol, const bool equal_nan) {
-  DLLM_NVTX_RANGE_FN("dllm::allclose");
+  CS_NVTX_RANGE_FN("cs::allclose");
   at::Tensor t1, t2;
   torch::cuda::synchronize();
   if constexpr (std::is_same_v<T1, at::Tensor>) {
@@ -60,19 +76,19 @@ ReadOnlyTensor::ReadOnlyTensor() : impl_{std::make_shared<Impl>()} {}
 
 TensorOptions ReadOnlyTensor::options() const { return impl_->options(); }
 
-}  // namespace dllm
+}  // namespace cs
 
 namespace at {
-bool allclose(const dllm::ReadOnlyTensor &t1, const at::Tensor &t2,
+bool allclose(const cs::ReadOnlyTensor &t1, const at::Tensor &t2,
               const double rtol, const double atol, const bool equal_nan) {
-  return dllm::allclose_impl(t1, t2, rtol, atol, equal_nan);
+  return cs::allclose_impl(t1, t2, rtol, atol, equal_nan);
 }
-bool allclose(const dllm::ReadOnlyTensor &t1, const dllm::ReadOnlyTensor &t2,
+bool allclose(const cs::ReadOnlyTensor &t1, const cs::ReadOnlyTensor &t2,
               const double rtol, const double atol, const bool equal_nan) {
-  return dllm::allclose_impl(t1, t2, rtol, atol, equal_nan);
+  return cs::allclose_impl(t1, t2, rtol, atol, equal_nan);
 }
-bool allclose(const at::Tensor &t1, const dllm::ReadOnlyTensor &t2,
+bool allclose(const at::Tensor &t1, const cs::ReadOnlyTensor &t2,
               const double rtol, const double atol, const bool equal_nan) {
-  return dllm::allclose_impl(t1, t2, rtol, atol, equal_nan);
+  return cs::allclose_impl(t1, t2, rtol, atol, equal_nan);
 }
 }  // namespace at

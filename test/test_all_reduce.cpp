@@ -1,3 +1,19 @@
+/*
+ * Copyright (c) 2024 The Core team
+ *
+ * Licensed under the Apache License, Version 2.0;
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an 'AS IS' BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 #include <cuda_fp16.h>
 #include <gtest/gtest.h>
 #include <mpi.h>
@@ -32,9 +48,9 @@ struct TypeToTorch<double> {
 
 class AllReduceNcclTestFixture : public ::testing::Test {
  protected:
-  dllm::communication::Comm comm{
-      dllm::communication::getCommWorld(dllm::communication::NCCL)};
-  dllm::DynamicScheduler scheduler{static_cast<int>(comm.getRank())};
+  cs::communication::Comm comm{
+      cs::communication::getCommWorld(cs::communication::NCCL)};
+  cs::DynamicScheduler scheduler{static_cast<int>(comm.getRank())};
 
   AllReduceNcclTestFixture() { CHECK_CUDART(cudaSetDevice(comm.getRank())); }
 
@@ -48,13 +64,13 @@ void AllReduceNcclTestFixture::TestAllReduceT(const int m) {
   const at::ScalarType dtype = TypeToTorch<T>::type;
   const auto option = at::TensorOptions().dtype(dtype).device(device);
   at::manual_seed(comm.getRank() + 1);
-  auto x = dllm::compute::Utils::rand(scheduler, {m}, option);
-  auto y = dllm::compute::Utils::rand(scheduler, {m}, option);
-  dllm::communication::AllReduce::runInplace(scheduler, comm, {x, y},
-                                             dllm::communication::SUM);
+  auto x = cs::compute::Utils::rand(scheduler, {m}, option);
+  auto y = cs::compute::Utils::rand(scheduler, {m}, option);
+  cs::communication::AllReduce::runInplace(scheduler, comm, {x, y},
+                                           cs::communication::SUM);
 
-  auto x_torch = dllm::memory::toTorch(scheduler, x);
-  auto y_torch = dllm::memory::toTorch(scheduler, y);
+  auto x_torch = cs::memory::toTorch(scheduler, x);
+  auto y_torch = cs::memory::toTorch(scheduler, y);
   x.wait();
   y.wait();
 

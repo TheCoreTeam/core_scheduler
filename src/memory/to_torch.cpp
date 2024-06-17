@@ -1,3 +1,19 @@
+/*
+ * Copyright (c) 2024 The Core team
+ *
+ * Licensed under the Apache License, Version 2.0;
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an 'AS IS' BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 #include "memory/to_torch.h"
 
 #include <c10/cuda/CUDAStream.h>
@@ -6,7 +22,7 @@
 #include "threading/scheduler_impl.h"
 #include "threading/task_impl.h"
 
-namespace dllm::memory {
+namespace cs::memory {
 at::Tensor toTorch(const Scheduler &scheduler, const ReadOnlyTensor &src) {
   struct Impl : Task::Impl {
     explicit Impl(std::vector<Tensor> output /* tensor */,
@@ -24,7 +40,7 @@ at::Tensor toTorch(const Scheduler &scheduler, const ReadOnlyTensor &src) {
       c10::cuda::getCurrentCUDAStream().synchronize();
     }
     [[nodiscard]] const char *name() const override {
-      return "dllm::memory::toTorch";
+      return "cs::memory::toTorch";
     }
   };
   Tensor dst_;
@@ -33,4 +49,4 @@ at::Tensor toTorch(const Scheduler &scheduler, const ReadOnlyTensor &src) {
   dst_.wait();
   return dst;
 }
-}  // namespace dllm::memory
+}  // namespace cs::memory

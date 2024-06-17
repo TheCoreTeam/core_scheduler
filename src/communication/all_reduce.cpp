@@ -1,3 +1,19 @@
+/*
+ * Copyright (c) 2024 The Core team
+ *
+ * Licensed under the Apache License, Version 2.0;
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an 'AS IS' BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 #include "communication/all_reduce.h"
 
 #include <torch/csrc/autograd/generated/variable_factories.h>
@@ -10,14 +26,14 @@
 #include "threading/scheduler_impl.h"
 #include "threading/task_impl.h"
 
-namespace dllm::communication {
+namespace cs::communication {
 namespace {
 constexpr auto toC10dRedOp(const Operation operation) {
   switch (operation) {
     case SUM:
       return c10d::ReduceOp::SUM;
     default:
-      DLLM_ASSERT_TRUE(false, "unsupported operation for NCCL all reduce");
+      CS_ASSERT_TRUE(false, "unsupported operation for NCCL all reduce");
   }
 }
 }  // namespace
@@ -75,8 +91,8 @@ void AllReduce::runInplace(const Scheduler &scheduler, const Comm &comm,
         std::vector<at::Tensor> v;
         v.reserve(output().size());
         for (const auto &t : output()) {
-          DLLM_ASSERT_TRUE(t.impl()->tensor().device().type() == at::kCUDA,
-                           "NCCL backend only support CUDA GPUs");
+          CS_ASSERT_TRUE(t.impl()->tensor().device().type() == at::kCUDA,
+                         "NCCL backend only support CUDA GPUs");
           v.push_back(t.impl()->tensor());
         }
         const auto work = comm.impl()->backend()->allreduce(
@@ -88,7 +104,7 @@ void AllReduce::runInplace(const Scheduler &scheduler, const Comm &comm,
         }
       }
       [[nodiscard]] const char *name() const override {
-        return "dllm::communication::AllReduce::runInplace";
+        return "cs::communication::AllReduce::runInplace";
       }
     };
 
@@ -111,8 +127,8 @@ void AllReduce::runInplace(const Scheduler &scheduler, const Comm &comm,
         std::vector<int64_t> sizes;
         sizes.reserve(output().size());
         for (const auto &t : output()) {
-          DLLM_ASSERT_TRUE(t.impl()->tensor().device().type() == at::kCUDA,
-                           "NCCL backend only support CUDA GPUs");
+          CS_ASSERT_TRUE(t.impl()->tensor().device().type() == at::kCUDA,
+                         "NCCL backend only support CUDA GPUs");
           auto &nakeTensor = t.impl()->tensor();
           if (!nakeTensor.is_contiguous()) {
             intermediate().push_back(nakeTensor);
@@ -138,7 +154,7 @@ void AllReduce::runInplace(const Scheduler &scheduler, const Comm &comm,
         }
       }
       [[nodiscard]] const char *name() const override {
-        return "dllm::communication::AllReduce::runInplace";
+        return "cs::communication::AllReduce::runInplace";
       }
     };
 
@@ -152,4 +168,4 @@ void AllReduce::runInplace(const Scheduler &scheduler, const Comm &comm,
         Task{std::make_shared<Impl>(Impl{tensors, input, comm, operation})});
   }
 }
-}  // namespace dllm::communication
+}  // namespace cs::communication

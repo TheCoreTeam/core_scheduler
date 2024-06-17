@@ -1,0 +1,19 @@
+Authors ordered by contribution (of the initial version).
+
+Lead Authors (who lead this project's design)
+
+Jie Ren, KAUST.
+Liangyu Wang, KAUST.
+
+Core Contributors (who contribute to the main parts of the project)
+
+Tingxuan Zhong, Xidian University.
+Xincheng Wang, Xidian University.
+Hang Xu, KAUST.
+
+Contributors (who provide valuable comments)
+
+Ran Yan, Amazon.
+Zizheng Guo, Peking University.
+Yuxi Hong, LBNL.
+Xiao Zhang, UofT.

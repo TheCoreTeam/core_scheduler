@@ -1,3 +1,19 @@
+/*
+ * Copyright (c) 2024 The Core team
+ *
+ * Licensed under the Apache License, Version 2.0;
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an 'AS IS' BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 #include <ATen/Context.h>
 #include <ATen/ops/allclose.h>
 #include <ATen/ops/cat.h>
@@ -33,7 +49,7 @@ struct TypeToTorch<double> {
 
 class TestCrossEntropyFixture : public ::testing::Test {
  protected:
-  dllm::DynamicScheduler scheduler{0};
+  cs::DynamicScheduler scheduler{0};
 
   template <typename T>
   void Test(int size);
@@ -46,21 +62,21 @@ void TestCrossEntropyFixture::Test(const int size) {
   const at::ScalarType dtype = TypeToTorch<T>::type;
   const auto option = at::TensorOptions().dtype(dtype).device(device);
   auto x =
-      dllm::compute::Utils::rand(scheduler, {size, 2 * size, 3 * size}, option);
-  x = dllm::compute::Utils::view(scheduler, x, {-1, x.size(-1)});
-  auto target = dllm::compute::Utils::randint(
+      cs::compute::Utils::rand(scheduler, {size, 2 * size, 3 * size}, option);
+  x = cs::compute::Utils::view(scheduler, x, {-1, x.size(-1)});
+  auto target = cs::compute::Utils::randint(
       scheduler, 0, 3 * size, {size, 2 * size}, option.dtype(at::kLong));
-  target = dllm::compute::Utils::view(scheduler, target, {-1});
-  auto state = dllm::compute::CrossEntropy::init(scheduler);
-  auto loss = dllm::compute::CrossEntropy::forward(scheduler, state, x, target);
-  auto dx = dllm::compute::CrossEntropy::backward(scheduler, state);
-  auto loss_ref_torch = dllm::memory::toTorch(scheduler, loss);
+  target = cs::compute::Utils::view(scheduler, target, {-1});
+  auto state = cs::compute::CrossEntropy::init(scheduler);
+  auto loss = cs::compute::CrossEntropy::forward(scheduler, state, x, target);
+  auto dx = cs::compute::CrossEntropy::backward(scheduler, state);
+  auto loss_ref_torch = cs::memory::toTorch(scheduler, loss);
   loss.wait();
-  auto x_torch = dllm::memory::toTorch(scheduler, x);
+  auto x_torch = cs::memory::toTorch(scheduler, x);
   x.wait();
-  auto dx_torch = dllm::memory::toTorch(scheduler, dx);
+  auto dx_torch = cs::memory::toTorch(scheduler, dx);
   dx.wait();
-  auto target_torch = dllm::memory::toTorch(scheduler, target);
+  auto target_torch = cs::memory::toTorch(scheduler, target);
   target.wait();
   x_torch.set_requires_grad(true);
   const auto loss_torch = at::cross_entropy_loss(x_torch, target_torch);

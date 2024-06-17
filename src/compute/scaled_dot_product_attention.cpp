@@ -1,3 +1,19 @@
+/*
+ * Copyright (c) 2024 The Core team
+ *
+ * Licensed under the Apache License, Version 2.0;
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an 'AS IS' BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 #include "compute/scaled_dot_product_attention.h"
 
 #include <ATen/ops/_scaled_dot_product_flash_attention.h>
@@ -8,7 +24,7 @@
 #include "threading/scheduler_impl.h"
 #include "threading/task_impl.h"
 
-namespace dllm::compute {
+namespace cs::compute {
 std::shared_ptr<ScaledDotProductFlashAttention::State>
 ScaledDotProductFlashAttention::init(const Scheduler &scheduler,
                                      const Options &options) {
@@ -53,7 +69,7 @@ Tensor ScaledDotProductFlashAttention::forward(
       output()[5].impl()->tensor() = philox_offset_;
     }
     [[nodiscard]] const char *name() const override {
-      return "dllm::compute::ScaledDotProductAttention::forward";
+      return "cs::compute::ScaledDotProductAttention::forward";
     }
   };
 
@@ -127,7 +143,7 @@ std::array<Tensor, 3> ScaledDotProductFlashAttention::backward(
       output()[2].impl()->tensor() = grad_value_.transpose(1, 2);
     }
     [[nodiscard]] const char *name() const override {
-      return "dllm::compute::ScaledDotProductAttention::backward";
+      return "cs::compute::ScaledDotProductAttention::backward";
     }
   };
 
@@ -156,4 +172,4 @@ std::array<Tensor, 3> ScaledDotProductFlashAttention::backward(
   state->backward.philox_offset.reset();
   return {grad_query, grad_key, grad_value};
 }
-}  // namespace dllm::compute
+}  // namespace cs::compute

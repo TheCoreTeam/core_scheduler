@@ -1,4 +1,18 @@
-add_executable(dllm_tests
+# Copyright (c) 2024 The Core Team
+#
+# Licensed under the Apache License, Version 2.0
+# You may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an 'AS IS' BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+add_executable(cs_tests
         main.cpp
         test_adamw.cpp
         test_linear.cpp
@@ -11,17 +25,17 @@ add_executable(dllm_tests
         test_load_save.cpp
 )
 
-target_link_libraries(dllm_tests PRIVATE
-        dllm
+target_link_libraries(cs_tests PRIVATE
+        cs
         GTest::gtest
 )
 
-target_compile_options(dllm_tests PRIVATE
+target_compile_options(cs_tests PRIVATE
         $<$<CONFIG:Release>:-Ofast>
         $<$<CONFIG:Debug>:-O0>
 )
 
-add_executable(dllm_communication_tests
+add_executable(cs_communication_tests
         main_communication.cpp
         test_all_reduce.cpp
         test_all_gather.cpp
@@ -29,16 +43,16 @@ add_executable(dllm_communication_tests
         test_reduce_scatter.cpp
 )
 
-target_include_directories(dllm_communication_tests PRIVATE
+target_include_directories(cs_communication_tests PRIVATE
         ${TORCH_INCLUDE_PATH}
 )
 
-target_link_libraries(dllm_communication_tests PRIVATE
-        dllm
+target_link_libraries(cs_communication_tests PRIVATE
+        cs
         GTest::gtest
 )
 
-target_compile_options(dllm_communication_tests PRIVATE
+target_compile_options(cs_communication_tests PRIVATE
         $<$<CONFIG:Release>:-Ofast>
         $<$<CONFIG:Debug>:-O0>
 )

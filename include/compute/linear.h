@@ -1,10 +1,26 @@
+/*
+ * Copyright (c) 2024 The Core team
+ *
+ * Licensed under the Apache License, Version 2.0;
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an 'AS IS' BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 #pragma once
 #include "arg.h"
 #include "module/state.h"
 #include "tensor.h"
 #include "threading/scheduler.h"
 
-namespace dllm::compute {
+namespace cs::compute {
 struct Linear {
   struct State final : module::State {
     struct Forward {
@@ -33,11 +49,11 @@ struct Linear {
   struct Options {
     Options(const int64_t in_futures, const int64_t out_futures)
         : in_futures_(in_futures), out_futures_(out_futures) {}
-    DLLM_ARG(int64_t, in_futures);
-    DLLM_ARG(int64_t, out_futures);
-    DLLM_ARG(bool, bias) = true;
-    DLLM_ARG(c10::optional<at::Device>, device) = {};
-    DLLM_ARG(c10::optional<at::ScalarType>, dtype) = {};
+    CS_ARG(int64_t, in_futures);
+    CS_ARG(int64_t, out_futures);
+    CS_ARG(bool, bias) = true;
+    CS_ARG(c10::optional<at::Device>, device) = {};
+    CS_ARG(c10::optional<at::ScalarType>, dtype) = {};
   };
 
   static std::shared_ptr<State> init(const Scheduler &scheduler,
@@ -55,4 +71,4 @@ struct Linear {
                                 const std::shared_ptr<State> &state,
                                 const ReadOnlyTensor &grad_output);
 };
-}  // namespace dllm::compute
+}  // namespace cs::compute

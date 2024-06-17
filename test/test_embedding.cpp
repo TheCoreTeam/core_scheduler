@@ -1,3 +1,19 @@
+/*
+ * Copyright (c) 2024 The Core team
+ *
+ * Licensed under the Apache License, Version 2.0;
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an 'AS IS' BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 #include <ATen/Context.h>
 #include <ATen/ops/embedding.h>
 #include <cuda_fp16.h>
@@ -32,7 +48,7 @@ struct TypeToTorch<double> {
 
 class TestEmbedding : public ::testing::Test {
  protected:
-  dllm::DynamicScheduler scheduler{0};
+  cs::DynamicScheduler scheduler{0};
 
   template <typename Element>
   void TestRoutine(const double tol_forward, const double tol_backward);
@@ -56,24 +72,24 @@ void TestEmbedding::TestRoutine(const double tol_forward,
   at::Device device = at::kCUDA;
   torch::Dtype dtype = TypeToTorch<Element>::type;
 
-  auto input = dllm::compute::Utils::randint(
+  auto input = cs::compute::Utils::randint(
       scheduler, 0, 3, {B, T},
       torch::TensorOptions().dtype(torch::kInt).device(device));
-  auto state = dllm::compute::Embedding::init(
+  auto state = cs::compute::Embedding::init(
       scheduler,
-      dllm::compute::Embedding::Options(vocab, d).device(device).dtype(dtype));
+      cs::compute::Embedding::Options(vocab, d).device(device).dtype(dtype));
 
-  auto output = dllm::compute::Embedding::forward(scheduler, state, input);
+  auto output = cs::compute::Embedding::forward(scheduler, state, input);
   output.wait();
-  auto grad_output = dllm::compute::Utils::randn_like(scheduler, output);
-  dllm::compute::Embedding::backward(scheduler, state, grad_output);
-  auto input_torch = dllm::memory::toTorch(scheduler, input);
+  auto grad_output = cs::compute::Utils::randn_like(scheduler, output);
+  cs::compute::Embedding::backward(scheduler, state, grad_output);
+  auto input_torch = cs::memory::toTorch(scheduler, input);
   input.wait();
-  auto weight_torch = dllm::memory::toTorch(scheduler, state->forward.weight);
+  auto weight_torch = cs::memory::toTorch(scheduler, state->forward.weight);
   state->forward.weight.wait();
   weight_torch.requires_grad_(true);
   const auto output_torch = at::embedding(weight_torch, input_torch);
-  auto grad_output_torch = dllm::memory::toTorch(scheduler, grad_output);
+  auto grad_output_torch = cs::memory::toTorch(scheduler, grad_output);
   grad_output.wait();
   output_torch.backward(grad_output_torch);
 

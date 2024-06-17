@@ -1,3 +1,19 @@
+/*
+ * Copyright (c) 2024 The Core team
+ *
+ * Licensed under the Apache License, Version 2.0;
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an 'AS IS' BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 #include <cuda_fp16.h>
 #include <gtest/gtest.h>
 #include <torch/csrc/autograd/generated/variable_factories.h>
@@ -31,9 +47,9 @@ struct TypeToTorch<double> {
 
 class ReduceScatterNCCLTestFixture : public ::testing::Test {
  protected:
-  dllm::communication::Comm comm{
-      dllm::communication::getCommWorld(dllm::communication::NCCL)};
-  dllm::DynamicScheduler scheduler{static_cast<int>(comm.getRank())};
+  cs::communication::Comm comm{
+      cs::communication::getCommWorld(cs::communication::NCCL)};
+  cs::DynamicScheduler scheduler{static_cast<int>(comm.getRank())};
 
   ReduceScatterNCCLTestFixture() {
     CHECK_CUDART(cudaSetDevice(comm.getRank()));
@@ -50,17 +66,17 @@ void ReduceScatterNCCLTestFixture::TestlAllToAllT(const int blockSize) {
   const auto option = at::TensorOptions().dtype(dtype).device(device);
   at::manual_seed(comm.getRank() + 1);
   const int m = blockSize * comm.getSize();
-  std::vector<dllm::ReadOnlyTensor> vs;
+  std::vector<cs::ReadOnlyTensor> vs;
   vs.reserve(comm.getSize());
   for (int i = 0; i < comm.getSize(); ++i) {
-    auto t = dllm::compute::Utils::rand(scheduler, {blockSize}, option);
+    auto t = cs::compute::Utils::rand(scheduler, {blockSize}, option);
     vs.push_back(t);
   }
-  auto r = dllm::compute::Utils::empty(scheduler, {blockSize}, option);
-  dllm::communication::ReduceScatter::run(scheduler, comm, {r}, {vs},
-                                          dllm::communication::SUM);
+  auto r = cs::compute::Utils::empty(scheduler, {blockSize}, option);
+  cs::communication::ReduceScatter::run(scheduler, comm, {r}, {vs},
+                                        cs::communication::SUM);
 
-  auto x_torch = dllm::memory::toTorch(scheduler, r);
+  auto x_torch = cs::memory::toTorch(scheduler, r);
   r.wait();
 
   auto accumulator = torch::zeros({m}, option);

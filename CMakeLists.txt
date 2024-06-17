@@ -1,11 +1,25 @@
+# Copyright (c) 2024 The Core Team
+#
+# Licensed under the Apache License, Version 2.0
+# You may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an 'AS IS' BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 cmake_minimum_required(VERSION 3.25)
 cmake_policy(SET CMP0146 OLD)
-project(dllm LANGUAGES C CXX CUDA)
+project(cs LANGUAGES C CXX CUDA)
 
-option(DLLM_ENABLE_TESTS "" ON)
-option(DLLM_ENABLE_EXAMPLES "" ON)
-option(DLLM_ENABLE_BUILTIN_TOOLCHAIN "" ON)
-if (DLLM_ENABLE_BUILTIN_TOOLCHAIN)
+option(CS_ENABLE_TESTS "" ON)
+option(CS_ENABLE_EXAMPLES "" ON)
+option(CS_ENABLE_BUILTIN_TOOLCHAIN "" ON)
+if (CS_ENABLE_BUILTIN_TOOLCHAIN)
     include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/toolchain.cmake)
 endif ()
 
@@ -52,12 +66,12 @@ find_package(MPI COMPONENTS C REQUIRED)
 
 add_subdirectory(src)
 
-if (DLLM_ENABLE_TESTS)
+if (CS_ENABLE_TESTS)
     find_package(GTest REQUIRED)
     add_subdirectory(test)
 endif ()
 
-if (DLLM_ENABLE_EXAMPLES)
+if (CS_ENABLE_EXAMPLES)
     add_subdirectory(example)
 endif ()
 

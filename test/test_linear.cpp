@@ -1,3 +1,19 @@
+/*
+ * Copyright (c) 2024 The Core team
+ *
+ * Licensed under the Apache License, Version 2.0;
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an 'AS IS' BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 #include <cuda_fp16.h>
 #include <gtest/gtest.h>
 
@@ -31,35 +47,35 @@ struct TypeToTorch<double> {
 
 class LinearTestFixture : public ::testing::Test {
  protected:
-  dllm::DynamicScheduler scheduler_{0};
+  cs::DynamicScheduler scheduler_{0};
 };
 
 namespace {
 template <typename Element>
-void TestBackwardT(dllm::Scheduler &scheduler) {
+void TestBackwardT(cs::Scheduler &scheduler) {
   const int m = 32, n = 16, k = 4, s = 3;
   const torch::Device device = torch::kCUDA;
   const torch::Dtype dtype = TypeToTorch<Element>::type;
   const auto option = torch::TensorOptions().dtype(dtype).device(device);
-  auto x = dllm::compute::Utils::randn(scheduler, {m, s, k}, option);
-  auto state = dllm::compute::Linear::init(
+  auto x = cs::compute::Utils::randn(scheduler, {m, s, k}, option);
+  auto state = cs::compute::Linear::init(
       scheduler,
-      dllm::compute::Linear::Options{k, n}.bias(false).device(device).dtype(
+      cs::compute::Linear::Options{k, n}.bias(false).device(device).dtype(
           dtype));
-  auto y = dllm::compute::Linear::forward(scheduler, state, x);
-  auto yGrad = dllm::compute::Utils::randn_like(scheduler, y);
-  auto dx = dllm::compute::Linear::backwardInput(scheduler, state, yGrad);
-  dllm::compute::Linear::backwardParameter(scheduler, state, yGrad);
+  auto y = cs::compute::Linear::forward(scheduler, state, x);
+  auto yGrad = cs::compute::Utils::randn_like(scheduler, y);
+  auto dx = cs::compute::Linear::backwardInput(scheduler, state, yGrad);
+  cs::compute::Linear::backwardParameter(scheduler, state, yGrad);
   dx.wait();
   state->forward.grad_weight.wait();
-  auto xRef = dllm::memory::toTorch(scheduler, x);
+  auto xRef = cs::memory::toTorch(scheduler, x);
   x.wait();
   xRef.requires_grad_(true);
-  auto wRef = dllm::memory::toTorch(scheduler, state->forward.weight);
+  auto wRef = cs::memory::toTorch(scheduler, state->forward.weight);
   state->forward.weight.wait();
   wRef.requires_grad_(true);
   auto yRef = torch::linear(xRef, wRef);
-  auto yGradRef = dllm::memory::toTorch(scheduler, yGrad);
+  auto yGradRef = cs::memory::toTorch(scheduler, yGrad);
   yGrad.wait();
   yRef.backward(yGradRef);
 
@@ -79,29 +95,29 @@ TEST_F(LinearTestFixture, TestBackwardF64) {
 
 namespace {
 template <typename Element>
-void TestModuleT(dllm::Scheduler &scheduler) {
+void TestModuleT(cs::Scheduler &scheduler) {
   const int m = 32, n = 16, k = 4, s = 3;
   const torch::Device device = torch::kCUDA;
   const torch::Dtype dtype = TypeToTorch<Element>::type;
   const auto option = torch::TensorOptions().dtype(dtype).device(device);
-  auto x = dllm::compute::Utils::randn(scheduler, {m, s, k}, option);
-  dllm::module::Linear fc{
+  auto x = cs::compute::Utils::randn(scheduler, {m, s, k}, option);
+  cs::module::Linear fc{
       scheduler,
-      dllm::module::Linear::Options{k, n}.bias(false).device(device).dtype(
+      cs::module::Linear::Options{k, n}.bias(false).device(device).dtype(
           dtype)};
   auto y = fc->forward(scheduler, x);
-  auto yGrad = dllm::compute::Utils::randn_like(scheduler, y);
+  auto yGrad = cs::compute::Utils::randn_like(scheduler, y);
   auto dx = fc->backward(scheduler, yGrad);
   dx.wait();
   fc->state()->forward.grad_weight.wait();
-  auto xRef = dllm::memory::toTorch(scheduler, x);
+  auto xRef = cs::memory::toTorch(scheduler, x);
   x.wait();
   xRef.requires_grad_(true);
-  auto wRef = dllm::memory::toTorch(scheduler, fc->state()->forward.weight);
+  auto wRef = cs::memory::toTorch(scheduler, fc->state()->forward.weight);
   fc->state()->forward.weight.wait();
   wRef.requires_grad_(true);
   auto yRef = torch::linear(xRef, wRef);
-  auto yGradRef = dllm::memory::toTorch(scheduler, yGrad);
+  auto yGradRef = cs::memory::toTorch(scheduler, yGrad);
   yGrad.wait();
   yRef.backward(yGradRef);
 

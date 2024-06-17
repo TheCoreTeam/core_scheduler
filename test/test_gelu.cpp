@@ -1,3 +1,19 @@
+/*
+ * Copyright (c) 2024 The Core team
+ *
+ * Licensed under the Apache License, Version 2.0;
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an 'AS IS' BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 #include <ATen/Context.h>
 #include <cuda_fp16.h>
 #include <gtest/gtest.h>
@@ -32,33 +48,33 @@ struct TypeToTorch<double> {
   static const at::ScalarType type = torch::kDouble;
 };
 
-class TestDLLMGelu : public ::testing::Test {
+class TestCSGelu : public ::testing::Test {
  protected:
-  dllm::DynamicScheduler scheduler{0};
+  cs::DynamicScheduler scheduler{0};
 
   template <typename Element>
   void TestRoutine(int T, double tol_forward, double tol_backward);
 };
 
 template <typename Element>
-void TestDLLMGelu::TestRoutine(const int T, const double tol_forward,
-                               const double tol_backward) {
+void TestCSGelu::TestRoutine(const int T, const double tol_forward,
+                             const double tol_backward) {
   torch::manual_seed(1);
   const int B = 2;
   const torch::Device device = torch::kCUDA;
   const torch::Dtype dtype = TypeToTorch<Element>::type;
   const auto option = torch::TensorOptions().dtype(dtype).device(device);
 
-  auto input2 = dllm::compute::Utils::randn(scheduler, {B, T}, option);
-  auto state = dllm::compute::GeLU::init(scheduler);
-  auto tensorOutput = dllm::compute::GeLU::forward(scheduler, state, input2);
-  auto GradOutput_ = dllm::compute::Utils::randn_like(scheduler, tensorOutput);
+  auto input2 = cs::compute::Utils::randn(scheduler, {B, T}, option);
+  auto state = cs::compute::GeLU::init(scheduler);
+  auto tensorOutput = cs::compute::GeLU::forward(scheduler, state, input2);
+  auto GradOutput_ = cs::compute::Utils::randn_like(scheduler, tensorOutput);
   auto tensorGradInput =
-      dllm::compute::GeLU::backward(scheduler, state, GradOutput_);
+      cs::compute::GeLU::backward(scheduler, state, GradOutput_);
 
-  auto input = dllm::memory::toTorch(scheduler, input2);
+  auto input = cs::memory::toTorch(scheduler, input2);
   input2.wait();
-  auto GradOutput = dllm::memory::toTorch(scheduler, GradOutput_);
+  auto GradOutput = cs::memory::toTorch(scheduler, GradOutput_);
   GradOutput_.wait();
 
   auto input1 = input.detach().clone().set_requires_grad(true);
@@ -74,14 +90,14 @@ void TestDLLMGelu::TestRoutine(const int T, const double tol_forward,
   ASSERT_TRUE(at::allclose(GradInput1, tensorGradInput));
 }
 
-TEST_F(TestDLLMGelu, TestF32_128) { TestRoutine<float>(128, 5e-4, 5e-4); }
+TEST_F(TestCSGelu, TestF32_128) { TestRoutine<float>(128, 5e-4, 5e-4); }
 
-TEST_F(TestDLLMGelu, TestF32_512) { TestRoutine<float>(512, 5e-4, 5e-4); }
+TEST_F(TestCSGelu, TestF32_512) { TestRoutine<float>(512, 5e-4, 5e-4); }
 
-TEST_F(TestDLLMGelu, TestF32_1024) { TestRoutine<float>(1024, 5e-4, 5e-4); }
+TEST_F(TestCSGelu, TestF32_1024) { TestRoutine<float>(1024, 5e-4, 5e-4); }
 
-TEST_F(TestDLLMGelu, TestF16_128) { TestRoutine<nv_half>(128, 1e-2, 1e-2); }
+TEST_F(TestCSGelu, TestF16_128) { TestRoutine<nv_half>(128, 1e-2, 1e-2); }
 
-TEST_F(TestDLLMGelu, TestF16_512) { TestRoutine<nv_half>(512, 1e-2, 1e-2); }
+TEST_F(TestCSGelu, TestF16_512) { TestRoutine<nv_half>(512, 1e-2, 1e-2); }
 
-TEST_F(TestDLLMGelu, TestF16_1024) { TestRoutine<nv_half>(1024, 1e-2, 1e-2); }
+TEST_F(TestCSGelu, TestF16_1024) { TestRoutine<nv_half>(1024, 1e-2, 1e-2); }

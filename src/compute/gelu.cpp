@@ -1,3 +1,19 @@
+/*
+ * Copyright (c) 2024 The Core team
+ *
+ * Licensed under the Apache License, Version 2.0;
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an 'AS IS' BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 #include "compute/gelu.h"
 
 #include <ATen/ops/gelu.h>
@@ -7,7 +23,7 @@
 #include "threading/scheduler_impl.h"
 #include "threading/task_impl.h"
 
-namespace dllm::compute {
+namespace cs::compute {
 std::shared_ptr<GeLU::State> GeLU::init(const Scheduler &scheduler) {
   return std::make_shared<State>();
 }
@@ -23,7 +39,7 @@ Tensor GeLU::forward(const Scheduler &scheduler,
       output()[0].impl()->tensor() = at::gelu(input()[0].impl()->tensor());
     }
     [[nodiscard]] const char *name() const override {
-      return "dllm::compute::GeLU::forward";
+      return "cs::compute::GeLU::forward";
     }
   };
 
@@ -46,7 +62,7 @@ Tensor GeLU::backward(const Scheduler &scheduler,
           input()[0].impl()->tensor(), input()[1].impl()->tensor());
     }
     [[nodiscard]] const char *name() const override {
-      return "dllm::compute::GeLU::backward";
+      return "cs::compute::GeLU::backward";
     }
   };
 
@@ -57,4 +73,4 @@ Tensor GeLU::backward(const Scheduler &scheduler,
   state->backward.input.reset();
   return grad_input;
 }
-}  // namespace dllm::compute
+}  // namespace cs::compute
