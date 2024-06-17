@@ -14,7 +14,7 @@
 
 cmake_minimum_required(VERSION 3.25)
 cmake_policy(SET CMP0146 OLD)
-project(cs LANGUAGES C CXX CUDA)
+project(CoreScheduler LANGUAGES C CXX CUDA)
 
 option(CS_ENABLE_TESTS "" ON)
 option(CS_ENABLE_EXAMPLES "" ON)
