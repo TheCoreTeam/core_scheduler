@@ -24,14 +24,14 @@
 #include "threading/scheduler_impl.h"
 #include "threading/task_impl.h"
 
-namespace dllm::communication {
+namespace cs::communication {
 namespace {
 constexpr auto toC10dRedOp(const Operation operation) {
   switch (operation) {
     case SUM:
       return c10d::ReduceOp::SUM;
     default:
-      DLLM_ASSERT_TRUE(false, "unsupported operation for NCCL all reduce");
+      CS_ASSERT_TRUE(false, "unsupported operation for NCCL all reduce");
   }
 }
 }  // namespace
@@ -60,8 +60,8 @@ void ReduceScatter::run(
         std::vector<at::Tensor> v;
         v.reserve(i.size());
         for (const auto &t : i) {
-          DLLM_ASSERT_TRUE(t.impl()->tensor().device().type() == at::kCUDA,
-                           "NCCL backend only support CUDA GPUs");
+          CS_ASSERT_TRUE(t.impl()->tensor().device().type() == at::kCUDA,
+                         "NCCL backend only support CUDA GPUs");
           v.push_back(t.impl()->tensor());
         }
         vSend.push_back(std::move(v));
@@ -69,8 +69,8 @@ void ReduceScatter::run(
       std::vector<at::Tensor> vReceive;
       vReceive.reserve(output().size());
       for (const auto &t : output()) {
-        DLLM_ASSERT_TRUE(t.impl()->tensor().device().type() == at::kCUDA,
-                         "NCCL backend only support CUDA GPUs");
+        CS_ASSERT_TRUE(t.impl()->tensor().device().type() == at::kCUDA,
+                       "NCCL backend only support CUDA GPUs");
         vReceive.push_back(t.impl()->tensor());
       }
       comm.impl()
@@ -81,7 +81,7 @@ void ReduceScatter::run(
           ->wait();
     }
     [[nodiscard]] const char *name() const override {
-      return "dllm::communication::ReduceScatter::run";
+      return "cs::communication::ReduceScatter::run";
     }
   };
 
@@ -96,4 +96,4 @@ void ReduceScatter::run(
   scheduler.impl()->submit(Task{std::make_shared<Impl>(
       Impl{tensorReceive, input, tensorSend, comm, operation})});
 }
-}  // namespace dllm::communication
+}  // namespace cs::communication

@@ -37,7 +37,7 @@ namespace arrow {
 class ListArray;
 }
 
-namespace dllm::data {
+namespace cs::data {
 inline DataLoader::Impl::Impl(const int64_t batchSize, const int64_t numWorkers,
                               const bool shuffle, const int64_t rank,
                               const int64_t worldSize)
@@ -179,8 +179,7 @@ std::unordered_map<std::string, Tensor> LlmDataLoader::load(
     void operator()() const override {
       const auto stream = c10::cuda::getCurrentCUDAStream();
       const auto device = stream.device();
-      DLLM_ASSERT_TRUE(output().size() == buffer.size(),
-                       "Incorrect buffer size");
+      CS_ASSERT_TRUE(output().size() == buffer.size(), "Incorrect buffer size");
       for (std::size_t i = 0; i < buffer.size(); ++i) {
         output()[i].impl()->tensor() =
             at::empty(buffer[i].sizes, buffer[i].options.device(device));
@@ -198,7 +197,7 @@ std::unordered_map<std::string, Tensor> LlmDataLoader::load(
       event.record();
     }
     [[nodiscard]] const char *name() const override {
-      return "dllm::LlmDataLoader::load";
+      return "cs::LlmDataLoader::load";
     }
   };
 
@@ -228,7 +227,7 @@ std::unordered_map<std::string, Tensor> LlmDataLoader::load(
 LlmDataLoader::LlmDataLoader(const LlmDataset &dataset, int64_t batchSize,
                              int64_t numWorkers, bool shuffle, int64_t rank,
                              int64_t worldSize) {
-  DLLM_ASSERT_TRUE(shuffle == false, "We do not support shuffle now");
+  CS_ASSERT_TRUE(shuffle == false, "We do not support shuffle now");
   const auto impl = std::make_shared<LlmDataLoaderImpl>(
       dataset, batchSize, numWorkers, shuffle, rank, worldSize);
   impl_ = impl;
@@ -252,4 +251,4 @@ LlmDataLoader::LlmDataLoader(const LlmDataset &dataset, int64_t batchSize,
   }
   impl->lastThreadIdx_ = 0;
 }
-}  // namespace dllm::data
+}  // namespace cs::data

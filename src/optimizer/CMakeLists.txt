@@ -12,8 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-set(DLLM_OPTIMIZER_SRCS
+set(CS_OPTIMIZER_SRCS
         ${CMAKE_CURRENT_SOURCE_DIR}/adamw.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/adamw.cu
 )
-set(DLLM_OPTIMIZER_SRCS ${DLLM_OPTIMIZER_SRCS} PARENT_SCOPE)
+set(CS_OPTIMIZER_SRCS ${CS_OPTIMIZER_SRCS} PARENT_SCOPE)

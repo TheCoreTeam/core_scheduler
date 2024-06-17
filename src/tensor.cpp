@@ -25,11 +25,11 @@
 #include "tensor_impl.h"
 #include "threading/task_impl.h"
 
-namespace dllm {
+namespace cs {
 template <typename T1, typename T2>
 static bool allclose_impl(const T1 &t1_, const T2 &t2_, const double rtol,
                           const double atol, const bool equal_nan) {
-  DLLM_NVTX_RANGE_FN("dllm::allclose");
+  CS_NVTX_RANGE_FN("cs::allclose");
   at::Tensor t1, t2;
   torch::cuda::synchronize();
   if constexpr (std::is_same_v<T1, at::Tensor>) {
@@ -76,19 +76,19 @@ ReadOnlyTensor::ReadOnlyTensor() : impl_{std::make_shared<Impl>()} {}
 
 TensorOptions ReadOnlyTensor::options() const { return impl_->options(); }
 
-}  // namespace dllm
+}  // namespace cs
 
 namespace at {
-bool allclose(const dllm::ReadOnlyTensor &t1, const at::Tensor &t2,
+bool allclose(const cs::ReadOnlyTensor &t1, const at::Tensor &t2,
               const double rtol, const double atol, const bool equal_nan) {
-  return dllm::allclose_impl(t1, t2, rtol, atol, equal_nan);
+  return cs::allclose_impl(t1, t2, rtol, atol, equal_nan);
 }
-bool allclose(const dllm::ReadOnlyTensor &t1, const dllm::ReadOnlyTensor &t2,
+bool allclose(const cs::ReadOnlyTensor &t1, const cs::ReadOnlyTensor &t2,
               const double rtol, const double atol, const bool equal_nan) {
-  return dllm::allclose_impl(t1, t2, rtol, atol, equal_nan);
+  return cs::allclose_impl(t1, t2, rtol, atol, equal_nan);
 }
-bool allclose(const at::Tensor &t1, const dllm::ReadOnlyTensor &t2,
+bool allclose(const at::Tensor &t1, const cs::ReadOnlyTensor &t2,
               const double rtol, const double atol, const bool equal_nan) {
-  return dllm::allclose_impl(t1, t2, rtol, atol, equal_nan);
+  return cs::allclose_impl(t1, t2, rtol, atol, equal_nan);
 }
 }  // namespace at

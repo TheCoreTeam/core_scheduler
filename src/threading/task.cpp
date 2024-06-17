@@ -18,7 +18,7 @@
 
 #include "threading/task_impl.h"
 
-namespace dllm {
+namespace cs {
 Task::Task(std::shared_ptr<Impl> impl) : impl_{std::move(impl)} {}
 
 const std::vector<ReadOnlyTensor>& Task::input() const {
@@ -36,4 +36,4 @@ void Task::reset() { impl_.reset(); }
 bool Task::valid() const { return impl_ != nullptr; }
 
 const char* Task::name() const { return impl_->name(); }
-}  // namespace dllm
+}  // namespace cs

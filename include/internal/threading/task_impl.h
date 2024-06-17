@@ -19,7 +19,7 @@
 
 #include "threading/task.h"
 
-namespace dllm {
+namespace cs {
 struct Task::Impl {
   enum Type {
     compute,
@@ -59,4 +59,4 @@ struct Task::Impl {
 
   Type type_;
 };
-}  // namespace dllm
+}  // namespace cs

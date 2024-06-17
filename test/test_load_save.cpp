@@ -54,7 +54,7 @@ struct TypeToTorch<double> {
 
 class TestLoadSaveFixture : public ::testing::Test {
  protected:
-  dllm::DynamicScheduler scheduler{0};
+  cs::DynamicScheduler scheduler{0};
 
   template <typename T>
   void TestRoutine(int size);
@@ -89,18 +89,18 @@ void TestLoadSaveFixture::TestRoutine(const int size) {
   const at::Device device(at::kCUDA, 0);
   const at::ScalarType dtype = TypeToTorch<T>::type;
 
-  dllm::module::LayerNorm ln{
+  cs::module::LayerNorm ln{
       scheduler,
-      dllm::module::LayerNorm::Options{{3 * size}}.device(device).dtype(dtype)};
+      cs::module::LayerNorm::Options{{3 * size}}.device(device).dtype(dtype)};
 
   const auto weightClone =
-      dllm::compute::Utils::clone(scheduler, ln->state()->forward.weight);
+      cs::compute::Utils::clone(scheduler, ln->state()->forward.weight);
 
-  dllm::save(ln, path);
+  cs::save(ln, path);
 
-  dllm::compute::Utils::zero_(scheduler, ln->state()->forward.weight);
+  cs::compute::Utils::zero_(scheduler, ln->state()->forward.weight);
 
-  dllm::load(ln, path);
+  cs::load(ln, path);
 
   std::remove(path.c_str());
 

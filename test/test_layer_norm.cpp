@@ -50,7 +50,7 @@ struct TypeToTorch<double> {
 
 class TestLayerNormFixture : public ::testing::Test {
  protected:
-  dllm::DynamicScheduler scheduler{0};
+  cs::DynamicScheduler scheduler{0};
 
   template <typename T>
   void TestFunctional(int size);
@@ -66,21 +66,20 @@ void TestLayerNormFixture::TestFunctional(const int size) {
   const at::ScalarType dtype = TypeToTorch<T>::type;
   const auto option = at::TensorOptions().dtype(dtype).device(device);
 
-  auto state = dllm::compute::LayerNorm::init(
+  auto state = cs::compute::LayerNorm::init(
       scheduler,
-      dllm::compute::LayerNorm::Options{{3 * size}}.device(device).dtype(
-          dtype));
+      cs::compute::LayerNorm::Options{{3 * size}}.device(device).dtype(dtype));
   auto x =
-      dllm::compute::Utils::rand(scheduler, {size, 2 * size, 3 * size}, option);
-  auto y = dllm::compute::LayerNorm::forward(scheduler, state, x);
-  auto dy = dllm::compute::Utils::rand_like(scheduler, y);
-  auto dx = dllm::compute::LayerNorm::backward(scheduler, state, dy);
+      cs::compute::Utils::rand(scheduler, {size, 2 * size, 3 * size}, option);
+  auto y = cs::compute::LayerNorm::forward(scheduler, state, x);
+  auto dy = cs::compute::Utils::rand_like(scheduler, y);
+  auto dx = cs::compute::LayerNorm::backward(scheduler, state, dy);
 
-  auto x_torch = dllm::memory::toTorch(scheduler, x);
+  auto x_torch = cs::memory::toTorch(scheduler, x);
   x.wait();
-  auto y_ref_torch = dllm::memory::toTorch(scheduler, y);
+  auto y_ref_torch = cs::memory::toTorch(scheduler, y);
   y.wait();
-  auto dy_torch = dllm::memory::toTorch(scheduler, dy);
+  auto dy_torch = cs::memory::toTorch(scheduler, dy);
   dy.wait();
   x_torch.set_requires_grad(true);
   torch::nn::LayerNorm ln{torch::nn::LayerNormOptions({3 * size})};
@@ -103,20 +102,20 @@ void TestLayerNormFixture::TestModule(const int size) {
   const at::ScalarType dtype = TypeToTorch<T>::type;
   const auto option = at::TensorOptions().dtype(dtype).device(device);
 
-  dllm::module::LayerNorm lnOurs{
+  cs::module::LayerNorm lnOurs{
       scheduler,
-      dllm::module::LayerNorm::Options{{3 * size}}.device(device).dtype(dtype)};
+      cs::module::LayerNorm::Options{{3 * size}}.device(device).dtype(dtype)};
   auto x =
-      dllm::compute::Utils::rand(scheduler, {size, 2 * size, 3 * size}, option);
+      cs::compute::Utils::rand(scheduler, {size, 2 * size, 3 * size}, option);
   auto y = lnOurs->forward(scheduler, x);
-  auto dy = dllm::compute::Utils::rand_like(scheduler, y);
+  auto dy = cs::compute::Utils::rand_like(scheduler, y);
   auto dx = lnOurs->backward(scheduler, dy);
 
-  auto x_torch = dllm::memory::toTorch(scheduler, x);
+  auto x_torch = cs::memory::toTorch(scheduler, x);
   x.wait();
-  auto y_ref_torch = dllm::memory::toTorch(scheduler, y);
+  auto y_ref_torch = cs::memory::toTorch(scheduler, y);
   y.wait();
-  auto dy_torch = dllm::memory::toTorch(scheduler, dy);
+  auto dy_torch = cs::memory::toTorch(scheduler, dy);
   dy.wait();
   x_torch.set_requires_grad(true);
   torch::nn::LayerNorm ln{torch::nn::LayerNormOptions({3 * size})};

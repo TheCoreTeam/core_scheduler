@@ -18,7 +18,7 @@
 #include <fmt/format.h>
 #include <nvtx3/nvToolsExt.h>
 
-namespace dllm {
+namespace cs {
 struct NvtxRange {
   template <typename... T>
   explicit NvtxRange(const std::string &range_string) {
@@ -38,6 +38,6 @@ struct NvtxRange {
 #define UNIQUE_VAR(prefix) CONCAT(prefix##_at_##__LINE__, _unique)
 
 // Define the NVTX range macro using the unique variable name
-#define DLLM_NVTX_RANGE_FN(FUNC_NAME) \
-  ::dllm::NvtxRange UNIQUE_VAR(__nvtx_range)(FUNC_NAME)
-}  // namespace dllm
+#define CS_NVTX_RANGE_FN(FUNC_NAME) \
+  ::cs::NvtxRange UNIQUE_VAR(__nvtx_range)(FUNC_NAME)
+}  // namespace cs

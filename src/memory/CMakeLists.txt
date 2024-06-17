@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-set(DLLM_MEMORY_SRCS
+set(CS_MEMORY_SRCS
         ${CMAKE_CURRENT_SOURCE_DIR}/to_torch.cpp
 )
-set(DLLM_MEMORY_SRCS ${DLLM_MEMORY_SRCS} PARENT_SCOPE)
+set(CS_MEMORY_SRCS ${CS_MEMORY_SRCS} PARENT_SCOPE)

@@ -20,7 +20,7 @@
 #include "tensor.h"
 #include "threading/scheduler.h"
 
-namespace dllm::compute {
+namespace cs::compute {
 struct LayerNorm {
   struct State final : module::State {
     struct Forward {
@@ -54,12 +54,12 @@ struct LayerNorm {
   struct Options {
     Options(IntArrayRef normalized_shape)
         : normalized_shape_{normalized_shape} {}
-    DLLM_ARG(IntArray, normalized_shape);
-    DLLM_ARG(double, eps) = 1e-05;
-    DLLM_ARG(bool, elementwise_affine) = true;
-    DLLM_ARG(bool, bias) = true;
-    DLLM_ARG(c10::optional<at::Device>, device) = {};
-    DLLM_ARG(c10::optional<at::ScalarType>, dtype) = {};
+    CS_ARG(IntArray, normalized_shape);
+    CS_ARG(double, eps) = 1e-05;
+    CS_ARG(bool, elementwise_affine) = true;
+    CS_ARG(bool, bias) = true;
+    CS_ARG(c10::optional<at::Device>, device) = {};
+    CS_ARG(c10::optional<at::ScalarType>, dtype) = {};
   };
 
   static std::shared_ptr<State> init(const Scheduler &scheduler,
@@ -73,4 +73,4 @@ struct LayerNorm {
                          const std::shared_ptr<State> &state,
                          const ReadOnlyTensor &grad_output);
 };
-}  // namespace dllm::compute
+}  // namespace cs::compute

@@ -19,7 +19,7 @@
 #include "logger.h"
 #include "threading/event_impl.h"
 
-namespace dllm {
+namespace cs {
 namespace {
 auto &getEventMutex() {
   static std::mutex mutex;
@@ -75,4 +75,4 @@ bool Event::query() const { return impl_->query(); }
 void Event::synchronize() const { impl_->synchronize(); }
 
 const std::shared_ptr<Event::Impl> &Event::impl() const { return impl_; }
-}  // namespace dllm
+}  // namespace cs

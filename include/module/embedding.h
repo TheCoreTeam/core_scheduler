@@ -19,8 +19,8 @@
 #include "module/module.h"
 #include "module/pimpl.h"
 
-namespace dllm::module {
-struct DLLM_API EmbeddingImpl : Module {
+namespace cs::module {
+struct CS_API EmbeddingImpl : Module {
   using Options = compute::Embedding::Options;
 
   explicit EmbeddingImpl(const Scheduler &scheduler, const Options &options);
@@ -36,5 +36,5 @@ struct DLLM_API EmbeddingImpl : Module {
   std::weak_ptr<compute::Embedding::State> state_;
 };
 
-DLLM_MODULE(Embedding);
-}  // namespace dllm::module
+CS_MODULE(Embedding);
+}  // namespace cs::module

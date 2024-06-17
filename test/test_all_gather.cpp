@@ -49,9 +49,9 @@ struct TypeToTorch<double> {
 
 class AllGatherNCCLTestFixture : public ::testing::Test {
  protected:
-  dllm::communication::Comm comm{
-      dllm::communication::getCommWorld(dllm::communication::NCCL)};
-  dllm::DynamicScheduler scheduler{static_cast<int>(comm.getRank())};
+  cs::communication::Comm comm{
+      cs::communication::getCommWorld(cs::communication::NCCL)};
+  cs::DynamicScheduler scheduler{static_cast<int>(comm.getRank())};
 
   AllGatherNCCLTestFixture() { CHECK_CUDART(cudaSetDevice(comm.getRank())); }
 
@@ -65,18 +65,18 @@ void AllGatherNCCLTestFixture::TestlAllToAllT(const int blockSize) {
   const at::ScalarType dtype = TypeToTorch<T>::type;
   const auto option = at::TensorOptions().dtype(dtype).device(device);
   at::manual_seed(comm.getRank() + 1);
-  auto x = dllm::compute::Utils::rand(scheduler, {blockSize}, option);
-  std::vector<dllm::Tensor> r;
+  auto x = cs::compute::Utils::rand(scheduler, {blockSize}, option);
+  std::vector<cs::Tensor> r;
   r.reserve(comm.getSize());
   for (int i = 0; i < comm.getSize(); ++i) {
-    auto t = dllm::compute::Utils::empty(scheduler, {blockSize}, option);
+    auto t = cs::compute::Utils::empty(scheduler, {blockSize}, option);
     r.push_back(t);
   }
-  dllm::communication::AllGather::run(scheduler, comm, {r}, {x});
+  cs::communication::AllGather::run(scheduler, comm, {r}, {x});
   std::vector<at::Tensor> r_torch;
   r_torch.resize(r.size());
   for (int i = 0; i < r.size(); ++i) {
-    r_torch[i] = dllm::memory::toTorch(scheduler, r[i]);
+    r_torch[i] = cs::memory::toTorch(scheduler, r[i]);
     r[i].wait();
   }
 

@@ -19,8 +19,8 @@
 #include "module/module.h"
 #include "module/pimpl.h"
 
-namespace dllm::module {
-struct DLLM_API LinearImpl : Module {
+namespace cs::module {
+struct CS_API LinearImpl : Module {
   using Options = compute::Linear::Options;
 
   explicit LinearImpl(const Scheduler &scheduler, const Options &options);
@@ -42,5 +42,5 @@ struct DLLM_API LinearImpl : Module {
   std::weak_ptr<compute::Linear::State> state_;
 };
 
-DLLM_MODULE(Linear);
-}  // namespace dllm::module
+CS_MODULE(Linear);
+}  // namespace cs::module

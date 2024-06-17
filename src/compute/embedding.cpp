@@ -23,7 +23,7 @@
 #include "threading/scheduler_impl.h"
 #include "threading/task_impl.h"
 
-namespace dllm::compute {
+namespace cs::compute {
 OrderedDict<std::string, Tensor> Embedding::State::parameters() const {
   OrderedDict<std::string, Tensor> dict;
   dict.insert("weight", forward.weight);
@@ -57,7 +57,7 @@ std::shared_ptr<Embedding::State> Embedding::init(const Scheduler &scheduler,
       output()[0].impl()->tensor() = weight_;
     }
     [[nodiscard]] const char *name() const override {
-      return "dllm::compute::Embedding::init";
+      return "cs::compute::Embedding::init";
     }
   };
 
@@ -105,7 +105,7 @@ Tensor Embedding::forward(const Scheduler &scheduler,
           args.padding_idx, args.scale_grad_by_freq, args.sparse);
     }
     [[nodiscard]] const char *name() const override {
-      return "dllm::compute::Embedding::forward";
+      return "cs::compute::Embedding::forward";
     }
   };
 
@@ -141,7 +141,7 @@ void Embedding::backward(const Scheduler &scheduler,
       }
     }
     [[nodiscard]] const char *name() const override {
-      return "dllm::compute::Embedding::backward";
+      return "cs::compute::Embedding::backward";
     }
   };
 
@@ -152,4 +152,4 @@ void Embedding::backward(const Scheduler &scheduler,
   // decrease counter
   state->backward.indices.reset();
 }
-}  // namespace dllm::compute
+}  // namespace cs::compute

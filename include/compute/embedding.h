@@ -20,7 +20,7 @@
 #include "tensor.h"
 #include "threading/scheduler.h"
 
-namespace dllm::compute {
+namespace cs::compute {
 struct Embedding {
   struct State final : module::State {
     struct Forward {
@@ -51,15 +51,15 @@ struct Embedding {
   struct Options {
     Options(const int64_t num_embeddings, const int64_t embedding_dim)
         : num_embeddings_{num_embeddings}, embedding_dim_{embedding_dim} {}
-    DLLM_ARG(int64_t, num_embeddings);
-    DLLM_ARG(int64_t, embedding_dim);
-    DLLM_ARG(c10::optional<int64_t>, padding_idx) = {};
-    DLLM_ARG(c10::optional<double>, max_norm) = {};
-    DLLM_ARG(double, norm_type) = 2.;
-    DLLM_ARG(bool, scale_grad_by_freq) = false;
-    DLLM_ARG(bool, sparse) = false;
-    DLLM_ARG(c10::optional<at::Device>, device) = {};
-    DLLM_ARG(c10::optional<at::ScalarType>, dtype) = {};
+    CS_ARG(int64_t, num_embeddings);
+    CS_ARG(int64_t, embedding_dim);
+    CS_ARG(c10::optional<int64_t>, padding_idx) = {};
+    CS_ARG(c10::optional<double>, max_norm) = {};
+    CS_ARG(double, norm_type) = 2.;
+    CS_ARG(bool, scale_grad_by_freq) = false;
+    CS_ARG(bool, sparse) = false;
+    CS_ARG(c10::optional<at::Device>, device) = {};
+    CS_ARG(c10::optional<at::ScalarType>, dtype) = {};
   };
 
   static std::shared_ptr<State> init(const Scheduler &scheduler,
@@ -74,4 +74,4 @@ struct Embedding {
                        const ReadOnlyTensor &grad_output);
 };
 
-}  // namespace dllm::compute
+}  // namespace cs::compute

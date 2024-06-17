@@ -21,36 +21,36 @@
 #include <cstdlib>
 #include <string>
 
-namespace dllm {
-#define DLLM_ASSERT_TRUE(statement, ...)                                      \
+namespace cs {
+#define CS_ASSERT_TRUE(statement, ...)                                      \
   do {                                                                        \
     if (!(statement)) {                                                       \
       std::string errorMessage =                                              \
           fmt::format("Assert '{}' failed: '{}'", #statement, ##__VA_ARGS__); \
-      SPDLOG_LOGGER_CRITICAL(&::dllm::logger(), errorMessage);                \
+      SPDLOG_LOGGER_CRITICAL(&::cs::logger(), errorMessage);                \
       std::abort();                                                           \
     }                                                                         \
   } while (false)
 
-#define DLLM_WARN_TRUE(statement, ...)                                        \
+#define CS_WARN_TRUE(statement, ...)                                        \
   do {                                                                        \
     if (!(statement)) {                                                       \
       std::string errorMessage =                                              \
           fmt::format("Assert '{}' failed: '{}'", #statement, ##__VA_ARGS__); \
-      SPDLOG_LOGGER_WARN(&::dllm::logger(), errorMessage);                    \
+      SPDLOG_LOGGER_WARN(&::cs::logger(), errorMessage);                    \
     }                                                                         \
   } while (false)
 
 #define CHECK_CUDART(statement)                                        \
   do {                                                                 \
     auto code = (statement);                                           \
-    DLLM_ASSERT_TRUE((code) == cudaSuccess, cudaGetErrorString(code)); \
+    CS_ASSERT_TRUE((code) == cudaSuccess, cudaGetErrorString(code)); \
   } while (false)
 
 #define CHECK_CUBLAS(statement)                                               \
   do {                                                                        \
     auto code = (statement);                                                  \
-    DLLM_ASSERT_TRUE((code) == CUBLAS_STATUS_SUCCESS,                         \
+    CS_ASSERT_TRUE((code) == CUBLAS_STATUS_SUCCESS,                         \
                      fmt::format("statement {} returned code {}", #statement, \
                                  static_cast<int>(code)));                    \
   } while (false)
@@ -58,7 +58,7 @@ namespace dllm {
 #define CHECK_MPI(statement)                                                  \
   do {                                                                        \
     auto code = (statement);                                                  \
-    DLLM_ASSERT_TRUE((code) == MPI_SUCCESS,                                   \
+    CS_ASSERT_TRUE((code) == MPI_SUCCESS,                                   \
                      fmt::format("statement {} returned code {}", #statement, \
                                  static_cast<int>(code)));                    \
   } while (false)
@@ -66,10 +66,10 @@ namespace dllm {
 #define CHECK_NCCL(statement)                                                 \
   do {                                                                        \
     auto code = (statement);                                                  \
-    DLLM_ASSERT_TRUE((code) == ncclSuccess,                                   \
+    CS_ASSERT_TRUE((code) == ncclSuccess,                                   \
                      fmt::format("statement {} returned code {}", #statement, \
                                  static_cast<int>(code)));                    \
   } while (false)
 
 spdlog::logger &logger();
-}  // namespace dllm
+}  // namespace cs

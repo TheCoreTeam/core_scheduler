@@ -22,15 +22,15 @@
 #include "tensor.h"
 #include "threading/scheduler.h"
 
-namespace dllm::module {
+namespace cs::module {
 struct Module;
 }
 
-namespace dllm {
+namespace cs {
 struct ThreadPoolCompute;
 }
 
-namespace dllm::optimizer {
+namespace cs::optimizer {
 struct AdamW {
   AdamW() = delete;
 
@@ -55,13 +55,13 @@ struct AdamW {
   };
 
   struct Options {
-    DLLM_ARG(double, lr) = 1e-3;
-    DLLM_ARG(double, beta1) = 0.9;
-    DLLM_ARG(double, beta2) = 0.999;
-    DLLM_ARG(double, eps) = 1e-8;
-    DLLM_ARG(double, weight_decay) = 1e-2;
-    DLLM_ARG(bool, amsgrad) = false;
-    DLLM_ARG(long, t) = 0;
+    CS_ARG(double, lr) = 1e-3;
+    CS_ARG(double, beta1) = 0.9;
+    CS_ARG(double, beta2) = 0.999;
+    CS_ARG(double, eps) = 1e-8;
+    CS_ARG(double, weight_decay) = 1e-2;
+    CS_ARG(bool, amsgrad) = false;
+    CS_ARG(long, t) = 0;
   };
 
   static void init(const Scheduler &scheduler, const module::Module &module,
@@ -91,4 +91,4 @@ struct AdamW {
                    const std::shared_ptr<State> &state, Tensor &w,
                    const ReadOnlyTensor &dw);
 };
-}  // namespace dllm::optimizer
+}  // namespace cs::optimizer

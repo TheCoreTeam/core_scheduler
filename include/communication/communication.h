@@ -21,7 +21,7 @@
 
 #include "threading/scheduler.h"
 
-namespace dllm::communication {
+namespace cs::communication {
 struct Comm {
   struct Impl;
 
@@ -57,4 +57,4 @@ Comm getComm(MPI_Comm group, BackendType backendType);
 Comm getCommWorld(BackendType backendType);
 
 Comm getCommNode(BackendType backendType);
-}  // namespace dllm::communication
+}  // namespace cs::communication

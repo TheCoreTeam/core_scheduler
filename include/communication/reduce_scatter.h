@@ -19,11 +19,11 @@
 #include "tensor.h"
 #include "threading/scheduler.h"
 
-namespace dllm::communication {
+namespace cs::communication {
 struct ReduceScatter {
   static void run(const Scheduler &scheduler, const Comm &comm,
                   const std::vector<Tensor> &tensorReceive,
                   const std::vector<std::vector<ReadOnlyTensor>> &tensorSend,
                   Operation operation);
 };
-}  // namespace dllm::communication
+}  // namespace cs::communication

@@ -23,7 +23,7 @@
 #include "threading/scheduler_impl.h"
 #include "threading/task_impl.h"
 
-namespace dllm::compute {
+namespace cs::compute {
 std::shared_ptr<GeLU::State> GeLU::init(const Scheduler &scheduler) {
   return std::make_shared<State>();
 }
@@ -39,7 +39,7 @@ Tensor GeLU::forward(const Scheduler &scheduler,
       output()[0].impl()->tensor() = at::gelu(input()[0].impl()->tensor());
     }
     [[nodiscard]] const char *name() const override {
-      return "dllm::compute::GeLU::forward";
+      return "cs::compute::GeLU::forward";
     }
   };
 
@@ -62,7 +62,7 @@ Tensor GeLU::backward(const Scheduler &scheduler,
           input()[0].impl()->tensor(), input()[1].impl()->tensor());
     }
     [[nodiscard]] const char *name() const override {
-      return "dllm::compute::GeLU::backward";
+      return "cs::compute::GeLU::backward";
     }
   };
 
@@ -73,4 +73,4 @@ Tensor GeLU::backward(const Scheduler &scheduler,
   state->backward.input.reset();
   return grad_input;
 }
-}  // namespace dllm::compute
+}  // namespace cs::compute

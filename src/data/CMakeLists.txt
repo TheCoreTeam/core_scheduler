@@ -12,9 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-set(DLLM_DATA_SRCS
+set(CS_DATA_SRCS
         ${CMAKE_CURRENT_SOURCE_DIR}/dataset.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/dataloader.cpp
 )
 
-set(DLLM_DATA_SRCS ${DLLM_DATA_SRCS} PARENT_SCOPE)
+set(CS_DATA_SRCS ${CS_DATA_SRCS} PARENT_SCOPE)

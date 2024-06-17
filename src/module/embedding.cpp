@@ -18,7 +18,7 @@
 
 #include "threading/scheduler.h"
 
-namespace dllm::module {
+namespace cs::module {
 EmbeddingImpl::EmbeddingImpl(const Scheduler& scheduler,
                              const Options& options) {
   const auto state = compute::Embedding::init(scheduler, options);
@@ -39,4 +39,4 @@ void EmbeddingImpl::backward(const Scheduler& scheduler,
 std::shared_ptr<compute::Embedding::State> EmbeddingImpl::state() const {
   return state_.lock();
 }
-}  // namespace dllm::module
+}  // namespace cs::module

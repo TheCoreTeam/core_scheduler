@@ -20,11 +20,11 @@
 
 #include <memory>
 
-namespace dllm {
+namespace cs {
 
 spdlog::logger &logger() {
   static spdlog::logger _logger{
-      "DLLM.cpp", std::make_shared<spdlog::sinks::stdout_color_sink_mt>()};
+      "CS.cpp", std::make_shared<spdlog::sinks::stdout_color_sink_mt>()};
   return _logger;
 }
-}  // namespace dllm
+}  // namespace cs

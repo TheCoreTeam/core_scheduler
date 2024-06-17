@@ -24,7 +24,7 @@
 #include "threading/scheduler_impl.h"
 #include "threading/task_impl.h"
 
-namespace dllm::compute {
+namespace cs::compute {
 std::shared_ptr<ScaledDotProductFlashAttention::State>
 ScaledDotProductFlashAttention::init(const Scheduler &scheduler,
                                      const Options &options) {
@@ -69,7 +69,7 @@ Tensor ScaledDotProductFlashAttention::forward(
       output()[5].impl()->tensor() = philox_offset_;
     }
     [[nodiscard]] const char *name() const override {
-      return "dllm::compute::ScaledDotProductAttention::forward";
+      return "cs::compute::ScaledDotProductAttention::forward";
     }
   };
 
@@ -143,7 +143,7 @@ std::array<Tensor, 3> ScaledDotProductFlashAttention::backward(
       output()[2].impl()->tensor() = grad_value_.transpose(1, 2);
     }
     [[nodiscard]] const char *name() const override {
-      return "dllm::compute::ScaledDotProductAttention::backward";
+      return "cs::compute::ScaledDotProductAttention::backward";
     }
   };
 
@@ -172,4 +172,4 @@ std::array<Tensor, 3> ScaledDotProductFlashAttention::backward(
   state->backward.philox_offset.reset();
   return {grad_query, grad_key, grad_value};
 }
-}  // namespace dllm::compute
+}  // namespace cs::compute

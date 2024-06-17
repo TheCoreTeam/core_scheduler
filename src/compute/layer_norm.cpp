@@ -28,7 +28,7 @@
 #include "threading/scheduler_impl.h"
 #include "threading/task_impl.h"
 
-namespace dllm::compute {
+namespace cs::compute {
 OrderedDict<std::string, Tensor> LayerNorm::State::parameters() const {
   OrderedDict<std::string, Tensor> dict;
   dict.insert("weight", forward.weight);
@@ -52,8 +52,8 @@ LayerNorm::State::increments() {
 
 std::shared_ptr<LayerNorm::State> LayerNorm::init(const Scheduler& scheduler,
                                                   const Options& options) {
-  DLLM_ASSERT_TRUE(options.elementwise_affine() == true,
-                   "elementwise_affine must be enabled now");
+  CS_ASSERT_TRUE(options.elementwise_affine() == true,
+                 "elementwise_affine must be enabled now");
   at::TensorOptions tensorOptions{};
   if (options.device().has_value()) {
     tensorOptions = tensorOptions.device(options.device());
@@ -79,7 +79,7 @@ std::shared_ptr<LayerNorm::State> LayerNorm::init(const Scheduler& scheduler,
             at::zeros(options.normalized_shape(), tensorOptions);
       }
       [[nodiscard]] const char* name() const override {
-        return "dllm::compute::LayerNorm::init";
+        return "cs::compute::LayerNorm::init";
       }
     };
 
@@ -106,7 +106,7 @@ std::shared_ptr<LayerNorm::State> LayerNorm::init(const Scheduler& scheduler,
             at::ones(options.normalized_shape(), tensorOptions);
       }
       [[nodiscard]] const char* name() const override {
-        return "dllm::compute::LayerNorm::init";
+        return "cs::compute::LayerNorm::init";
       }
     };
 
@@ -146,7 +146,7 @@ Tensor LayerNorm::forward(const Scheduler& scheduler,
                                   input()[2].impl()->tensor(), args.eps);
       }
       [[nodiscard]] const char* name() const override {
-        return "dllm::compute::LayerNorm::forward";
+        return "cs::compute::LayerNorm::forward";
       }
     };
 
@@ -172,7 +172,7 @@ Tensor LayerNorm::forward(const Scheduler& scheduler,
                                   input()[1].impl()->tensor(), {}, args.eps);
       }
       [[nodiscard]] const char* name() const override {
-        return "dllm::compute::LayerNorm::forward";
+        return "cs::compute::LayerNorm::forward";
       }
     };
 
@@ -225,7 +225,7 @@ Tensor LayerNorm::backward(const Scheduler& scheduler,
         intermediate().push_back(db);
       }
       [[nodiscard]] const char* name() const override {
-        return "dllm::compute::LayerNorm::backward";
+        return "cs::compute::LayerNorm::backward";
       }
     };
 
@@ -260,7 +260,7 @@ Tensor LayerNorm::backward(const Scheduler& scheduler,
         intermediate().push_back(dw);
       }
       [[nodiscard]] const char* name() const override {
-        return "dllm::compute::LayerNorm::backward";
+        return "cs::compute::LayerNorm::backward";
       }
     };
 
@@ -278,4 +278,4 @@ Tensor LayerNorm::backward(const Scheduler& scheduler,
   return grad_input;
 }
 
-}  // namespace dllm::compute
+}  // namespace cs::compute

@@ -19,7 +19,7 @@
 
 #include "threading/event.h"
 
-namespace dllm {
+namespace cs {
 struct Event::Impl {
   void block();
 
@@ -32,4 +32,4 @@ struct Event::Impl {
  private:
   at::cuda::CUDAEvent event;
 };
-}  // namespace dllm
+}  // namespace cs

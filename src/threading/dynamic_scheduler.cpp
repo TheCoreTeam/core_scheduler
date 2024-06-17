@@ -32,7 +32,7 @@
 #include "threading/scheduler_impl.h"
 #include "threading/task_impl.h"
 
-namespace dllm {
+namespace cs {
 namespace {
 hwloc_topology_t getHwlocTopology() {
   static struct Topo {
@@ -80,9 +80,9 @@ void setClosestCpuSetToGpu(const hwloc_cpuset_t bitmap,
                            const unsigned int gpuRank) {
   nvmlDevice_t nvml_device;
   nvmlDeviceGetHandleByIndex(gpuRank, &nvml_device);
-  DLLM_ASSERT_TRUE(hwloc_nvml_get_device_cpuset(getHwlocTopology(), nvml_device,
-                                                bitmap) == 0,
-                   "device rank not found by NVML");
+  CS_ASSERT_TRUE(hwloc_nvml_get_device_cpuset(getHwlocTopology(), nvml_device,
+                                              bitmap) == 0,
+                 "device rank not found by NVML");
 }
 
 hwloc_cpuset_t getClosestCpuSetToGpu(const unsigned int gpuRank) {
@@ -144,7 +144,7 @@ void memoryWatchDog(const std::shared_ptr<std::atomic<bool>> shutDown,
         pair.tensors.clear();
         pair.event = Event{nullptr};
       } catch (const std::exception &e) {
-        DLLM_ASSERT_TRUE(false, "Task failed with error: {}", e.what());
+        CS_ASSERT_TRUE(false, "Task failed with error: {}", e.what());
       }
     } else {
       std::unique_lock uniqueLock{*cvMutex};
@@ -204,7 +204,7 @@ void threadTask(const int localRank, const int8_t streamIdx,
           }
         }
       }
-      DLLM_NVTX_RANGE_FN(task.name());
+      CS_NVTX_RANGE_FN(task.name());
       task();
       if (!task.impl()->intermediate().empty()) {
         event = Event{};
@@ -215,8 +215,8 @@ void threadTask(const int localRank, const int8_t streamIdx,
         t.impl()->event().record();
       }
     } catch (const std::exception &e) {
-      DLLM_ASSERT_TRUE(false, fmt::format("Task {} failed with error: {}",
-                                          task.name(), e.what()));
+      CS_ASSERT_TRUE(false, fmt::format("Task {} failed with error: {}",
+                                        task.name(), e.what()));
     }
     for (auto &output = task.output(); auto &t : output) {
       t.impl()->stream() = context.cudaStream;
@@ -267,15 +267,15 @@ void threadCommTask(const int localRank, const int8_t streamIdx,
           }
         }
       }
-      DLLM_NVTX_RANGE_FN(task.name());
+      CS_NVTX_RANGE_FN(task.name());
       task();
       for (auto &output = task.output(); auto &t : output) {
         t.impl()->streamIdx() = streamIdx;
         t.impl()->event().record();
       }
     } catch (const std::exception &e) {
-      DLLM_ASSERT_TRUE(false, fmt::format("Task {} failed with error: {}",
-                                          task.name(), e.what()));
+      CS_ASSERT_TRUE(false, fmt::format("Task {} failed with error: {}",
+                                        task.name(), e.what()));
     }
     for (auto &output = task.output(); auto &t : output) {
       t.impl()->stream() = context.cudaStream;
@@ -374,4 +374,4 @@ void Impl_::submit(Task &&task) {
 DynamicScheduler::DynamicScheduler(int localRank) {
   impl_ = std::make_shared<Impl_>(localRank);
 }
-}  // namespace dllm
+}  // namespace cs

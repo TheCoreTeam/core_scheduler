@@ -24,7 +24,7 @@
 #include "threading/scheduler_impl.h"
 #include "threading/task_impl.h"
 
-namespace dllm::compute {
+namespace cs::compute {
 OrderedDict<std::string, Tensor> Linear::State::parameters() const {
   OrderedDict<std::string, Tensor> dict;
   dict.insert("weight", forward.weight);
@@ -47,7 +47,7 @@ OrderedDict<std::string, module::State::Increment> Linear::State::increments() {
 
 std::shared_ptr<Linear::State> Linear::init(const Scheduler &scheduler,
                                             const Options &options) {
-  DLLM_ASSERT_TRUE(options.bias() == false, "we do not supprot bias now");
+  CS_ASSERT_TRUE(options.bias() == false, "we do not supprot bias now");
   // ReSharper disable once CppDFAUnreachableCode
   TensorOptions tensorOptions{};
   if (options.device().has_value()) {
@@ -83,7 +83,7 @@ std::shared_ptr<Linear::State> Linear::init(const Scheduler &scheduler,
         torch::nn::init::uniform_(output()[1].impl()->tensor(), -bound, bound);
       }
       [[nodiscard]] const char *name() const override {
-        return "dllm::compute::Linear::init";
+        return "cs::compute::Linear::init";
       }
     };
 
@@ -117,7 +117,7 @@ std::shared_ptr<Linear::State> Linear::init(const Scheduler &scheduler,
                                           std::sqrt(5));
       }
       [[nodiscard]] const char *name() const override {
-        return "dllm::compute::Linear::init";
+        return "cs::compute::Linear::init";
       }
     };
 
@@ -145,7 +145,7 @@ Tensor Linear::forward(const Scheduler &scheduler,
           at::linear(input()[0].impl()->tensor(), input()[1].impl()->tensor());
     }
     [[nodiscard]] const char *name() const override {
-      return "dllm::compute::Linear::forward";
+      return "cs::compute::Linear::forward";
     }
   };
 
@@ -169,7 +169,7 @@ Tensor Linear::backwardInput(const Scheduler &scheduler,
           at::matmul(input()[0].impl()->tensor(), input()[1].impl()->tensor());
     }
     [[nodiscard]] const char *name() const override {
-      return "dllm::compute::Linear::backwardInput";
+      return "cs::compute::Linear::backwardInput";
     }
   };
 
@@ -216,7 +216,7 @@ void Linear::backwardParameter(const Scheduler &scheduler,
       }
     }
     [[nodiscard]] const char *name() const override {
-      return "dllm::compute::Linear::backwardParameter";
+      return "cs::compute::Linear::backwardParameter";
     }
   };
 
@@ -225,4 +225,4 @@ void Linear::backwardParameter(const Scheduler &scheduler,
       {state->forward.grad_weight}, {grad_output, state->backward.input}})});
   state->backward.input.reset();
 }
-}  // namespace dllm::compute
+}  // namespace cs::compute

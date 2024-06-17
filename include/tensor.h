@@ -19,7 +19,7 @@
 
 #include <memory>
 
-namespace dllm {
+namespace cs {
 using IntArrayRef = at::IntArrayRef;
 
 using IntArray = c10::SmallVector<IntArrayRef::value_type>;
@@ -61,13 +61,13 @@ TORCH_API std::ostream &print(std::ostream &stream,
 static std::ostream &operator<<(std::ostream &out, const ReadOnlyTensor &t) {
   return print(out, t, 80);
 }
-}  // namespace dllm
+}  // namespace cs
 
 namespace at {
-bool allclose(const dllm::ReadOnlyTensor &t1, const at::Tensor &t2,
+bool allclose(const cs::ReadOnlyTensor &t1, const at::Tensor &t2,
               double rtol = 1e-05, double atol = 1e-08, bool equal_nan = false);
-bool allclose(const dllm::ReadOnlyTensor &t1, const dllm::ReadOnlyTensor &t2,
+bool allclose(const cs::ReadOnlyTensor &t1, const cs::ReadOnlyTensor &t2,
               double rtol = 1e-05, double atol = 1e-08, bool equal_nan = false);
-bool allclose(const at::Tensor &t1, const dllm::ReadOnlyTensor &t2,
+bool allclose(const at::Tensor &t1, const cs::ReadOnlyTensor &t2,
               double rtol = 1e-05, double atol = 1e-08, bool equal_nan = false);
 }  // namespace at

@@ -20,7 +20,7 @@
 #include "optimizer/adamw.h"
 #include "tensor_impl.h"
 
-namespace dllm::optimizer {
+namespace cs::optimizer {
 namespace {
 template <typename TA, typename TB>
 constexpr __inline__ __attribute__((always_inline)) int ceil_div(TA a, TB b) {
@@ -150,4 +150,4 @@ void stepKernelAmsgrad(cudaStream_t stream,
             options.weight_decay, size);
       });
 }
-}  // namespace dllm::optimizer
+}  // namespace cs::optimizer

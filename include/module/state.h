@@ -21,12 +21,12 @@
 
 #include "tensor.h"
 
-namespace dllm {
+namespace cs {
 template <typename Key, typename Value>
 using OrderedDict = torch::OrderedDict<Key, Value>;
 }
 
-namespace dllm::module {
+namespace cs::module {
 struct OptimizerState {
   virtual ~OptimizerState() = default;
 };
@@ -50,4 +50,4 @@ struct State {
     return OrderedDict<std::string, Increment>{};
   }
 };
-}  // namespace dllm::module
+}  // namespace cs::module

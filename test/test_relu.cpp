@@ -34,9 +34,9 @@ struct scalar_random_op<nv_half> {
 };
 }  // namespace Eigen::internal
 
-class TestDLLMRelu : public ::testing::Test {
+class TestCSRelu : public ::testing::Test {
  protected:
-  dllm::ContextCompute context{};
+  cs::ContextCompute context{};
 
   void SetUp() override {
     CHECK_CUDART(
@@ -48,11 +48,11 @@ class TestDLLMRelu : public ::testing::Test {
   }
 
   template <typename Element>
-  void TestRoutine(const dllm::TensorIndexType size);
+  void TestRoutine(const cs::TensorIndexType size);
 };
 
 template <typename Element>
-void TestDLLMRelu::TestRoutine(const dllm::TensorIndexType size) {
+void TestCSRelu::TestRoutine(const cs::TensorIndexType size) {
   Eigen::Vector<Element, Eigen::Dynamic> hostInput(size);
   Eigen::Vector<Element, Eigen::Dynamic> hostOutput(size);
   Eigen::Vector<Element, Eigen::Dynamic> hostRef(size);
@@ -65,10 +65,10 @@ void TestDLLMRelu::TestRoutine(const dllm::TensorIndexType size) {
   void *DeviceInput, *DeviceOutput;
   CHECK_CUDART(cudaMalloc(&DeviceInput, sizeof(Element) * cute::size(layout)));
   CHECK_CUDART(cudaMalloc(&DeviceOutput, sizeof(Element) * cute::size(layout)));
-  auto tensorInput = std::make_shared<dllm::Tensor1D>(
-      DeviceInput, layout, dllm::toDtype<Element>(), dllm::CUDA);
-  auto tensorOutput = std::make_shared<dllm::Tensor1D>(
-      DeviceOutput, layout, dllm::toDtype<Element>(), dllm::CUDA);
+  auto tensorInput = std::make_shared<cs::Tensor1D>(
+      DeviceInput, layout, cs::toDtype<Element>(), cs::CUDA);
+  auto tensorOutput = std::make_shared<cs::Tensor1D>(
+      DeviceOutput, layout, cs::toDtype<Element>(), cs::CUDA);
 
   CHECK_CUDART(cudaMemcpy(DeviceInput, hostInput.data(),
                           sizeof(Element) * cute::size(layout),
@@ -80,7 +80,7 @@ void TestDLLMRelu::TestRoutine(const dllm::TensorIndexType size) {
   hostRef =
       hostInput.unaryExpr([](Element x) { return std::max<Element>(0, x); });
 
-  auto tast = dllm::compute::ReLU::forward(tensorInput, tensorOutput);
+  auto tast = cs::compute::ReLU::forward(tensorInput, tensorOutput);
   tast(&context);
 
   CHECK_CUDART(cudaMemcpy(hostOutput.data(), DeviceOutput,
@@ -113,20 +113,20 @@ void TestDLLMRelu::TestRoutine(const dllm::TensorIndexType size) {
   CHECK_CUDART(cudaFree(DeviceOutput));
 }
 
-TEST_F(TestDLLMRelu, TestF32_128) { TestRoutine<float>(128); }
+TEST_F(TestCSRelu, TestF32_128) { TestRoutine<float>(128); }
 
-TEST_F(TestDLLMRelu, TestF32_512) { TestRoutine<float>(512); }
+TEST_F(TestCSRelu, TestF32_512) { TestRoutine<float>(512); }
 
-TEST_F(TestDLLMRelu, TestF32_1024) { TestRoutine<float>(1024); }
+TEST_F(TestCSRelu, TestF32_1024) { TestRoutine<float>(1024); }
 
-TEST_F(TestDLLMRelu, TestF64_128) { TestRoutine<double>(128); }
+TEST_F(TestCSRelu, TestF64_128) { TestRoutine<double>(128); }
 
-TEST_F(TestDLLMRelu, TestF64_512) { TestRoutine<double>(512); }
+TEST_F(TestCSRelu, TestF64_512) { TestRoutine<double>(512); }
 
-TEST_F(TestDLLMRelu, TestF64_1024) { TestRoutine<double>(1024); }
+TEST_F(TestCSRelu, TestF64_1024) { TestRoutine<double>(1024); }
 
-TEST_F(TestDLLMRelu, TestF16_128) { TestRoutine<nv_half>(128); }
+TEST_F(TestCSRelu, TestF16_128) { TestRoutine<nv_half>(128); }
 
-TEST_F(TestDLLMRelu, TestF16_512) { TestRoutine<nv_half>(512); }
+TEST_F(TestCSRelu, TestF16_512) { TestRoutine<nv_half>(512); }
 
-TEST_F(TestDLLMRelu, TestF16_1024) { TestRoutine<nv_half>(1024); }
+TEST_F(TestCSRelu, TestF16_1024) { TestRoutine<nv_half>(1024); }

@@ -22,7 +22,7 @@
 #include "threading/scheduler_impl.h"
 #include "threading/task_impl.h"
 
-namespace dllm::memory {
+namespace cs::memory {
 at::Tensor toTorch(const Scheduler &scheduler, const ReadOnlyTensor &src) {
   struct Impl : Task::Impl {
     explicit Impl(std::vector<Tensor> output /* tensor */,
@@ -40,7 +40,7 @@ at::Tensor toTorch(const Scheduler &scheduler, const ReadOnlyTensor &src) {
       c10::cuda::getCurrentCUDAStream().synchronize();
     }
     [[nodiscard]] const char *name() const override {
-      return "dllm::memory::toTorch";
+      return "cs::memory::toTorch";
     }
   };
   Tensor dst_;
@@ -49,4 +49,4 @@ at::Tensor toTorch(const Scheduler &scheduler, const ReadOnlyTensor &src) {
   dst_.wait();
   return dst;
 }
-}  // namespace dllm::memory
+}  // namespace cs::memory

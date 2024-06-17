@@ -17,8 +17,8 @@
 #pragma once
 #include "threading/scheduler.h"
 
-namespace dllm {
+namespace cs {
 struct DynamicScheduler : Scheduler {
   explicit DynamicScheduler(int localRank);
 };
-}  // namespace dllm
+}  // namespace cs

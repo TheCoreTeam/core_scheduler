@@ -19,7 +19,7 @@
 #include "tensor.h"
 #include "threading/scheduler.h"
 
-namespace dllm::compute {
+namespace cs::compute {
 struct ScaledDotProductFlashAttention {
   struct State {
     struct Forward {
@@ -50,10 +50,10 @@ struct ScaledDotProductFlashAttention {
 
   struct Options {
     Options() {}
-    DLLM_ARG(double, dropout_p) = 0;
-    DLLM_ARG(bool, is_causal) = false;
-    DLLM_ARG(bool, return_debug_mask) = false;
-    DLLM_ARG(c10::optional<double>, scale) = {};
+    CS_ARG(double, dropout_p) = 0;
+    CS_ARG(bool, is_causal) = false;
+    CS_ARG(bool, return_debug_mask) = false;
+    CS_ARG(c10::optional<double>, scale) = {};
   };
 
   static std::shared_ptr<State> init(const Scheduler &scheduler,
@@ -69,4 +69,4 @@ struct ScaledDotProductFlashAttention {
                                         const std::shared_ptr<State> &state,
                                         const ReadOnlyTensor &grad_out);
 };
-}  // namespace dllm::compute
+}  // namespace cs::compute

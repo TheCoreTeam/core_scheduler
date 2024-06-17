@@ -17,7 +17,7 @@
 #pragma once
 #include <memory>
 
-namespace dllm {
+namespace cs {
 namespace dataset {
 struct DataLoader;
 }
@@ -32,4 +32,4 @@ struct Scheduler {
  protected:
   std::shared_ptr<Impl> impl_;
 };
-}  // namespace dllm
+}  // namespace cs

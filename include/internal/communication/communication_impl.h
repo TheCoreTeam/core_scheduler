@@ -20,7 +20,7 @@
 
 #include "communication/communication.h"
 
-namespace dllm::communication {
+namespace cs::communication {
 struct Bucket::Impl {
   virtual ~Impl() = default;
 
@@ -40,4 +40,4 @@ struct Comm::Impl {
   const c10::intrusive_ptr<c10d::Store> store_{};
   const c10::intrusive_ptr<c10d::Backend> backend_{};
 };
-}  // namespace dllm::communication
+}  // namespace cs::communication

@@ -26,7 +26,7 @@
 #include "threading/scheduler_impl.h"
 #include "threading/task_impl.h"
 
-namespace dllm::communication {
+namespace cs::communication {
 void AllToAll::run(const Scheduler &scheduler, const Comm &comm,
                    const std::vector<Tensor> &tensorReceive,
                    const std::vector<ReadOnlyTensor> &tensorSend) {
@@ -41,27 +41,27 @@ void AllToAll::run(const Scheduler &scheduler, const Comm &comm,
       std::vector<at::Tensor> vReceive;
       vReceive.reserve(output().size());
       for (const auto &t : output()) {
-        DLLM_ASSERT_TRUE(t.impl()->tensor().device().type() == at::kCUDA,
-                         "NCCL backend only support CUDA GPUs");
+        CS_ASSERT_TRUE(t.impl()->tensor().device().type() == at::kCUDA,
+                       "NCCL backend only support CUDA GPUs");
         vReceive.push_back(t.impl()->tensor());
       }
 
       std::vector<at::Tensor> vSend;
       vSend.reserve(input().size());
       for (const auto &t : input()) {
-        DLLM_ASSERT_TRUE(t.impl()->tensor().device().type() == at::kCUDA,
-                         "NCCL backend only support CUDA GPUs");
+        CS_ASSERT_TRUE(t.impl()->tensor().device().type() == at::kCUDA,
+                       "NCCL backend only support CUDA GPUs");
         vSend.push_back(t.impl()->tensor());
       }
 
       comm.impl()->backend()->alltoall(vReceive, vSend)->wait();
     }
     [[nodiscard]] const char *name() const override {
-      return "dllm::communication::AllToAll::run";
+      return "cs::communication::AllToAll::run";
     }
   };
 
   scheduler.impl()->submit(
       Task{std::make_shared<Impl>(Impl{tensorReceive, tensorSend, comm})});
 }
-}  // namespace dllm::communication
+}  // namespace cs::communication

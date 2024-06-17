@@ -19,12 +19,12 @@
 #include "module/module.h"
 #include "module/pimpl.h"
 
-namespace dllm {
+namespace cs {
 struct ThreadPoolCompute;
 }
 
-namespace dllm::module {
-struct DLLM_API LayerNormImpl : Module {
+namespace cs::module {
+struct CS_API LayerNormImpl : Module {
   using Options = compute::LayerNorm::Options;
 
   explicit LayerNormImpl(const Scheduler &scheduler, const Options &options);
@@ -40,5 +40,5 @@ struct DLLM_API LayerNormImpl : Module {
   std::weak_ptr<compute::LayerNorm::State> state_;
 };
 
-DLLM_MODULE(LayerNorm);
-}  // namespace dllm::module
+CS_MODULE(LayerNorm);
+}  // namespace cs::module

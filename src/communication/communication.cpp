@@ -22,7 +22,7 @@
 #include "communication/communication_impl.h"
 #include "logger.h"
 
-namespace dllm::communication {
+namespace cs::communication {
 namespace {
 template <BackendType backend>
 std::unordered_map<MPI_Comm, Comm> &getMap() {
@@ -44,13 +44,13 @@ Comm createNccl(const MPI_Comm group) {
 
   if (rank == 0) {
     const hostent *he = gethostbyname(processor_name);
-    DLLM_ASSERT_TRUE(he != nullptr, fmt::format("Error resolving hostname: {}",
-                                                hstrerror(h_errno)));
+    CS_ASSERT_TRUE(he != nullptr, fmt::format("Error resolving hostname: {}",
+                                              hstrerror(h_errno)));
     strcpy(addr0, inet_ntoa(*reinterpret_cast<in_addr *>(he->h_addr)));
 
     // Try to find a free port
     int sock = socket(AF_INET, SOCK_STREAM, 0);
-    DLLM_ASSERT_TRUE(sock != -1, "Socket creation failed");
+    CS_ASSERT_TRUE(sock != -1, "Socket creation failed");
 
     sockaddr_in addr;
     addr.sin_family = AF_INET;
@@ -66,7 +66,7 @@ Comm createNccl(const MPI_Comm group) {
     }
 
     close(sock);
-    DLLM_ASSERT_TRUE(port < 30000, "Could not find a free port");
+    CS_ASSERT_TRUE(port < 30000, "Could not find a free port");
   }
 
   // Broadcast the IP address and port from rank 0 to all other ranks
@@ -96,7 +96,7 @@ Comm lookupMapOrCreate(const MPI_Comm group, const BackendType backendType) {
       }
     }
     default: {
-      DLLM_ASSERT_TRUE(false, "we only support NCCL now");
+      CS_ASSERT_TRUE(false, "we only support NCCL now");
     }
   }
 }
@@ -146,4 +146,4 @@ const c10::intrusive_ptr<c10d::Store> &Comm::Impl::store() const {
 const c10::intrusive_ptr<c10d::Backend> &Comm::Impl::backend() const {
   return backend_;
 }
-}  // namespace dllm::communication
+}  // namespace cs::communication

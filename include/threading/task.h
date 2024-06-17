@@ -20,7 +20,7 @@
 
 #include "tensor.h"
 
-namespace dllm {
+namespace cs {
 struct Task {
   struct Impl;
 
@@ -43,4 +43,4 @@ struct Task {
  private:
   std::shared_ptr<Impl> impl_;
 };
-}  // namespace dllm
+}  // namespace cs

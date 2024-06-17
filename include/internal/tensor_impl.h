@@ -15,7 +15,7 @@
  */
 
 #pragma once
-#ifdef DLLM_ENABLE_INTERNAL_BUILD
+#ifdef CS_ENABLE_INTERNAL_BUILD
 // This is an internal file, never use it unless you know what you are doing
 #include <ATen/core/TensorBody.h>
 #include <cuda_runtime.h>
@@ -23,7 +23,7 @@
 #include "tensor.h"
 #include "threading/event.h"
 
-namespace dllm {
+namespace cs {
 struct Event;
 
 struct ReadOnlyTensor::Impl {
@@ -57,7 +57,7 @@ struct ReadOnlyTensor::Impl {
 
   at::Tensor tensor_{};
 };
-}  // namespace dllm
+}  // namespace cs
 #else
 #error "You should not include this file in your program!"
 #endif

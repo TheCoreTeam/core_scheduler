@@ -21,7 +21,7 @@
 #include "tensor.h"
 #include "threading/scheduler.h"
 
-namespace dllm::data {
+namespace cs::data {
 struct DataLoader {
   struct Impl;
 
@@ -42,4 +42,4 @@ struct LlmDataLoader : DataLoader {
                 int64_t numWorkers, bool shuffle, int64_t rank,
                 int64_t worldSize);
 };
-}  // namespace dllm::data
+}  // namespace cs::data

@@ -20,7 +20,7 @@
 #include "tensor.h"
 #include "threading/scheduler.h"
 
-namespace dllm::compute {
+namespace cs::compute {
 struct Linear {
   struct State final : module::State {
     struct Forward {
@@ -49,11 +49,11 @@ struct Linear {
   struct Options {
     Options(const int64_t in_futures, const int64_t out_futures)
         : in_futures_(in_futures), out_futures_(out_futures) {}
-    DLLM_ARG(int64_t, in_futures);
-    DLLM_ARG(int64_t, out_futures);
-    DLLM_ARG(bool, bias) = true;
-    DLLM_ARG(c10::optional<at::Device>, device) = {};
-    DLLM_ARG(c10::optional<at::ScalarType>, dtype) = {};
+    CS_ARG(int64_t, in_futures);
+    CS_ARG(int64_t, out_futures);
+    CS_ARG(bool, bias) = true;
+    CS_ARG(c10::optional<at::Device>, device) = {};
+    CS_ARG(c10::optional<at::ScalarType>, dtype) = {};
   };
 
   static std::shared_ptr<State> init(const Scheduler &scheduler,
@@ -71,4 +71,4 @@ struct Linear {
                                 const std::shared_ptr<State> &state,
                                 const ReadOnlyTensor &grad_output);
 };
-}  // namespace dllm::compute
+}  // namespace cs::compute

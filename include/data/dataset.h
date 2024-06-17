@@ -19,7 +19,7 @@
 #include <memory>
 #include <vector>
 
-namespace dllm::data {
+namespace cs::data {
 struct Dataset {
   struct Impl;
 
@@ -45,4 +45,4 @@ struct LlmDataset : Dataset {
 
   [[nodiscard]] std::int64_t cols() const;
 };
-}  // namespace dllm::data
+}  // namespace cs::data

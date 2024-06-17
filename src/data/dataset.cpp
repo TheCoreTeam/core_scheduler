@@ -26,7 +26,7 @@
 #include "data/dataset_impl.h"
 #include "logger.h"
 
-namespace dllm::data {
+namespace cs::data {
 struct LlmDatasetImpl final : Dataset::Impl {
   std::shared_ptr<const arrow::Table> table;
   const std::int64_t attributeNum;
@@ -56,8 +56,8 @@ std::vector<std::string> get_arrow_files(const std::string &directory) {
   std::vector<std::string> files;
 
   // 确保提供的路径是一个目录
-  DLLM_ASSERT_TRUE(fs::is_directory(directory),
-                   "Provided path is not a directory.");
+  CS_ASSERT_TRUE(fs::is_directory(directory),
+                 "Provided path is not a directory.");
 
   // 遍历目录中的所有项
   for (const auto &entry : fs::directory_iterator(directory)) {
@@ -81,36 +81,35 @@ LlmDataset::LlmDataset(const std::string &directory) {
 
   auto result = arrow::dataset::FileSystemDatasetFactory::Make(
       filesystem, get_arrow_files(directory), format, {});
-  DLLM_ASSERT_TRUE(result.ok(),
-                   fmt::format("Failed to make dataset factory: {}",
-                               result.status().ToString()));
+  CS_ASSERT_TRUE(result.ok(), fmt::format("Failed to make dataset factory: {}",
+                                          result.status().ToString()));
   const auto factory = result.ValueOrDie();
   const auto dataset_result = factory->Finish();
-  DLLM_ASSERT_TRUE(dataset_result.ok(),
-                   fmt::format("Failed to finish dataset: {}",
-                               dataset_result.status().ToString()));
+  CS_ASSERT_TRUE(dataset_result.ok(),
+                 fmt::format("Failed to finish dataset: {}",
+                             dataset_result.status().ToString()));
   const auto &dataset = dataset_result.ValueOrDie();
 
   auto scanner_builder_result = dataset->NewScan();
-  DLLM_ASSERT_TRUE(scanner_builder_result.ok(),
-                   fmt::format("Failed to start a new scan: {}",
-                               scanner_builder_result.status().ToString()));
+  CS_ASSERT_TRUE(scanner_builder_result.ok(),
+                 fmt::format("Failed to start a new scan: {}",
+                             scanner_builder_result.status().ToString()));
 
   const auto scanner_builder = scanner_builder_result.ValueOrDie();
 
   const auto project_status = scanner_builder->Project({"input_ids", "labels"});
-  DLLM_ASSERT_TRUE(project_status.ok(),
-                   fmt::format("Failed to set projection columns: {}",
-                               project_status.ToString()));
+  CS_ASSERT_TRUE(project_status.ok(),
+                 fmt::format("Failed to set projection columns: {}",
+                             project_status.ToString()));
 
   const auto scanner_result = scanner_builder->Finish();
-  DLLM_ASSERT_TRUE(scanner_result.ok(),
-                   fmt::format("Failed to create scanner: {}",
-                               scanner_result.status().ToString()));
+  CS_ASSERT_TRUE(scanner_result.ok(),
+                 fmt::format("Failed to create scanner: {}",
+                             scanner_result.status().ToString()));
   const auto &scanner = scanner_result.ValueOrDie();
 
   auto table_result = scanner->ToTable();
-  DLLM_ASSERT_TRUE(
+  CS_ASSERT_TRUE(
       table_result.ok(),
       fmt::format("Error reading table: {}", table_result.status().ToString()));
   auto table = table_result.ValueOrDie();
@@ -137,8 +136,8 @@ void LlmDataset::fillBatch(const std::vector<std::int64_t *> &ptrs,
                            const std::int64_t startingRow,
                            const std::int64_t batchSize) const {
   const auto impl = std::dynamic_pointer_cast<LlmDatasetImpl>(impl_);
-  DLLM_ASSERT_TRUE(impl->table->num_columns() == static_cast<int>(ptrs.size()),
-                   "wrong ptrs size");
+  CS_ASSERT_TRUE(impl->table->num_columns() == static_cast<int>(ptrs.size()),
+                 "wrong ptrs size");
   int startChunkIdx = -1;
   for (int i = 1; i < static_cast<int>(impl->rowOffset_.size()); ++i) {
     if (impl->rowOffset_[i] >= startingRow) {
@@ -154,12 +153,12 @@ void LlmDataset::fillBatch(const std::vector<std::int64_t *> &ptrs,
       break;
     }
   }
-  DLLM_ASSERT_TRUE(startChunkIdx != -1,
-                   "Data loader error, one reason is batchsize is larger than "
-                   "the dataset size");
-  DLLM_ASSERT_TRUE(endChunkIdx != -1,
-                   "Data loader error, one reason is batchsize is larger than "
-                   "the dataset size");
+  CS_ASSERT_TRUE(startChunkIdx != -1,
+                 "Data loader error, one reason is batchsize is larger than "
+                 "the dataset size");
+  CS_ASSERT_TRUE(endChunkIdx != -1,
+                 "Data loader error, one reason is batchsize is larger than "
+                 "the dataset size");
 
   for (int i = 0; i < static_cast<int>(ptrs.size()); ++i) {
     auto data = std::static_pointer_cast<arrow::ListArray>(
@@ -235,4 +234,4 @@ std::int64_t LlmDataset::cols() const {
       impl->table->column(0)->chunk(0));
   return data->value_offset(1) - data->value_offset(0);
 }
-}  // namespace dllm::data
+}  // namespace cs::data

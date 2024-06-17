@@ -25,7 +25,7 @@
 #include "logger.h"
 #include "module/state.h"
 
-namespace dllm::module {
+namespace cs::module {
 struct Module : std::enable_shared_from_this<Module> {
   virtual ~Module() = default;
   using NamedModulePointerApplyFunction =
@@ -68,8 +68,8 @@ struct Module : std::enable_shared_from_this<Module> {
 template <typename ModuleType>
 std::shared_ptr<ModuleType> Module::register_module(
     std::string name, std::shared_ptr<ModuleType> module) {
-  DLLM_ASSERT_TRUE(!name.empty(), "Submodule name must not be empty");
-  DLLM_ASSERT_TRUE(name.find('.') == std::string::npos,
+  CS_ASSERT_TRUE(!name.empty(), "Submodule name must not be empty");
+  CS_ASSERT_TRUE(name.find('.') == std::string::npos,
                    "Submodule name must not contain a dot (got '", name, "')");
   auto& base_module = children_.insert(std::move(name), std::move(module));
   return std::dynamic_pointer_cast<ModuleType>(base_module);
@@ -80,9 +80,9 @@ std::shared_ptr<ModuleType> Module::register_module(
     std::string name, torch::nn::ModuleHolder<ModuleType> module_holder) {
   return register_module(std::move(name), module_holder.ptr());
 }
-}  // namespace dllm::module
+}  // namespace cs::module
 
-namespace dllm {
+namespace cs {
 void save(const module::Module& module, const std::string& path);
 
 template <typename Module, typename = std::enable_if_t<
@@ -100,4 +100,4 @@ template <typename Module, typename = std::enable_if_t<
 static void load(const Module& module, const std::string& path) {
   load(*module, path);
 }
-}  // namespace dllm
+}  // namespace cs

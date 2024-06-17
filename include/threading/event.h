@@ -17,7 +17,7 @@
 #pragma once
 #include <memory>
 
-namespace dllm {
+namespace cs {
 struct Event {
   struct Impl;
 
@@ -40,4 +40,4 @@ struct Event {
  private:
   std::shared_ptr<Impl> impl_;
 };
-}  // namespace dllm
+}  // namespace cs

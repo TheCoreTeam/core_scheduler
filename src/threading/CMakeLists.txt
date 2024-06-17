@@ -12,10 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-set(DLLM_THREADING_SRCS
+set(CS_THREADING_SRCS
         ${CMAKE_CURRENT_SOURCE_DIR}/event.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/task.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/scheduler.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/dynamic_scheduler.cpp
 )
-set(DLLM_THREADING_SRCS ${DLLM_THREADING_SRCS} PARENT_SCOPE)
+set(CS_THREADING_SRCS ${CS_THREADING_SRCS} PARENT_SCOPE)

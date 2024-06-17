@@ -18,7 +18,7 @@
 #include "tensor.h"
 #include "threading/scheduler.h"
 
-namespace dllm::compute::Utils {
+namespace cs::compute::Utils {
 Tensor sum(const Scheduler &scheduler, const ReadOnlyTensor &input,
            IntArrayRef dim, bool keep_dim = false,
            c10::optional<at::ScalarType> dtype = c10::nullopt);
@@ -84,4 +84,4 @@ Tensor add(const Scheduler &scheduler, ReadOnlyTensor x, ReadOnlyTensor y);
 void zero_(const Scheduler &scheduler, const Tensor &tensor);
 
 Tensor clone(const Scheduler &scheduler, Tensor tensor);
-}  // namespace dllm::compute::Utils
+}  // namespace cs::compute::Utils

@@ -26,7 +26,7 @@
 #include "threading/scheduler_impl.h"
 #include "threading/task_impl.h"
 
-namespace dllm::optimizer {
+namespace cs::optimizer {
 void stepKernel(cudaStream_t stream, const AdamW::State::Options &options,
                 const Tensor &w, const Tensor &m, const Tensor &v,
                 const ReadOnlyTensor &dw);
@@ -77,7 +77,7 @@ std::shared_ptr<AdamW::State> AdamW::init(const Scheduler &scheduler,
             at::zeros_like(input()[0].impl()->tensor());
       }
       [[nodiscard]] const char *name() const override {
-        return "dllm::optimizer::AdamW::init";
+        return "cs::optimizer::AdamW::init";
       }
     };
 
@@ -103,7 +103,7 @@ std::shared_ptr<AdamW::State> AdamW::init(const Scheduler &scheduler,
             at::zeros_like(input()[0].impl()->tensor());
       }
       [[nodiscard]] const char *name() const override {
-        return "dllm::optimizer::AdamW::init";
+        return "cs::optimizer::AdamW::init";
       }
     };
 
@@ -137,11 +137,11 @@ void AdamW::step(const Scheduler &scheduler,
           stepKernelAmsgrad(stream.stream(), options, output()[0], output()[1],
                             output()[2], output()[3], input()[4]);
         } else {
-          DLLM_WARN_TRUE(false, "got non-defined gradient, skip the update");
+          CS_WARN_TRUE(false, "got non-defined gradient, skip the update");
         }
       }
       [[nodiscard]] const char *name() const override {
-        return "dllm::optimizer::AdamW::step";
+        return "cs::optimizer::AdamW::step";
       }
     };
 
@@ -165,11 +165,11 @@ void AdamW::step(const Scheduler &scheduler,
           stepKernel(stream.stream(), options, output()[0], output()[1],
                      output()[2], input()[3]);
         } else {
-          DLLM_WARN_TRUE(false, "got non-defined gradient, skip the update");
+          CS_WARN_TRUE(false, "got non-defined gradient, skip the update");
         }
       }
       [[nodiscard]] const char *name() const override {
-        return "dllm::optimizer::AdamW::step";
+        return "cs::optimizer::AdamW::step";
       }
     };
 
@@ -179,4 +179,4 @@ void AdamW::step(const Scheduler &scheduler,
         Impl{{w, m, v}, {w, m, v, dw}, state->options})});
   }
 }
-}  // namespace dllm::optimizer
+}  // namespace cs::optimizer

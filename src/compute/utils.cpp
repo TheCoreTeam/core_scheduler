@@ -23,7 +23,7 @@
 #include "threading/scheduler_impl.h"
 #include "threading/task_impl.h"
 
-namespace dllm::compute::Utils {
+namespace cs::compute::Utils {
 Tensor sum(const Scheduler &scheduler, const ReadOnlyTensor &input,
            const IntArrayRef dim, const bool keep_dim,
            const c10::optional<at::ScalarType> dtype) {
@@ -45,12 +45,12 @@ Tensor sum(const Scheduler &scheduler, const ReadOnlyTensor &input,
           at::sum(input()[0].impl()->tensor(), dim, keep_dim, dtype);
     }
     [[nodiscard]] const char *name() const override {
-      return "dllm::compute::Utils::sum";
+      return "cs::compute::Utils::sum";
     }
   };
 
   Tensor output{};
-  DLLM_ASSERT_TRUE(!dim.empty(), "dim should not be empty");
+  CS_ASSERT_TRUE(!dim.empty(), "dim should not be empty");
 
   scheduler.impl()->submit(Task{
       std::make_shared<Impl>(Impl{{output}, {input}, dim, keep_dim, dtype})});
@@ -74,7 +74,7 @@ Tensor range(const Scheduler &scheduler, const at::Scalar &start,
       output()[0].impl()->tensor() = at::range(start, end, options);
     }
     [[nodiscard]] const char *name() const override {
-      return "dllm::compute::Utils::range";
+      return "cs::compute::Utils::range";
     }
   };
 
@@ -101,7 +101,7 @@ Tensor arange(const Scheduler &scheduler, const at::Scalar &start,
       output()[0].impl()->tensor() = at::arange(start, end, options);
     }
     [[nodiscard]] const char *name() const override {
-      return "dllm::compute::Utils::arange";
+      return "cs::compute::Utils::arange";
     }
   };
 
@@ -130,7 +130,7 @@ Tensor arange(const Scheduler &scheduler, const at::Scalar &start,
       output()[0].impl()->tensor() = at::arange(start, end, step, options);
     }
     [[nodiscard]] const char *name() const override {
-      return "dllm::compute::Utils::arange";
+      return "cs::compute::Utils::arange";
     }
   };
 
@@ -160,7 +160,7 @@ Tensor randint(const Scheduler &scheduler, const int64_t low,
       output()[0].impl()->tensor() = torch::randint(low, high, size, options);
     }
     [[nodiscard]] const char *name() const override {
-      return "dllm::compute::Utils::randint";
+      return "cs::compute::Utils::randint";
     }
   };
 
@@ -185,7 +185,7 @@ Tensor empty(const Scheduler &scheduler, const IntArrayRef size,
       output()[0].impl()->tensor() = torch::empty(size, options);
     }
     [[nodiscard]] const char *name() const override {
-      return "dllm::compute::Utils::empty";
+      return "cs::compute::Utils::empty";
     }
   };
 
@@ -205,7 +205,7 @@ Tensor empty_like(const Scheduler &scheduler, const ReadOnlyTensor &src) {
           torch::empty_like(input()[0].impl()->tensor());
     }
     [[nodiscard]] const char *name() const override {
-      return "dllm::compute::Utils::empty_like";
+      return "cs::compute::Utils::empty_like";
     }
   };
 
@@ -229,7 +229,7 @@ Tensor ones(const Scheduler &scheduler, const IntArrayRef size,
       output()[0].impl()->tensor() = torch::ones(size, options);
     }
     [[nodiscard]] const char *name() const override {
-      return "dllm::compute::Utils::ones";
+      return "cs::compute::Utils::ones";
     }
   };
 
@@ -249,7 +249,7 @@ Tensor ones_like(const Scheduler &scheduler, const ReadOnlyTensor &src) {
           torch::ones_like(input()[0].impl()->tensor());
     }
     [[nodiscard]] const char *name() const override {
-      return "dllm::compute::Utils::ones_like";
+      return "cs::compute::Utils::ones_like";
     }
   };
 
@@ -273,7 +273,7 @@ Tensor zeros(const Scheduler &scheduler, const IntArrayRef size,
       output()[0].impl()->tensor() = torch::zeros(size, options);
     }
     [[nodiscard]] const char *name() const override {
-      return "dllm::compute::Utils::zeros";
+      return "cs::compute::Utils::zeros";
     }
   };
 
@@ -293,7 +293,7 @@ Tensor zeros_like(const Scheduler &scheduler, const ReadOnlyTensor &src) {
           torch::zeros_like(input()[0].impl()->tensor());
     }
     [[nodiscard]] const char *name() const override {
-      return "dllm::compute::Utils::zeros_like";
+      return "cs::compute::Utils::zeros_like";
     }
   };
 
@@ -317,7 +317,7 @@ Tensor rand(const Scheduler &scheduler, const IntArrayRef size,
       output()[0].impl()->tensor() = torch::rand(size, options);
     }
     [[nodiscard]] const char *name() const override {
-      return "dllm::compute::Utils::rand";
+      return "cs::compute::Utils::rand";
     }
   };
 
@@ -337,7 +337,7 @@ Tensor rand_like(const Scheduler &scheduler, const ReadOnlyTensor &src) {
           torch::rand_like(input()[0].impl()->tensor());
     }
     [[nodiscard]] const char *name() const override {
-      return "dllm::compute::Utils::rand_like";
+      return "cs::compute::Utils::rand_like";
     }
   };
 
@@ -361,7 +361,7 @@ Tensor randn(const Scheduler &scheduler, const IntArrayRef size,
       output()[0].impl()->tensor() = torch::randn(size, options);
     }
     [[nodiscard]] const char *name() const override {
-      return "dllm::compute::Utils::randn";
+      return "cs::compute::Utils::randn";
     }
   };
 
@@ -381,7 +381,7 @@ Tensor randn_like(const Scheduler &scheduler, const ReadOnlyTensor &src) {
           torch::randn_like(input()[0].impl()->tensor());
     }
     [[nodiscard]] const char *name() const override {
-      return "dllm::compute::Utils::randn_like";
+      return "cs::compute::Utils::randn_like";
     }
   };
 
@@ -409,7 +409,7 @@ std::vector<Tensor> split(const Scheduler &scheduler, const ReadOnlyTensor &src,
       }
     }
     [[nodiscard]] const char *name() const override {
-      return "dllm::compute::Utils::split";
+      return "cs::compute::Utils::split";
     }
   };
 
@@ -444,7 +444,7 @@ Tensor view(const Scheduler &scheduler, const ReadOnlyTensor &input,
       output()[0].impl()->tensor() = input()[0].impl()->tensor().view(size);
     }
     [[nodiscard]] const char *name() const override {
-      return "dllm::compute::Utils::view";
+      return "cs::compute::Utils::view";
     }
   };
 
@@ -470,7 +470,7 @@ Tensor broadcast_to(const Scheduler &scheduler, const ReadOnlyTensor &input,
           input()[0].impl()->tensor().broadcast_to(size);
     }
     [[nodiscard]] const char *name() const override {
-      return "dllm::compute::Utils::broadcast_to";
+      return "cs::compute::Utils::broadcast_to";
     }
   };
 
@@ -498,7 +498,7 @@ Tensor cat(const Scheduler &scheduler, const std::vector<ReadOnlyTensor> &input,
       output()[0].impl()->tensor() = at::cat(vInput, dim);
     }
     [[nodiscard]] const char *name() const override {
-      return "dllm::compute::Utils::cat";
+      return "cs::compute::Utils::cat";
     }
   };
 
@@ -520,7 +520,7 @@ Tensor add(const Scheduler &scheduler, ReadOnlyTensor x, ReadOnlyTensor y) {
           at::add(input()[0].impl()->tensor(), input()[1].impl()->tensor());
     }
     [[nodiscard]] const char *name() const override {
-      return "dllm::compute::Utils::Add";
+      return "cs::compute::Utils::Add";
     }
   };
   scheduler.impl()->submit(
@@ -536,7 +536,7 @@ void zero_(const Scheduler &scheduler, const Tensor &tensor) {
       (void)output()[0].impl()->tensor().zero_();
     }
     [[nodiscard]] const char *name() const override {
-      return "dllm::compute::Utils::zero_";
+      return "cs::compute::Utils::zero_";
     }
   };
 
@@ -551,7 +551,7 @@ Tensor clone(const Scheduler &scheduler, Tensor tensor) {
       output()[0].impl()->tensor() = input()[0].impl()->tensor().clone();
     }
     [[nodiscard]] const char *name() const override {
-      return "dllm::compute::Utils::clone";
+      return "cs::compute::Utils::clone";
     }
   };
 
@@ -559,4 +559,4 @@ Tensor clone(const Scheduler &scheduler, Tensor tensor) {
   scheduler.impl()->submit(Task{std::make_shared<Impl>(Impl{result, tensor})});
   return result;
 }
-}  // namespace dllm::compute::Utils
+}  // namespace cs::compute::Utils

@@ -24,11 +24,11 @@
 #include "threading/scheduler_impl.h"
 #include "threading/task_impl.h"
 
-namespace dllm::compute {
+namespace cs::compute {
 std::shared_ptr<CrossEntropy::State> CrossEntropy::init(
     const Scheduler &scheduler, const Options &options) {
-  DLLM_ASSERT_TRUE(options.label_smoothing() == 0.0,
-                   "We do not support label_smoothing");
+  CS_ASSERT_TRUE(options.label_smoothing() == 0.0,
+                 "We do not support label_smoothing");
   return std::make_shared<State>(
       State::Forward{}, State::Backward{},
       State::Args{options.reduction(), options.ignore_index(),
@@ -62,7 +62,7 @@ Tensor CrossEntropy::forward(const Scheduler &scheduler,
                                args.reduction, args.ignore_index);
     }
     [[nodiscard]] const char *name() const override {
-      return "dllm::compute::CrossEntropy::forward";
+      return "cs::compute::CrossEntropy::forward";
     }
   };
 
@@ -107,7 +107,7 @@ Tensor CrossEntropy::backward(const Scheduler &scheduler,
           input()[2].impl()->tensor().scalar_type());
     }
     [[nodiscard]] const char *name() const override {
-      return "dllm::compute::CrossEntropy::backward";
+      return "cs::compute::CrossEntropy::backward";
     }
   };
 
@@ -125,4 +125,4 @@ Tensor CrossEntropy::backward(const Scheduler &scheduler,
   state->backward.loss.reset();
   return grad_input;
 }
-}  // namespace dllm::compute
+}  // namespace cs::compute

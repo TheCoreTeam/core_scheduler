@@ -18,7 +18,7 @@
 
 #include "threading/scheduler.h"
 
-namespace dllm::module {
+namespace cs::module {
 LayerNormImpl::LayerNormImpl(const Scheduler& scheduler,
                              const Options& options) {
   const auto state = compute::LayerNorm::init(scheduler, options);
@@ -39,4 +39,4 @@ Tensor LayerNormImpl::backward(const Scheduler& scheduler,
 std::shared_ptr<compute::LayerNorm::State> LayerNormImpl::state() const {
   return state_.lock();
 }
-}  // namespace dllm::module
+}  // namespace cs::module

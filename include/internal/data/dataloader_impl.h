@@ -17,7 +17,7 @@
 #pragma once
 #include "data/dataloader.h"
 
-namespace dllm::data {
+namespace cs::data {
 struct DataLoader::Impl {
   Impl(int64_t batchSize, int64_t numWorkers, bool shuffle, int64_t rank,
        int64_t worldSize);
@@ -32,4 +32,4 @@ struct DataLoader::Impl {
 
   virtual ~Impl() = default;
 };
-}  // namespace dllm::data
+}  // namespace cs::data

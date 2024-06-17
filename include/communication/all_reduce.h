@@ -19,7 +19,7 @@
 #include "tensor.h"
 #include "threading/scheduler.h"
 
-namespace dllm::communication {
+namespace cs::communication {
 struct AllReduceBucket : Bucket {
   AllReduceBucket(int64_t byteThreshold, Operation operation);
 
@@ -32,4 +32,4 @@ struct AllReduce {
                          const std::vector<Tensor>& tensors,
                          Operation operation);
 };
-}  // namespace dllm::communication
+}  // namespace cs::communication

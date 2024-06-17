@@ -18,7 +18,7 @@
 #include "tensor.h"
 #include "threading/scheduler.h"
 
-namespace dllm::compute {
+namespace cs::compute {
 struct GeLU {
   struct State {
     struct Forward {
@@ -40,4 +40,4 @@ struct GeLU {
                          const std::shared_ptr<State> &state,
                          const ReadOnlyTensor &grad_output);
 };
-}  // namespace dllm::compute
+}  // namespace cs::compute

@@ -18,7 +18,7 @@
 
 #include "threading/scheduler.h"
 
-namespace dllm::module {
+namespace cs::module {
 LinearImpl::LinearImpl(const Scheduler& scheduler, const Options& options) {
   const auto state = compute::Linear::init(scheduler, options);
   register_state("LinearState", state);
@@ -51,4 +51,4 @@ Tensor LinearImpl::backwardInput(const Scheduler& scheduler,
 std::shared_ptr<compute::Linear::State> LinearImpl::state() const {
   return state_.lock();
 }
-}  // namespace dllm::module
+}  // namespace cs::module

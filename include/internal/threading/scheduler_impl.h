@@ -18,7 +18,7 @@
 #include "threading/scheduler.h"
 #include "threading/task.h"
 
-namespace dllm {
+namespace cs {
 struct Scheduler::Impl {
   Impl(int64_t deviceRank);
 
@@ -31,4 +31,4 @@ struct Scheduler::Impl {
  private:
   const int64_t deviceRank_;
 };
-}  // namespace dllm
+}  // namespace cs

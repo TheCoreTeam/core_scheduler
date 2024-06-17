@@ -21,7 +21,7 @@
 #include "tensor.h"
 #include "threading/scheduler.h"
 
-namespace dllm::compute {
+namespace cs::compute {
 struct CrossEntropy {
   struct State {
     struct Forward {
@@ -42,9 +42,9 @@ struct CrossEntropy {
 
   struct Options {
     Options() {}
-    DLLM_ARG(at::Reduction::Reduction, reduction) = at::Reduction::Mean;
-    DLLM_ARG(int64_t, ignore_index) = -100;
-    DLLM_ARG(double, label_smoothing) = 0.0;
+    CS_ARG(at::Reduction::Reduction, reduction) = at::Reduction::Mean;
+    CS_ARG(int64_t, ignore_index) = -100;
+    CS_ARG(double, label_smoothing) = 0.0;
   };
 
   static std::shared_ptr<State> init(const Scheduler &scheduler,
@@ -58,4 +58,4 @@ struct CrossEntropy {
   static Tensor backward(const Scheduler &scheduler,
                          const std::shared_ptr<State> &state);
 };
-}  // namespace dllm::compute
+}  // namespace cs::compute
