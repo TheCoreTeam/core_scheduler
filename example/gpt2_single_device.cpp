@@ -73,9 +73,9 @@ struct DataConfig {
 // Function to display the progress bar
 void display_progress(int completed, int total, const std::string &prefix = "",
                       int rank = 0) {
-  int width = 50;               // Width of the progress bar
+  int width = 50;  // Width of the progress bar
   float progress = total > 1 ? (float)completed / (total - 1)
-                              : 1.0;  // Adjusted to avoid division by zero
+                             : 1.0;  // Adjusted to avoid division by zero
   int pos = width * progress;
 
   if (completed == 0) {
@@ -93,8 +93,12 @@ void display_progress(int completed, int total, const std::string &prefix = "",
   }
   std::cout << "] " << completed + 1 << "/" << total << " | "
             << int(progress * 100.0) << " %\r";
-  if (rank==0) {std::cout.flush();}
-  else {std::cout << std::endl; std::cout.flush();}
+  if (rank == 0) {
+    std::cout.flush();
+  } else {
+    std::cout << std::endl;
+    std::cout.flush();
+  }
   if (completed == total - 1) {
     std::cout << "" << std::endl;
   }
