@@ -25,8 +25,8 @@ conda activate core_scheduler
 mkdir build
 cd build
 cmake ..
-make -j cs_tests
-./test/cs_tests
+make -j core_scheduler_tests
+./test/core_scheduler_tests
 ```
 
 ## Authors
