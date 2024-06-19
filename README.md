@@ -29,6 +29,18 @@ make -j core_scheduler_tests
 ./test/core_scheduler_tests
 ```
 
+Example (see [tutorial](https://docs.google.com/document/d/1cQ0gTcOuIoeZzHIpKj8hwdTGhK9XaAwPAsRrWba1Ijw/edit#heading=h.kjcrsddy5vbj))
+
+```bash
+make -j gpt2_single_device
+./example/gpt2_single_device
+```
+
+```bash
+make -j gpt2_ddp
+mpirun -np $num_devices$ ./example/gpt2_ddp
+```
+
 ## Authors
 
 See [AUTHORS.txt](./AUTHORS.txt)
