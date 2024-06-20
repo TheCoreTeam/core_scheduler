@@ -59,7 +59,7 @@ target_include_directories(core_scheduler_core PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/../include/internal
 )
 
-target_link_libraries(core_scheduler_core PRIVATE CUDA::cudart CUDA::nvtx3)
+target_link_libraries(core_scheduler_core PRIVATE CUDA::cudart CUDA::nvtx3 nvidia::cudnn_frontend)
 target_link_libraries(core_scheduler_core PRIVATE OpenMP::OpenMP_CXX)
 target_link_libraries(core_scheduler_core PRIVATE arrow_dataset Arrow::arrow_shared Parquet::parquet_shared)
 target_link_libraries(core_scheduler_core PRIVATE hwloc CUDA::nvml)

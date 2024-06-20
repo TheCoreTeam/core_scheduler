@@ -13,6 +13,7 @@
 # limitations under the License.
 
 set(CORE_SCHEDULER_THREADING_SRCS
+        ${CMAKE_CURRENT_SOURCE_DIR}/cudnn_handle.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/event.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/task.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/scheduler.cpp

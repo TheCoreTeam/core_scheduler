@@ -14,11 +14,10 @@
  * limitations under the License.
  */
 
-#include "compute/scaled_dot_product_attention.h"
-
 #include <ATen/ops/_scaled_dot_product_flash_attention.h>
 #include <ATen/ops/_scaled_dot_product_flash_attention_backward.h>
 
+#include "compute/scaled_dot_product_attention.h"
 #include "logger.h"
 #include "tensor_impl.h"
 #include "threading/scheduler_impl.h"
@@ -88,8 +87,6 @@ Tensor ScaledDotProductFlashAttention::forward(
   state->backward.cum_seq_k = cum_seq_k;
   state->backward.philox_seed = philox_seed;
   state->backward.philox_offset = philox_offset;
-  // TODO(Jie): support different attention algorithm
-  // size
   scheduler.impl()->submit(Task{std::make_shared<Impl>(Impl{
       {output, logsumexp, cum_seq_q, cum_seq_k, philox_seed, philox_offset},
       {query, key, value},
