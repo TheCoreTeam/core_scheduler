@@ -64,47 +64,50 @@ struct ModelConfig {
 };
 
 struct TrainConfig {
-  const int64_t epoch = 5;
+  const int64_t epoch = 50;
   const int64_t wait_every_step = 1;
-  const int64_t bucket_size = 30 * 1024 * 1024;  // 60M
-  double lr = 5e-4;
+  const int64_t bucket_size = 30 * 1024 * 1024;  // 30M
+  double lr = 1e-5;
   double beta1 = 0.9;
   double beta2 = 0.95;
   double weight_decay = 1e-1;
 };
 
 struct DataConfig {
-  const std::string path = "/home/ly/main/dataset/example_llm_data/train.arrow";
+  const std::string path = "dataset_path/";
 };
 
 // Function to display the progress bar
 void display_progress(int completed, int total, const std::string &prefix = "",
-                      int rank = 0, bool only_rank0 = true) {
-  if (rank == 0 && only_rank0) {  // Check if this is rank 0
-    int width = 50;               // Width of the progress bar
-    float progress = total > 1 ? (float)completed / (total - 1)
-                               : 1.0;  // Adjusted to avoid division by zero
-    int pos = width * progress;
+                      int rank = 0) {
+  int width = 50;  // Width of the progress bar
+  float progress = total > 1 ? (float)completed / (total - 1)
+                             : 1.0;  // Adjusted to avoid division by zero
+  int pos = width * progress;
 
-    if (completed == 0) {
-      std::cout << "";
-    }
-    std::cout << prefix;
-    std::cout << "[";
-    for (int i = 0; i < width; ++i) {
-      if (i < pos)
-        std::cout << "=";
-      else if (i == pos)
-        std::cout << ">";
-      else
-        std::cout << " ";
-    }
-    std::cout << "] " << completed + 1 << "/" << total << " | "
-              << int(progress * 100.0) << " %\r";
+  if (completed == 0) {
+    std::cout << "";
+  }
+  std::cout << prefix;
+  std::cout << "[";
+  for (int i = 0; i < width; ++i) {
+    if (i < pos)
+      std::cout << "=";
+    else if (i == pos)
+      std::cout << ">";
+    else
+      std::cout << " ";
+  }
+  std::cout << "] " << completed + 1 << "/" << total << " | "
+            << int(progress * 100.0) << " %\r";
+  if (rank == 0) {
     std::cout.flush();
-    if (completed == total - 1) {
-      std::cout << "" << std::endl;
-    }
+  } else {
+    std::cout << std::endl;
+    std::cout.flush();
+  }
+  if (completed == total - 1) {
+    std::cout << "" << std::endl;
   }
 }
 
@@ -437,7 +440,7 @@ struct GPT2 : cs::module::Module {
 };
 
 void train() {
-  // torch::manual_seed(42);
+  torch::manual_seed(42);
   ModelConfig modelConfig;
   TrainConfig trainConfig;
   DataConfig dataConfig;
@@ -512,13 +515,19 @@ void train() {
         model->lm_head->state()->forward.weight.wait();
       }
     }
-    std::cout << "loss: " << loss << std::endl;
+    cs::communication::AllReduce::runInplace(scheduler, comm, {loss},
+                                             cs::communication::SUM);
+    if (comm.getRank() == 0) {
+      std::cout << "loss: " << loss << std::endl;
+    }
   }
   auto time_stop = std::chrono::high_resolution_clock::now();
   auto duration = std::chrono::duration_cast<std::chrono::microseconds>(
       time_stop - time_start);
-  std::cout << "Time taken by loop: " << duration.count() / 1000 << " s"
-            << std::endl;
+  if (comm.getRank() == 0) {
+    std::cout << "Time taken by loop: " << duration.count() / 1000 << " s"
+              << std::endl;
+  }
 }
 
 int main(int argc, char **argv) {
