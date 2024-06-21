@@ -455,6 +455,38 @@ Tensor view(const Scheduler &scheduler, const ReadOnlyTensor &input,
   return output;
 }
 
+Tensor as_strided(const Scheduler &scheduler, const ReadOnlyTensor &input,
+                  const IntArrayRef size, const IntArrayRef stride,
+                  const optional<int64_t> storage_offset) {
+  struct Impl : Task::Impl {
+    const IntArrayRef size;
+    const IntArrayRef stride;
+    const optional<int64_t> storage_offset;
+
+    explicit Impl(std::vector<Tensor> output /* tensor */,
+                  std::vector<ReadOnlyTensor> input /* input */,
+                  const IntArrayRef size, const IntArrayRef stride,
+                  const optional<int64_t> storage_offset)
+        : Task::Impl{std::move(output), std::move(input), compute},
+          size{size},
+          stride{stride},
+          storage_offset(storage_offset) {}
+    void operator()() const override {
+      output()[0].impl()->tensor() =
+          input()[0].impl()->tensor().as_strided(size, stride, storage_offset);
+    }
+    [[nodiscard]] const char *name() const override {
+      return "cs::compute::Utils::as_strided";
+    }
+  };
+
+  Tensor output{};
+
+  scheduler.impl()->submit(Task{std::make_shared<Impl>(
+      Impl{{output}, {input}, size, stride, storage_offset})});
+  return output;
+}
+
 Tensor broadcast_to(const Scheduler &scheduler, const ReadOnlyTensor &input,
                     const IntArrayRef size) {
   struct Impl : Task::Impl {

@@ -36,6 +36,7 @@ add_subdirectory(data)
 add_library(core_scheduler_core SHARED
         logger.cpp
         tensor.cpp
+        random.cpp
         ${CORE_SCHEDULER_MODULE_SRCS}
         ${CORE_SCHEDULER_COMPUTE_SRCS}
         ${CORE_SCHEDULER_MEMORY_SRCS}

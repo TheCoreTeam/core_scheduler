@@ -86,6 +86,11 @@ struct ScaledDotProductCuDnn {
       const bool is_causal = false;
       const bool return_debug_mask = false /* This must be false! */;
       const c10::optional<double> scale = c10::nullopt;
+      struct RNG {
+        int64_t seed;
+        int64_t offset;
+      };
+      std::shared_ptr<RNG> rng;
     } args;
   };
 

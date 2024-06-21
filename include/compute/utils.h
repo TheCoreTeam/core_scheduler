@@ -73,6 +73,10 @@ std::vector<Tensor> split(const Scheduler &scheduler, const ReadOnlyTensor &src,
 Tensor view(const Scheduler &scheduler, const ReadOnlyTensor &input,
             IntArrayRef size);
 
+Tensor as_strided(const Scheduler &scheduler, const ReadOnlyTensor &input,
+                  IntArrayRef size, IntArrayRef stride,
+                  optional<int64_t> storage_offset = c10::nullopt);
+
 Tensor broadcast_to(const Scheduler &scheduler, const ReadOnlyTensor &input,
                     IntArrayRef size);
 
