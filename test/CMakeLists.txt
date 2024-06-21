@@ -23,6 +23,7 @@ add_executable(core_scheduler_tests
         test_utils.cpp
         test_layer_norm.cpp
         test_load_save.cpp
+        test_cudnn_attention.cpp
 )
 
 target_link_libraries(core_scheduler_tests PRIVATE
