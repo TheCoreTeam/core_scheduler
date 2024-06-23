@@ -24,6 +24,7 @@ add_executable(core_scheduler_tests
         test_layer_norm.cpp
         test_load_save.cpp
         test_cudnn_attention.cpp
+        test_linear_gelu.cpp
 )
 
 target_link_libraries(core_scheduler_tests PRIVATE
