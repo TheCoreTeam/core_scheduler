@@ -34,8 +34,8 @@ bool cache_lookup_pre_built_graph(
   using cache_t =
       std::unordered_map<std::size_t,
                          std::shared_ptr<cudnn_frontend::graph::Graph>>;
-//  static std::mutex m;
-//  std::lock_guard<std::mutex> lock(m);
+  static std::mutex m;
+  std::lock_guard<std::mutex> lock(m);
   static cache_t user_maintained_cache;
   auto cache_key = graph->key();
   if (const auto it = user_maintained_cache.find(cache_key);
@@ -76,8 +76,8 @@ cudnnHandle_t getCurrentCuDnnHandle();
 #define Y_UID 4
 
 std::shared_ptr<cudnn_frontend::graph::Graph> create_linear_gelu_forward_graph(
-    const cudnn_frontend::DataType_t dataType, const int64_t b, const int64_t m,
-    const int64_t n, const int64_t k) {
+    const cudnn_frontend::DataType_t input_type, const int64_t b, const int64_t m,
+    const int64_t n, const int64_t k, const bool with_bias) {
   auto graph = std::make_shared<cudnn_frontend::graph::Graph>();
 
   graph->set_intermediate_data_type(cudnn_frontend::DataType_t::FLOAT)
@@ -85,39 +85,52 @@ std::shared_ptr<cudnn_frontend::graph::Graph> create_linear_gelu_forward_graph(
   auto X = graph->tensor(cudnn_frontend::graph::Tensor_attributes()
                              .set_name("X")
                              .set_uid(X_UID)
-                             .set_data_type(dataType)
+                             .set_data_type(input_type)
                              .set_dim({1, b * m, k})
                              .set_stride({b * m * k, k, 1}));
 
   auto W = graph->tensor(cudnn_frontend::graph::Tensor_attributes()
                              .set_name("W")
                              .set_uid(W_UID)
-                             .set_data_type(dataType)
+                             .set_data_type(input_type)
                              .set_dim({1, k, n})
                              .set_stride({k * n, 1, k}));
-
-  auto Bias = graph->tensor(cudnn_frontend::graph::Tensor_attributes()
-                                .set_name("Bias")
-                                .set_uid(Bias_UID)
-                                .set_data_type(dataType)
-                                .set_dim({1, 1, n})
-                                .set_stride({n, n, 1}));
 
   auto matmul_attributes =
       cudnn_frontend::graph::Matmul_attributes()
           .set_name("GEMM");
 
-  auto pw_add_attributes =
-      cudnn_frontend::graph::Pointwise_attributes()
-          .set_name("pw_Add")
-          .set_mode(cudnn_frontend::PointwiseMode_t::ADD);
-
   auto response = graph->matmul(X, W, matmul_attributes);
 
-  auto Y = graph->pointwise(response, Bias, pw_add_attributes);
+  if (with_bias) {
+    auto Bias = graph->tensor(cudnn_frontend::graph::Tensor_attributes()
+                                  .set_name("Bias")
+                                  .set_uid(Bias_UID)
+                                  .set_data_type(input_type)
+                                  .set_dim({1, 1, n})
+                                  .set_stride({n, n, 1}));
 
-  Y->set_output(true).set_name("Y").set_uid(Y_UID).set_data_type(dataType);
+    auto pw_add_attributes =
+        cudnn_frontend::graph::Pointwise_attributes()
+            .set_name("pw_Add")
+            .set_mode(cudnn_frontend::PointwiseMode_t::ADD);
 
+    response =
+        graph->pointwise(response, Bias, pw_add_attributes);
+  }
+//    Y->set_output(true).set_name("Y").set_uid(Y_UID).set_data_type(dataType);
+//  }else{
+//    response->set_output(true).set_name("Y").set_uid(Y_UID).set_data_type(dataType);
+//  }
+
+  auto pw_gelu_attributes =
+      cudnn_frontend::graph::Pointwise_attributes()
+          .set_name("pw_GeLU")
+          .set_mode(cudnn_frontend::PointwiseMode_t::GELU_FWD);
+
+  auto Y = graph->pointwise(response, pw_gelu_attributes);
+
+  Y->set_output(true).set_name("Y").set_uid(Y_UID).set_data_type(input_type);
   return graph;
 }
 
@@ -233,27 +246,28 @@ Tensor LinearGelu::forward(const Scheduler &scheduler,
                            const std::shared_ptr<State> &state,
                            const ReadOnlyTensor &input) {
   struct Impl : Task::Impl {
+    State::Args args;
     explicit Impl(std::vector<Tensor> output /* output */,
-                  std::vector<ReadOnlyTensor> input /* input, weight, bias */)
-        : Task::Impl{std::move(output), std::move(input), compute} {}
+                  std::vector<ReadOnlyTensor> input /* input, weight, bias */,
+                  const State::Args& args)
+        : Task::Impl{std::move(output), std::move(input), compute}, args{args} {}
     void operator()() const override {
       const auto &x = input()[0].impl()->tensor();
       const auto &w = input()[1].impl()->tensor();
       const auto &bias = input()[2].impl()->tensor();
       CS_ASSERT_TRUE(x.size(2) == w.size(1), "mismatch size for matmul.");
-      CS_ASSERT_TRUE(bias.size(0) == w.size(0),
-                     "mismatch size for adding bias.");
       const auto x_cudnn_type = torchToCudnnDataType(x.scalar_type());
       const auto w_cudnn_type = torchToCudnnDataType(w.scalar_type());
-      const auto bias_cudnn_type = torchToCudnnDataType(bias.scalar_type());
       CS_ASSERT_TRUE(
-          x_cudnn_type == w_cudnn_type && x_cudnn_type == bias_cudnn_type,
+          x_cudnn_type == w_cudnn_type,
           "we do not support mixed input type.");
+      CS_ASSERT_TRUE(x_cudnn_type != cudnn_frontend::DataType_t::FLOAT,
+                     "we do not support float for now.");
       const int64_t b = x.size(0);
       const int64_t m = x.size(1);
       const int64_t k = x.size(2);
       const int64_t n = w.size(0);
-      auto graph = create_linear_gelu_forward_graph(x_cudnn_type, b, m, n, k);
+      auto graph = create_linear_gelu_forward_graph(x_cudnn_type, b, m, n, k, args.bias);
       cache_lookup_pre_built_graph(graph, getCurrentCuDnnHandle());
 
       auto result = at::empty({b, m, n}, x.options());
@@ -263,7 +277,7 @@ Tensor LinearGelu::forward(const Scheduler &scheduler,
           variant_pack;
       variant_pack = {{X_UID, x.data_ptr()},
                       {W_UID, w.data_ptr()},
-                      {Bias_UID, bias.data_ptr()},
+                      {Bias_UID, args.bias ? bias.data_ptr() : nullptr},
                       {Y_UID, result.data_ptr()}};
 
       auto workspace = at::empty({graph->get_workspace_size()},
@@ -284,7 +298,7 @@ Tensor LinearGelu::forward(const Scheduler &scheduler,
   state->backward.input = input;
   // size
   scheduler.impl()->submit(Task{std::make_shared<Impl>(
-      Impl{{output}, {input, state->forward.weight, state->forward.bias}})});
+      Impl{{output}, {input, state->forward.weight, state->forward.bias}, state->args})});
   return output;
 }
 

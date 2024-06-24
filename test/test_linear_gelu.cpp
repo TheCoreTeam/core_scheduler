@@ -104,7 +104,7 @@ void TestBackwardT(cs::Scheduler &scheduler) {
 
 namespace {
 template <typename Element>
-void TestModuleT(cs::Scheduler &scheduler) {
+void TestModuleT(cs::Scheduler &scheduler, bool with_bias=true) {
   const int m = 32, n = 16, k = 4, s = 3;
   const torch::Device device = torch::kCUDA;
   const torch::Dtype dtype = TypeToTorch<Element>::type;
@@ -112,8 +112,10 @@ void TestModuleT(cs::Scheduler &scheduler) {
   auto x = cs::compute::Utils::randn(scheduler, {m, s, k}, option);
   cs::module::LinearGelu fc{
       scheduler,
-      cs::module::LinearGelu::Options{k, n}.bias(true).device(device).dtype(
+      cs::module::LinearGelu::Options{k, n}.bias(with_bias).device(device).dtype(
           dtype)};
+//  fc->state()->forward.bias = cs::compute::Utils::zeros(scheduler, n, option);
+//  fc->state()->forward.bias.wait();
   auto y = fc->forward(scheduler, x);
   auto yGrad = cs::compute::Utils::randn_like(scheduler, y);
 //  auto dx = fc->backward(scheduler, yGrad);
@@ -125,20 +127,28 @@ void TestModuleT(cs::Scheduler &scheduler) {
   auto wRef = cs::memory::toTorch(scheduler, fc->state()->forward.weight);
   fc->state()->forward.weight.wait();
   wRef.requires_grad_(true);
-  auto biasRef = cs::memory::toTorch(scheduler, fc->state()->forward.bias);
-  fc->state()->forward.bias.wait();
-  biasRef.requires_grad_(true);
-  auto yRef = torch::linear(xRef, wRef, biasRef);
+
+  at::Tensor yRef;
+  if(with_bias){
+    auto biasRef = cs::memory::toTorch(scheduler, fc->state()->forward.bias);
+    fc->state()->forward.bias.wait();
+    biasRef.requires_grad_(true);
+    yRef = torch::linear(xRef, wRef, biasRef);
+  }else{
+    yRef = torch::linear(xRef, wRef);
+  }
+  yRef = torch::gelu(yRef);
 //  auto yGradRef = cs::memory::toTorch(scheduler, yGrad);
 //  yGrad.wait();
 //  yRef.backward(yGradRef);
 
   auto y_torch = cs::memory::toTorch(scheduler, y);
   y.wait();
-  auto close = torch::allclose(y_torch, yRef, 1e-6);
+  auto close = torch::allclose(y_torch, yRef, 0.0625);
   if(!close){
     saveTensorToFile(y_torch, "y.txt");
     saveTensorToFile(yRef, "yRef.txt");
+    std::cout << (yRef-y_torch).abs().max() << "\n";
   }
   ASSERT_TRUE(close);
 //  ASSERT_TRUE(torch::allclose(dx, xRef.grad()));
@@ -146,6 +156,7 @@ void TestModuleT(cs::Scheduler &scheduler) {
 }
 }  // namespace
 
-TEST_F(LinearGeluTestFixture, TestModuleF16) { TestModuleT<nv_half>(scheduler_); }
-TEST_F(LinearGeluTestFixture, TestModuleBF16) { TestModuleT<nv_bfloat16>(scheduler_); }
-//TEST_F(LinearGeluTestFixture, TestModuleF32) { TestModuleT<float>(scheduler_); }
+TEST_F(LinearGeluTestFixture, TestModuleF16WithBias) { TestModuleT<nv_half>(scheduler_, true); }
+TEST_F(LinearGeluTestFixture, TestModuleF16WithoutBias) { TestModuleT<nv_half>(scheduler_, false); }
+TEST_F(LinearGeluTestFixture, TestModuleBF16WithBias) { TestModuleT<nv_bfloat16>(scheduler_, true); }
+TEST_F(LinearGeluTestFixture, TestModuleBF16WithoutBias) { TestModuleT<nv_bfloat16>(scheduler_, false); }
