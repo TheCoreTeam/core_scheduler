@@ -18,7 +18,8 @@ set(CORE_SCHEDULER_COMPUTE_SRCS
         ${CMAKE_CURRENT_SOURCE_DIR}/gelu.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/embedding.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/linear.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/scaled_dot_product_attention.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/sdpa_flash_attn.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/sdpa_cudnn.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/layer_norm.cpp
 )
 set(CORE_SCHEDULER_COMPUTE_SRCS ${CORE_SCHEDULER_COMPUTE_SRCS} PARENT_SCOPE)

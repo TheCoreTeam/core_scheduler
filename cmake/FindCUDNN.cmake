@@ -105,10 +105,15 @@ message(STATUS "Python site-packages directory: ${PYTHON_SITE_PACKAGES}")
 if (DEFINED ENV{CONDA_PREFIX})
     list(APPEND PIP_CUDNN_INCLUDE_DIR ${PYTHON_SITE_PACKAGES}/nvidia/cudnn/include)
     list(APPEND PIP_CUDNN_LIB_DIR ${PYTHON_SITE_PACKAGES}/nvidia/cudnn/lib)
+    list(APPEND PIP_CUDNN_FRONTEND_INCLUDE_DIR ${PYTHON_SITE_PACKAGES}/include)
 endif ()
 
 find_path(CUDNN_INCLUDE_DIR NAMES cudnn.h cudnn_v8.h cudnn_v7.h
         HINTS ${PIP_CUDNN_INCLUDE_DIR} ${CUDA_TOOLKIT_ROOT} $ENV{CUDA_PATH} $ENV{CUDA_TOOLKIT_ROOT_DIR} $ENV{cudnn} $ENV{CUDNN} $ENV{CUDNN_ROOT_DIR} $ENV{CUDA_PATH}/../../../NVIDIA/CUDNN/v9.0 /usr/include /usr/include/x86_64-linux-gnu/ /usr/include/aarch64-linux-gnu/
+        PATH_SUFFIXES cuda/include include include/12.3)
+
+find_path(CUDNN_FRONTEND_INCLUDE_DIR NAMES cudnn_frontend.h
+        HINTS ${PIP_CUDNN_FRONTEND_INCLUDE_DIR} ${CUDA_TOOLKIT_ROOT} $ENV{CUDA_PATH} $ENV{CUDA_TOOLKIT_ROOT_DIR} $ENV{cudnn} $ENV{CUDNN} $ENV{CUDNN_ROOT_DIR} $ENV{CUDA_PATH}/../../../NVIDIA/CUDNN/v9.0 /usr/include /usr/include/x86_64-linux-gnu/ /usr/include/aarch64-linux-gnu/
         PATH_SUFFIXES cuda/include include include/12.3)
 
 # 初始设置查找路径和后缀
@@ -237,4 +242,18 @@ if (CUDNN_FOUND AND NOT TARGET nvidia::cudnn)
                 INTERFACE_INCLUDE_DIRECTORIES "${CUDNN_INCLUDE_DIR}"
                 IMPORTED_LINK_INTERFACE_LANGUAGES "C")
     endif ()
+endif ()
+
+if (CUDNN_FOUND AND NOT TARGET nvidia::cudnn_frontend)
+        add_library(nvidia::cudnn_frontend UNKNOWN IMPORTED)
+        set_target_properties(nvidia::cudnn_frontend PROPERTIES
+                IMPORTED_LOCATION "${CUDNN_LIBRARY}"
+                INTERFACE_INCLUDE_DIRECTORIES "${CUDNN_FRONTEND_INCLUDE_DIR}"
+                IMPORTED_LINK_INTERFACE_LANGUAGES "C")
+        target_compile_definitions(nvidia::cudnn_frontend INTERFACE
+                $<$<BOOL:${CUDNN_FRONTEND_SKIP_JSON_LIB}>:CUDNN_FRONTEND_SKIP_JSON_LIB>)
+        target_link_libraries(
+                nvidia::cudnn_frontend INTERFACE
+                CUDA::cudart
+                CUDA::nvrtc)
 endif ()

@@ -69,4 +69,50 @@ struct ScaledDotProductFlashAttention {
                                         const std::shared_ptr<State> &state,
                                         const ReadOnlyTensor &grad_out);
 };
+
+struct ScaledDotProductCuDnn {
+  struct State {
+    struct Forward {
+    } forward;
+    struct Backward {
+      ReadOnlyTensor query{};
+      ReadOnlyTensor key{};
+      ReadOnlyTensor value{};
+      ReadOnlyTensor out{};
+      ReadOnlyTensor stats{};
+    } backward;
+    struct Args {
+      const double dropout_p = 0;
+      const bool is_causal = false;
+      const bool return_debug_mask = false /* This must be false! */;
+      const c10::optional<double> scale = c10::nullopt;
+      struct RNG {
+        int64_t seed;
+        int64_t offset;
+      };
+      std::shared_ptr<RNG> rng;
+    } args;
+  };
+
+  struct Options {
+    Options() {}
+    CS_ARG(double, dropout_p) = 0;
+    CS_ARG(bool, is_causal) = false;
+    CS_ARG(bool, return_debug_mask) = false;
+    CS_ARG(c10::optional<double>, scale) = {};
+  };
+
+  static std::shared_ptr<State> init(const Scheduler &scheduler,
+                                     const Options &options = {});
+
+  static Tensor forward(const Scheduler &scheduler,
+                        const std::shared_ptr<State> &state,
+                        const ReadOnlyTensor &query, const ReadOnlyTensor &key,
+                        const ReadOnlyTensor &value);
+
+  // grad_query, grad_key, grad_value
+  static std::array<Tensor, 3> backward(const Scheduler &scheduler,
+                                        const std::shared_ptr<State> &state,
+                                        const ReadOnlyTensor &grad_out);
+};
 }  // namespace cs::compute

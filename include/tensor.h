@@ -26,6 +26,9 @@ using IntArray = c10::SmallVector<IntArrayRef::value_type>;
 
 using TensorOptions = at::TensorOptions;
 
+template <typename ELement>
+using optional = c10::optional<ELement>;
+
 struct ReadOnlyTensor {
   ReadOnlyTensor();
 

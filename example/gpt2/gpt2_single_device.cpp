@@ -60,7 +60,6 @@ struct ModelConfig {
 struct TrainConfig {
   const int64_t epoch = 5;
   const int64_t wait_every_step = 1;
-  int64_t grad_accumulation_steps = 1;
   double lr = 1e-5;
   double beta1 = 0.9;
   double beta2 = 0.95;

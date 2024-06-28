@@ -36,6 +36,7 @@ add_subdirectory(data)
 add_library(core_scheduler_core SHARED
         logger.cpp
         tensor.cpp
+        random.cpp
         ${CORE_SCHEDULER_MODULE_SRCS}
         ${CORE_SCHEDULER_COMPUTE_SRCS}
         ${CORE_SCHEDULER_MEMORY_SRCS}
@@ -46,8 +47,8 @@ add_library(core_scheduler_core SHARED
 )
 
 target_compile_options(core_scheduler_core PRIVATE
-        $<$<AND:$<CONFIG:Release>,$<COMPILE_LANGUAGE:CUDA>>:--expt-relaxed-constexpr;--extended-lambda;-O3;-Wextra;-Xcompiler;-Ofast;-Wextra>
-        $<$<AND:$<CONFIG:Debug>,$<COMPILE_LANGUAGE:CUDA>>:-G;--expt-relaxed-constexpr;--extended-lambda;-O0;-Wextra;-Xcompiler;-Ofast;-Wextra>
+        $<$<AND:$<CONFIG:Release>,$<COMPILE_LANGUAGE:CUDA>>:--expt-relaxed-constexpr;--extended-lambda;-O3;-Xcompiler=-Ofast,-Wextra>
+        $<$<AND:$<CONFIG:Debug>,$<COMPILE_LANGUAGE:CUDA>>:-G;--expt-relaxed-constexpr;--extended-lambda;-O0;-Xcompiler=-Ofast,-Wextra>
         $<$<AND:$<CONFIG:Release>,$<NOT:$<COMPILE_LANGUAGE:CUDA>>>:-Ofast;-Wextra>
         $<$<AND:$<CONFIG:Debug>,$<NOT:$<COMPILE_LANGUAGE:CUDA>>>:-O0;-Wextra>
 )
@@ -59,7 +60,7 @@ target_include_directories(core_scheduler_core PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/../include/internal
 )
 
-target_link_libraries(core_scheduler_core PRIVATE CUDA::cudart CUDA::nvtx3)
+target_link_libraries(core_scheduler_core PRIVATE CUDA::cudart CUDA::nvtx3 nvidia::cudnn_frontend)
 target_link_libraries(core_scheduler_core PRIVATE OpenMP::OpenMP_CXX)
 target_link_libraries(core_scheduler_core PRIVATE arrow_dataset Arrow::arrow_shared Parquet::parquet_shared)
 target_link_libraries(core_scheduler_core PRIVATE hwloc CUDA::nvml)
