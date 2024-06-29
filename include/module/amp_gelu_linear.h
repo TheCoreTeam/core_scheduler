@@ -15,17 +15,17 @@
  */
 
 #pragma once
-#include <memory>
+#include "compute/amp_gelu_linear.h"
+#include "module/gelu_linear.h"
+#include "module/pimpl.h"
 
-namespace cs {
-struct Scheduler {
-  struct Impl;
+namespace cs::module {
+struct CS_API AmpGeluLinearImpl : GeluLinearImpl {
+  using Options = compute::AmpGeluLinear::Options;
 
-  [[nodiscard]] const std::shared_ptr<Impl> &impl() const;
-
-  [[nodiscard]] int64_t deviceRank() const;
-
- protected:
-  std::shared_ptr<Impl> impl_;
+  explicit AmpGeluLinearImpl(const Scheduler &scheduler,
+                             const Options &options);
 };
-}  // namespace cs
+
+CS_MODULE(AmpGeluLinear);
+}  // namespace cs::module

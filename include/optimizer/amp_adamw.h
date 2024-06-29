@@ -17,9 +17,7 @@
 #pragma once
 #include <type_traits>
 
-#include "arg.h"
-#include "module/module.h"
-#include "module/state.h"
+#include "optimizer/adamw.h"
 #include "tensor.h"
 #include "threading/scheduler.h"
 
@@ -32,38 +30,11 @@ struct ThreadPoolCompute;
 }
 
 namespace cs::optimizer {
-struct AdamW {
-  AdamW() = delete;
+struct AmpAdamW : AdamW {
+  AmpAdamW() = delete;
 
-  struct State final : module::OptimizerState {
-    struct Tensors {
-      Tensor m;
-      Tensor v;
-      Tensor vMax{};
-    } tensors;
-    struct Options {
-      const double lr = 1e-3;
-      const double beta1 = 0.9;
-      const double beta2 = 0.999;
-      const double eps = 1e-8;
-      const double weight_decay = 1e-2;
-      const bool amsgrad = false;
-      long t = 0;
-    } options;
-
-    State(const Tensors &tensors, const Options &options)
-        : tensors{tensors}, options{options} {}
-  };
-
-  struct Options {
-    CS_ARG(double, lr) = 1e-3;
-    CS_ARG(double, beta1) = 0.9;
-    CS_ARG(double, beta2) = 0.999;
-    CS_ARG(double, eps) = 1e-8;
-    CS_ARG(double, weight_decay) = 1e-2;
-    CS_ARG(bool, amsgrad) = false;
-    CS_ARG(long, t) = 0;
-  };
+  using State = AdamW::State;
+  using Options = AdamW::Options;
 
   static void init(const Scheduler &scheduler, const module::Module &module,
                    const Options &options);
@@ -90,6 +61,6 @@ struct AdamW {
 
   static void step(const Scheduler &scheduler,
                    const std::shared_ptr<State> &state, Tensor &w,
-                   const ReadOnlyTensor &dw);
+                   Tensor &wFp32, const ReadOnlyTensor &dw);
 };
 }  // namespace cs::optimizer

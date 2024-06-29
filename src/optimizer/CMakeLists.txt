@@ -13,6 +13,8 @@
 # limitations under the License.
 
 set(CORE_SCHEDULER_OPTIMIZER_SRCS
+        ${CMAKE_CURRENT_SOURCE_DIR}/amp_adamw.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/amp_adamw.cu
         ${CMAKE_CURRENT_SOURCE_DIR}/adamw.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/adamw.cu
 )

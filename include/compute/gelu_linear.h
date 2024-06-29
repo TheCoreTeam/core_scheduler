@@ -21,7 +21,7 @@
 #include "threading/scheduler.h"
 
 namespace cs::compute {
-struct Linear {
+struct GeluLinear {
   struct State : virtual module::State {
     struct Forward {
       Tensor weight;
@@ -33,6 +33,7 @@ struct Linear {
     } forward;
     struct Backward {
       ReadOnlyTensor input;
+      int8_t inputSetCount = 0;
     } backward;
     struct Args {
       const bool bias;

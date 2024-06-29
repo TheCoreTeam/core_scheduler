@@ -15,6 +15,7 @@
 add_executable(core_scheduler_tests
         main.cpp
         test_adamw.cpp
+        test_amp_adamw.cpp
         test_linear.cpp
         test_gelu.cpp
         test_flash_attention.cpp
@@ -24,6 +25,7 @@ add_executable(core_scheduler_tests
         test_layer_norm.cpp
         test_load_save.cpp
         test_cudnn_attention.cpp
+        test_gelu_linear.cpp
 )
 
 target_link_libraries(core_scheduler_tests PRIVATE

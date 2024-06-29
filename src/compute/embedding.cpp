@@ -14,10 +14,14 @@
  * limitations under the License.
  */
 
-#include "compute/embedding.h"
+// Header Order Protection
+// ReSharper disable once CppUnusedIncludeDirective
+#include <c10/util/Exception.h>
+// Header Order Protection
 
 #include <torch/nn/functional/embedding.h>
 
+#include "compute/embedding.h"
 #include "logger.h"
 #include "tensor_impl.h"
 #include "threading/scheduler_impl.h"
