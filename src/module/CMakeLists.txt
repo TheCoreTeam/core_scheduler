@@ -15,7 +15,9 @@
 set(CORE_SCHEDULER_MODULE_SRCS
         ${CMAKE_CURRENT_SOURCE_DIR}/module.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/linear.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/linear_gelu.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/amp_linear.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/gelu_linear.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/amp_gelu_linear.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/layer_norm.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/embedding.cpp
 )

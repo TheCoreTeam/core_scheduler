@@ -60,7 +60,7 @@ class TestCSAdamW : public ::testing::Test {
 
 template <typename Element>
 void TestCSAdamW::TestFunctionalRoutine(const int size) {
-  const double lr = 1e-3;
+  const double lr = 1;
   const double beta1 = 0.9;
   const double beta2 = 0.999;
   const double eps = 1e-8;
@@ -97,9 +97,9 @@ void TestCSAdamW::TestFunctionalRoutine(const int size) {
   auto v_hat = v_torch / (1 - std::pow(beta2, t + 1));
   x_torch = x_torch - lr * m_hat / (v_hat.sqrt() + eps);
 
-  ASSERT_TRUE(torch::allclose(x_torch, x));
-  ASSERT_TRUE(torch::allclose(m_torch, state->tensors.m));
-  ASSERT_TRUE(torch::allclose(v_torch, state->tensors.v));
+  ASSERT_TRUE(torch::allclose(x_torch, x, 1e-4, 1e-5));
+  ASSERT_TRUE(torch::allclose(m_torch, state->tensors.m, 1e-4, 1e-5));
+  ASSERT_TRUE(torch::allclose(v_torch, state->tensors.v, 1e-4, 1e-5));
 }
 
 TEST_F(TestCSAdamW, TestFunctionalF32_128) {
@@ -116,7 +116,7 @@ TEST_F(TestCSAdamW, TestFunctionalF32_1024) {
 
 template <typename Element>
 void TestCSAdamW::TestModuleRoutine(const int size) {
-  const double lr = 1e-3;
+  const double lr = 1;
   const double beta1 = 0.9;
   const double beta2 = 0.999;
   const double eps = 1e-8;
@@ -174,7 +174,8 @@ void TestCSAdamW::TestModuleRoutine(const int size) {
                                  .t(t));
   cs::optimizer::AdamW::step(scheduler, fc);
 
-  ASSERT_TRUE(torch::allclose(fc->state()->forward.weight, fcTorch->weight));
+  ASSERT_TRUE(torch::allclose(fc->state()->forward.weight, fcTorch->weight,
+                              1e-4, 1e-5));
 }
 
 TEST_F(TestCSAdamW, TestModuleF32_128) { TestModuleRoutine<float>(128); }

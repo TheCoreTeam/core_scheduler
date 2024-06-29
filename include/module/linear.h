@@ -38,7 +38,9 @@ struct CS_API LinearImpl : Module {
 
   std::shared_ptr<compute::Linear::State> state() const;
 
- private:
+ protected:
+  LinearImpl() = default;
+
   std::weak_ptr<compute::Linear::State> state_;
 };
 

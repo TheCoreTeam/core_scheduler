@@ -14,18 +14,15 @@
  * limitations under the License.
  */
 
-#pragma once
-#include <memory>
+#include "module/amp_linear.h"
 
-namespace cs {
-struct Scheduler {
-  struct Impl;
+#include "threading/scheduler.h"
 
-  [[nodiscard]] const std::shared_ptr<Impl> &impl() const;
-
-  [[nodiscard]] int64_t deviceRank() const;
-
- protected:
-  std::shared_ptr<Impl> impl_;
-};
-}  // namespace cs
+namespace cs::module {
+AmpLinearImpl::AmpLinearImpl(const Scheduler& scheduler,
+                             const Options& options) {
+  const auto state = compute::AmpLinear::init(scheduler, options);
+  register_state("AmpLinearState", state);
+  state_ = state;
+}
+}  // namespace cs::module

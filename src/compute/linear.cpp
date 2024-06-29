@@ -14,11 +14,15 @@
  * limitations under the License.
  */
 
-#include "compute/linear.h"
+// Header Order Protection
+// ReSharper disable once CppUnusedIncludeDirective
+#include <c10/util/Exception.h>
+// Header Order Protection
 
 #include <torch/nn/functional/linear.h>
 #include <torch/nn/init.h>
 
+#include "compute/linear.h"
 #include "logger.h"
 #include "tensor_impl.h"
 #include "threading/scheduler_impl.h"
@@ -151,7 +155,6 @@ Tensor Linear::forward(const Scheduler &scheduler,
 
   Tensor output;
   state->backward.input = input;
-  // size
   scheduler.impl()->submit(Task{
       std::make_shared<Impl>(Impl{{output}, {input, state->forward.weight}})});
   return output;
@@ -174,7 +177,6 @@ Tensor Linear::backwardInput(const Scheduler &scheduler,
   };
 
   Tensor grad_input;
-  // size
   scheduler.impl()->submit(Task{std::make_shared<Impl>(
       Impl{{grad_input}, {grad_output, state->forward.weight}})});
   return grad_input;

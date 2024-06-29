@@ -22,7 +22,7 @@
 
 namespace cs::compute {
 struct Linear {
-  struct State final : module::State {
+  struct State : virtual module::State {
     struct Forward {
       Tensor weight;
       Tensor bias{};
