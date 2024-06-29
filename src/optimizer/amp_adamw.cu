@@ -17,7 +17,7 @@
 #include <ATen/Dispatch.h>
 #include <cuda_runtime.h>
 
-#include "optimizer/adamw.h"
+#include "optimizer/amp_adamw.h"
 #include "tensor_impl.h"
 
 namespace cs::optimizer {
@@ -33,7 +33,8 @@ __device__ float cast_higher(const T v) {
 }
 
 template <typename T>
-__global__ void step(T *__restrict w, T *__restrict m, T *__restrict v,
+__global__ void step(T *__restrict w, float *__restrict wFp32,
+                     float *__restrict m, float *__restrict v,
                      const T *__restrict dw, const float lr, const float beta1,
                      const float beta2, const float inv_one_minus_beta1_pow_t,
                      const float inv_one_minus_beta2_pow_t, const float eps,
@@ -42,11 +43,11 @@ __global__ void step(T *__restrict w, T *__restrict m, T *__restrict v,
   if (tid >= n) {
     return;
   }
-  const auto one = cast_higher(static_cast<T>(1));
+  const auto one = cast_higher(1);
   const auto g_t = cast_higher(dw[tid]);
-  auto theta_t = cast_higher(w[tid]) - cast_higher(lr) *
-                                           cast_higher(weigt_decay) *
-                                           cast_higher(w[tid]);
+  auto theta_t = cast_higher(wFp32[tid]) - cast_higher(lr) *
+                                               cast_higher(weigt_decay) *
+                                               cast_higher(wFp32[tid]);
   const auto m_t = cast_higher(beta1) * cast_higher(m[tid]) +
                    (one - cast_higher(beta1)) * g_t;
   m[tid] = m_t;
@@ -55,14 +56,16 @@ __global__ void step(T *__restrict w, T *__restrict m, T *__restrict v,
   v[tid] = v_t;
   const auto m_hat_t = m_t * cast_higher(inv_one_minus_beta1_pow_t);
   const auto v_hat_t = v_t * cast_higher(inv_one_minus_beta2_pow_t);
-  w[tid] = theta_t -
-           cast_higher(lr) * m_hat_t / (std::sqrt(v_hat_t) + cast_higher(eps));
+  wFp32[tid] = theta_t - cast_higher(lr) * m_hat_t /
+                             (std::sqrt(v_hat_t) + cast_higher(eps));
+  w[tid] = wFp32[tid];
 }
 
 template <typename T>
-__global__ void step(T *__restrict w, T *__restrict m, T *__restrict v,
-                     T *__restrict vMax, const T *__restrict dw, const float lr,
-                     const float beta1, const float beta2,
+__global__ void step(T *__restrict w, float *__restrict wFp32,
+                     float *__restrict m, float *__restrict v,
+                     float *__restrict vMax, const T *__restrict dw,
+                     const float lr, const float beta1, const float beta2,
                      const float inv_one_minus_beta1_pow_t,
                      const float inv_one_minus_beta2_pow_t, const float eps,
                      const float weigt_decay, const std::size_t n) {
@@ -72,9 +75,9 @@ __global__ void step(T *__restrict w, T *__restrict m, T *__restrict v,
   }
   const auto one = cast_higher(static_cast<T>(1));
   const auto g_t = cast_higher(dw[tid]);
-  auto theta_t = cast_higher(w[tid]) - cast_higher(lr) *
-                                           cast_higher(weigt_decay) *
-                                           cast_higher(w[tid]);
+  auto theta_t = cast_higher(wFp32[tid]) - cast_higher(lr) *
+                                               cast_higher(weigt_decay) *
+                                               cast_higher(wFp32[tid]);
   const auto m_t = cast_higher(beta1) * cast_higher(m[tid]) +
                    (one - cast_higher(beta1)) * g_t;
   m[tid] = m_t;
@@ -85,14 +88,15 @@ __global__ void step(T *__restrict w, T *__restrict m, T *__restrict v,
   const auto v_hat_t = v_t * cast_higher(inv_one_minus_beta2_pow_t);
   const auto v_hat_max_t = std::max(cast_higher(vMax[tid]), v_hat_t);
   vMax[tid] = v_hat_max_t;
-  w[tid] = theta_t - cast_higher(lr) * m_hat_t /
-                         (std::sqrt(v_hat_max_t) + cast_higher(eps));
+  wFp32[tid] = theta_t - cast_higher(lr) * m_hat_t /
+                             (std::sqrt(v_hat_max_t) + cast_higher(eps));
+  w[tid] = wFp32[tid];
 }
 }  // namespace
 
-void stepKernel(cudaStream_t stream, const AdamW::State::Options &options,
-                const Tensor &w, const Tensor &m, const Tensor &v,
-                const ReadOnlyTensor &dw) {
+void ampStepKernel(cudaStream_t stream, const AmpAdamW::State::Options &options,
+                   const Tensor &w, const Tensor &wFp32, const Tensor &m,
+                   const Tensor &v, const ReadOnlyTensor &dw) {
   const auto size = [&] {
     const auto sizes = dw.impl()->tensor().sizes();
     int64_t s = 1;
@@ -103,24 +107,27 @@ void stepKernel(cudaStream_t stream, const AdamW::State::Options &options,
   }();
   AT_DISPATCH_FLOATING_TYPES_AND2(
       at::ScalarType::Half, at::ScalarType::BFloat16,
-      dw.impl()->tensor().scalar_type(), "AdamW w/o Amsgrad", [&] {
+      dw.impl()->tensor().scalar_type(), "AmpAdamW w/o Amsgrad", [&] {
         using T = scalar_t;
         dim3 block(std::min<decltype(size)>(128, size));
         dim3 grid(ceil_div(size, std::min<decltype(size)>(128, size)));
         step<T><<<grid, block, 0, stream>>>(
-            w.impl()->tensor().data_ptr<T>(), m.impl()->tensor().data_ptr<T>(),
-            v.impl()->tensor().data_ptr<T>(), dw.impl()->tensor().data_ptr<T>(),
-            options.lr, options.beta1, options.beta2,
-            1. / (1. - std::pow(options.beta1, options.t)),
+            w.impl()->tensor().data_ptr<T>(),
+            wFp32.impl()->tensor().data_ptr<float>(),
+            m.impl()->tensor().data_ptr<float>(),
+            v.impl()->tensor().data_ptr<float>(),
+            dw.impl()->tensor().data_ptr<T>(), options.lr, options.beta1,
+            options.beta2, 1. / (1. - std::pow(options.beta1, options.t)),
             1. / (1. - std::pow(options.beta2, options.t)), options.eps,
             options.weight_decay, size);
       });
 }
 
-void stepKernelAmsgrad(cudaStream_t stream,
-                       const AdamW::State::Options &options, const Tensor &w,
-                       const Tensor &m, const Tensor &v, const Tensor &vMax,
-                       const ReadOnlyTensor &dw) {
+void ampStepKernelAmsgrad(cudaStream_t stream,
+                          const AmpAdamW::State::Options &options,
+                          const Tensor &w, const Tensor &m, const Tensor &wFp32,
+                          const Tensor &v, const Tensor &vMax,
+                          const ReadOnlyTensor &dw) {
   const auto size = [&] {
     const auto sizes = dw.impl()->tensor().sizes();
     int64_t s = 1;
@@ -131,14 +138,16 @@ void stepKernelAmsgrad(cudaStream_t stream,
   }();
   AT_DISPATCH_FLOATING_TYPES_AND2(
       at::ScalarType::Half, at::ScalarType::BFloat16,
-      dw.impl()->tensor().scalar_type(), "AdamW w/ Amsgrad", [&] {
+      dw.impl()->tensor().scalar_type(), "AmpAdamW w/ Amsgrad", [&] {
         using T = scalar_t;
         dim3 block(std::min<decltype(size)>(128, size));
         dim3 grid(ceil_div(size, std::min<decltype(size)>(128, size)));
         step<T><<<grid, block, 0, stream>>>(
-            w.impl()->tensor().data_ptr<T>(), m.impl()->tensor().data_ptr<T>(),
-            v.impl()->tensor().data_ptr<T>(),
-            vMax.impl()->tensor().data_ptr<T>(),
+            w.impl()->tensor().data_ptr<T>(),
+            wFp32.impl()->tensor().data_ptr<float>(),
+            m.impl()->tensor().data_ptr<float>(),
+            v.impl()->tensor().data_ptr<float>(),
+            vMax.impl()->tensor().data_ptr<float>(),
             dw.impl()->tensor().data_ptr<T>(), options.lr, options.beta1,
             options.beta2, 1. / (1. - std::pow(options.beta1, options.t)),
             1. / (1. - std::pow(options.beta2, options.t)), options.eps,

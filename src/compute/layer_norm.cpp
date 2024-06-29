@@ -14,7 +14,10 @@
  * limitations under the License.
  */
 
-#include "compute/layer_norm.h"
+// Header Order Protection
+// ReSharper disable once CppUnusedIncludeDirective
+#include <c10/util/Exception.h>
+// Header Order Protection
 
 #include <ATen/ops/empty.h>
 #include <ATen/ops/layer_norm.h>
@@ -23,6 +26,7 @@
 #include <ATen/ops/ones.h>
 #include <ATen/ops/zeros.h>
 
+#include "compute/layer_norm.h"
 #include "logger.h"
 #include "tensor_impl.h"
 #include "threading/scheduler_impl.h"

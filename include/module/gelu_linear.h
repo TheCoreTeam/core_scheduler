@@ -15,15 +15,15 @@
  */
 
 #pragma once
-#include "compute/linear.h"
+#include "compute/gelu_linear.h"
 #include "module/module.h"
 #include "module/pimpl.h"
 
 namespace cs::module {
-struct CS_API LinearImpl : Module {
-  using Options = compute::Linear::Options;
+struct CS_API GeluLinearImpl : Module {
+  using Options = compute::GeluLinear::Options;
 
-  explicit LinearImpl(const Scheduler &scheduler, const Options &options);
+  explicit GeluLinearImpl(const Scheduler &scheduler, const Options &options);
 
   Tensor forward(const Scheduler &scheduler, const ReadOnlyTensor &input) const;
 
@@ -36,13 +36,13 @@ struct CS_API LinearImpl : Module {
   Tensor backwardInput(const Scheduler &scheduler,
                        const ReadOnlyTensor &grad_output) const;
 
-  std::shared_ptr<compute::Linear::State> state() const;
+  std::shared_ptr<compute::GeluLinear::State> state() const;
 
  protected:
-  LinearImpl() = default;
+  GeluLinearImpl() = default;
 
-  std::weak_ptr<compute::Linear::State> state_;
+  std::weak_ptr<compute::GeluLinear::State> state_;
 };
 
-CS_MODULE(Linear);
+CS_MODULE(GeluLinear);
 }  // namespace cs::module

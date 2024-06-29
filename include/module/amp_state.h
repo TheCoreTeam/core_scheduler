@@ -17,33 +17,14 @@
 #pragma once
 #include <torch/ordered_dict.h>
 
+#include "module/state.h"
 #include "tensor.h"
 
-namespace cs {
-template <typename Key, typename Value>
-using OrderedDict = torch::OrderedDict<Key, Value>;
-}
-
 namespace cs::module {
-struct OptimizerState {
-  virtual ~OptimizerState() = default;
-};
-
-struct State {
-  struct Increment {
-    Tensor &parameter;
-    Tensor &gradient;
-    std::shared_ptr<OptimizerState> &optimizerState;
-  };
-
-  virtual ~State() = default;
-
-  [[nodiscard]] virtual OrderedDict<std::string, Tensor> parameters() const {
+struct AmpState : virtual State {
+  [[nodiscard]] virtual OrderedDict<std::string, Tensor> parametersFp32()
+      const {
     return OrderedDict<std::string, Tensor>{};
-  }
-
-  [[nodiscard]] virtual OrderedDict<std::string, Increment> increments() {
-    return OrderedDict<std::string, Increment>{};
   }
 };
 }  // namespace cs::module
