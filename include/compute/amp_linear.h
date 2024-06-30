@@ -28,16 +28,19 @@ struct AmpLinear {
     using Backward = Linear::State::Backward;
     using Args = Linear::State::Args;
 
-    struct ForwardFp32 {
+    struct ForwardHighPrecision {
       Tensor weight{};
       Tensor bias{};
-    } forwardFp32;
+    } forwardHighPrecision;
 
-    State(const Forward &forward, const ForwardFp32 &forwardFp32,
+    State(const Forward &forward,
+          const ForwardHighPrecision &forwardHighPrecision,
           const Backward &backward, const Args &args);
 
-    [[nodiscard]] OrderedDict<std::string, Tensor> parametersFp32()
+    [[nodiscard]] OrderedDict<std::string, Tensor> parametersHighPrecision()
         const override;
+
+    [[nodiscard]] OrderedDict<std::string, Tensor> parameters() const override;
   };
 
   using Options = Linear::Options;

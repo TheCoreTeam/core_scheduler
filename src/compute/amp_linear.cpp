@@ -29,17 +29,24 @@
 #include "threading/task_impl.h"
 
 namespace cs::compute {
-AmpLinear::State::State(const Forward& forward, const ForwardFp32& forwardFp32,
+AmpLinear::State::State(const Forward& forward,
+                        const ForwardHighPrecision& forwardHighPrecision,
                         const Backward& backward, const Args& args)
-    : Linear::State{forward, backward, args}, forwardFp32{forwardFp32} {}
+    : Linear::State{forward, backward, args},
+      forwardHighPrecision{forwardHighPrecision} {}
 
-OrderedDict<std::string, Tensor> AmpLinear::State::parametersFp32() const {
+OrderedDict<std::string, Tensor> AmpLinear::State::parametersHighPrecision()
+    const {
   OrderedDict<std::string, Tensor> dict;
-  dict.insert("weight", forwardFp32.weight);
+  dict.insert("weight", forwardHighPrecision.weight);
   if (args.bias) {
-    dict.insert("bias", forwardFp32.bias);
+    dict.insert("bias", forwardHighPrecision.bias);
   }
   return dict;
+}
+
+OrderedDict<std::string, Tensor> AmpLinear::State::parameters() const {
+  return parametersHighPrecision();
 }
 
 std::shared_ptr<AmpLinear::State> AmpLinear::init(const Scheduler& scheduler,
@@ -99,7 +106,7 @@ std::shared_ptr<AmpLinear::State> AmpLinear::init(const Scheduler& scheduler,
                                          options.out_futures()})});
     return std::make_shared<State>(
         State::Forward{std::move(weight), std::move(bias)},
-        State::ForwardFp32{std::move(weightFp32), std::move(biasFp32)},
+        State::ForwardHighPrecision{std::move(weightFp32), std::move(biasFp32)},
         State::Backward{}, State::Args{options.bias()});
   } else {
     struct Impl : Task::Impl {
@@ -134,10 +141,10 @@ std::shared_ptr<AmpLinear::State> AmpLinear::init(const Scheduler& scheduler,
                                          tensorOptions,
                                          options.in_futures(),
                                          options.out_futures()})});
-    return std::make_shared<State>(State::Forward{std::move(weight)},
-                                   State::ForwardFp32{std::move(weightFp32)},
-                                   State::Backward{},
-                                   State::Args{options.bias()});
+    return std::make_shared<State>(
+        State::Forward{std::move(weight)},
+        State::ForwardHighPrecision{std::move(weightFp32)}, State::Backward{},
+        State::Args{options.bias()});
   }
 }
 }  // namespace cs::compute

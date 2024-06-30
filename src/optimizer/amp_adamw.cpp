@@ -50,11 +50,14 @@ void AmpAdamW::step(const Scheduler& scheduler, const module::Module& module) {
     auto ampState =
         std::dynamic_pointer_cast<module::AmpState>(kvState.value());
     CS_ASSERT_TRUE(ampState != nullptr, "The module is not an AMP module");
-    auto parametersFp32 = ampState->parametersFp32();
+    auto parametersHighPrecision = ampState->parametersHighPrecision();
     for (auto& kvIncrement : increments) {
+      CS_ASSERT_TRUE(parametersHighPrecision.contains(kvIncrement.key()),
+                     "Internal error, key is not found, mostly because your "
+                     "parametersHighPrecision implementation is not corrent");
       step(scheduler,
            std::dynamic_pointer_cast<State>(kvIncrement->optimizerState),
-           kvIncrement->parameter, parametersFp32[kvIncrement.key()],
+           kvIncrement->parameter, parametersHighPrecision[kvIncrement.key()],
            kvIncrement->gradient);
       kvIncrement->gradient = Tensor{};
     }

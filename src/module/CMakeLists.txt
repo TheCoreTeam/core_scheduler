@@ -13,6 +13,9 @@
 # limitations under the License.
 
 set(CORE_SCHEDULER_MODULE_SRCS
+        ${CMAKE_CURRENT_SOURCE_DIR}/state.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/amp_state.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/module.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/module.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/linear.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/amp_linear.cpp

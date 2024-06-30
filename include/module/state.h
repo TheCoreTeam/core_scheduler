@@ -38,12 +38,8 @@ struct State {
 
   virtual ~State() = default;
 
-  [[nodiscard]] virtual OrderedDict<std::string, Tensor> parameters() const {
-    return OrderedDict<std::string, Tensor>{};
-  }
+  [[nodiscard]] virtual OrderedDict<std::string, Tensor> parameters() const;
 
-  [[nodiscard]] virtual OrderedDict<std::string, Increment> increments() {
-    return OrderedDict<std::string, Increment>{};
-  }
+  [[nodiscard]] virtual OrderedDict<std::string, Increment> increments();
 };
 }  // namespace cs::module

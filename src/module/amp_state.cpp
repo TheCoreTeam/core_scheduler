@@ -1,8 +1,8 @@
 /*
- * Copyright (c) 2024 The Core team
+ * Copyright (c) 2024 The Core Team
  *
  * Licensed under the Apache License, Version 2.0;
- * you may not use this file except in compliance with the License.
+ * You may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
  *     http://www.apache.org/licenses/LICENSE-2.0
@@ -14,14 +14,10 @@
  * limitations under the License.
  */
 
-#pragma once
-#include <torch/ordered_dict.h>
-
-#include "module/state.h"
-#include "tensor.h"
+#include "module/amp_state.h"
 
 namespace cs::module {
-struct AmpState : virtual State {
-  [[nodiscard]] virtual OrderedDict<std::string, Tensor> parametersHighPrecision() const;
-};
+OrderedDict<std::string, Tensor> AmpState::parametersHighPrecision() const {
+  return OrderedDict<std::string, Tensor>{};
+}
 }  // namespace cs::module

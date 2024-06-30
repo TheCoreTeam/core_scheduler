@@ -111,7 +111,7 @@ void TestAmpAdamW::TestModuleRoutine(const int size) {
   // optimTorch.step();
   auto wFp32 = cs::memory::toTorch(
       scheduler, std::dynamic_pointer_cast<cs::module::AmpState>(fc->state())
-                     ->parametersFp32()["weight"]);
+                     ->parametersHighPrecision()["weight"]);
   auto m_torch = torch::zeros_like(wFp32);
   auto v_torch = torch::zeros_like(wFp32);
 
