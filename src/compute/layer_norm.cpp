@@ -33,6 +33,10 @@
 #include "threading/task_impl.h"
 
 namespace cs::compute {
+LayerNorm::State::State(const Forward& forward, const Backward& backward,
+                        const Args& args)
+    : forward{forward}, backward{backward}, args{args} {}
+
 OrderedDict<std::string, Tensor> LayerNorm::State::parameters() const {
   OrderedDict<std::string, Tensor> dict;
   dict.insert("weight", forward.weight);

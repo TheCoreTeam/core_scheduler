@@ -29,7 +29,7 @@ struct OptimizerState {
   virtual ~OptimizerState() = default;
 };
 
-struct State {
+struct CS_API State {
   struct Increment {
     Tensor &parameter;
     Tensor &gradient;

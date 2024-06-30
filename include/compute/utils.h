@@ -19,9 +19,9 @@
 #include "threading/scheduler.h"
 
 namespace cs::compute::Utils {
-Tensor sum(const Scheduler &scheduler, const ReadOnlyTensor &input,
-           IntArrayRef dim, bool keep_dim = false,
-           c10::optional<at::ScalarType> dtype = c10::nullopt);
+CS_API Tensor sum(const Scheduler &scheduler, const ReadOnlyTensor &input,
+                  IntArrayRef dim, bool keep_dim = false,
+                  c10::optional<at::ScalarType> dtype = c10::nullopt);
 
 inline Tensor sum(const Scheduler &scheduler, const ReadOnlyTensor &input,
                   const int64_t dim, const bool keep_dim = false,
@@ -29,63 +29,66 @@ inline Tensor sum(const Scheduler &scheduler, const ReadOnlyTensor &input,
   return sum(scheduler, input, IntArrayRef{dim}, keep_dim, dtype);
 }
 
-Tensor range(const Scheduler &scheduler, const at::Scalar &start,
-             const at::Scalar &end, TensorOptions options = {});
+CS_API Tensor range(const Scheduler &scheduler, const at::Scalar &start,
+                    const at::Scalar &end, TensorOptions options = {});
 
-Tensor arange(const Scheduler &scheduler, const at::Scalar &start,
-              const at::Scalar &end, TensorOptions options = {});
+CS_API Tensor arange(const Scheduler &scheduler, const at::Scalar &start,
+                     const at::Scalar &end, TensorOptions options = {});
 
-Tensor arange(const Scheduler &scheduler, const at::Scalar &start,
-              const at::Scalar &end, const at::Scalar &step,
-              TensorOptions options = {});
+CS_API Tensor arange(const Scheduler &scheduler, const at::Scalar &start,
+                     const at::Scalar &end, const at::Scalar &step,
+                     TensorOptions options = {});
 
-Tensor randint(const Scheduler &scheduler, int64_t low, int64_t high,
-               IntArrayRef size, TensorOptions options = at::kLong);
+CS_API Tensor randint(const Scheduler &scheduler, int64_t low, int64_t high,
+                      IntArrayRef size, TensorOptions options = at::kLong);
 
-Tensor empty(const Scheduler &scheduler, IntArrayRef size,
-             TensorOptions options = {});
+CS_API Tensor empty(const Scheduler &scheduler, IntArrayRef size,
+                    TensorOptions options = {});
 
-Tensor empty_like(const Scheduler &scheduler, const ReadOnlyTensor &src);
+CS_API Tensor empty_like(const Scheduler &scheduler, const ReadOnlyTensor &src);
 
-Tensor ones(const Scheduler &scheduler, IntArrayRef size,
-            TensorOptions options = {});
+CS_API Tensor ones(const Scheduler &scheduler, IntArrayRef size,
+                   TensorOptions options = {});
 
-Tensor ones_like(const Scheduler &scheduler, const ReadOnlyTensor &src);
+CS_API Tensor ones_like(const Scheduler &scheduler, const ReadOnlyTensor &src);
 
-Tensor zeros(const Scheduler &scheduler, IntArrayRef size,
-             TensorOptions options = {});
+CS_API Tensor zeros(const Scheduler &scheduler, IntArrayRef size,
+                    TensorOptions options = {});
 
-Tensor zeros_like(const Scheduler &scheduler, const ReadOnlyTensor &src);
+CS_API Tensor zeros_like(const Scheduler &scheduler, const ReadOnlyTensor &src);
 
-Tensor rand(const Scheduler &scheduler, IntArrayRef size,
-            TensorOptions options = {});
+CS_API Tensor rand(const Scheduler &scheduler, IntArrayRef size,
+                   TensorOptions options = {});
 
-Tensor rand_like(const Scheduler &scheduler, const ReadOnlyTensor &src);
+CS_API Tensor rand_like(const Scheduler &scheduler, const ReadOnlyTensor &src);
 
-Tensor randn(const Scheduler &scheduler, IntArrayRef size,
-             TensorOptions options = {});
+CS_API Tensor randn(const Scheduler &scheduler, IntArrayRef size,
+                    TensorOptions options = {});
 
-Tensor randn_like(const Scheduler &scheduler, const ReadOnlyTensor &src);
+CS_API Tensor randn_like(const Scheduler &scheduler, const ReadOnlyTensor &src);
 
-std::vector<Tensor> split(const Scheduler &scheduler, const ReadOnlyTensor &src,
-                          const int64_t &split_size, const int64_t &dim);
+CS_API std::vector<Tensor> split(const Scheduler &scheduler,
+                                 const ReadOnlyTensor &src,
+                                 const int64_t &split_size, const int64_t &dim);
 
-Tensor view(const Scheduler &scheduler, const ReadOnlyTensor &input,
-            IntArrayRef size);
+CS_API Tensor view(const Scheduler &scheduler, const ReadOnlyTensor &input,
+                   IntArrayRef size);
 
-Tensor as_strided(const Scheduler &scheduler, const ReadOnlyTensor &input,
-                  IntArrayRef size, IntArrayRef stride,
-                  optional<int64_t> storage_offset = c10::nullopt);
+CS_API Tensor as_strided(const Scheduler &scheduler,
+                         const ReadOnlyTensor &input, IntArrayRef size,
+                         IntArrayRef stride,
+                         optional<int64_t> storage_offset = c10::nullopt);
 
-Tensor broadcast_to(const Scheduler &scheduler, const ReadOnlyTensor &input,
-                    IntArrayRef size);
+CS_API Tensor broadcast_to(const Scheduler &scheduler,
+                           const ReadOnlyTensor &input, IntArrayRef size);
 
-Tensor cat(const Scheduler &scheduler, const std::vector<ReadOnlyTensor> &input,
-           int64_t dim);
+CS_API Tensor cat(const Scheduler &scheduler,
+                  const std::vector<ReadOnlyTensor> &input, int64_t dim);
 
-Tensor add(const Scheduler &scheduler, ReadOnlyTensor x, ReadOnlyTensor y);
+CS_API Tensor add(const Scheduler &scheduler, ReadOnlyTensor x,
+                  ReadOnlyTensor y);
 
-void zero_(const Scheduler &scheduler, const Tensor &tensor);
+CS_API void zero_(const Scheduler &scheduler, const Tensor &tensor);
 
-Tensor clone(const Scheduler &scheduler, Tensor tensor);
+CS_API Tensor clone(const Scheduler &scheduler, Tensor tensor);
 }  // namespace cs::compute::Utils

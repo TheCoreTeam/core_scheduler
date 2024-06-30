@@ -19,7 +19,7 @@
 #include "threading/scheduler.h"
 
 namespace cs::compute {
-struct GeLU {
+struct CS_API GeLU {
   struct State {
     struct Forward {
     } forward;

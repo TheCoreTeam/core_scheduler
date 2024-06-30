@@ -16,11 +16,8 @@
 
 #pragma once
 #include <fmt/format.h>
-#include <spdlog/spdlog.h>
 
 #include <cstdlib>
-
-#include "export.h"
 
 namespace cs {
 #define CS_ASSERT_TRUE(statement, ...)                                        \
@@ -28,7 +25,7 @@ namespace cs {
     if (!(statement)) {                                                       \
       std::string errorMessage =                                              \
           fmt::format("Assert '{}' failed: '{}'", #statement, ##__VA_ARGS__); \
-      SPDLOG_LOGGER_CRITICAL(&::cs::logger(), errorMessage);                  \
+      fmt::println(fmt::runtime(errorMessage));                               \
       std::abort();                                                           \
     }                                                                         \
   } while (false)
@@ -38,7 +35,7 @@ namespace cs {
     if (!(statement)) {                                                       \
       std::string errorMessage =                                              \
           fmt::format("Assert '{}' failed: '{}'", #statement, ##__VA_ARGS__); \
-      SPDLOG_LOGGER_WARN(&::cs::logger(), errorMessage);                      \
+      fmt::println(fmt::runtime(errorMessage));                               \
     }                                                                         \
   } while (false)
 
@@ -87,6 +84,4 @@ namespace cs {
                    fmt::format("statement {} returned code {}", #statement, \
                                (code).get_message()));                      \
   } while (false)
-
-CS_API spdlog::logger &logger();
 }  // namespace cs

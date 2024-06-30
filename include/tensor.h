@@ -19,6 +19,8 @@
 
 #include <memory>
 
+#include "export.h"
+
 namespace cs {
 using IntArrayRef = at::IntArrayRef;
 
@@ -30,36 +32,36 @@ template <typename ELement>
 using optional = c10::optional<ELement>;
 
 struct ReadOnlyTensor {
-  ReadOnlyTensor();
+  CS_API ReadOnlyTensor();
 
-  [[nodiscard]] TensorOptions options() const;
+  CS_API [[nodiscard]] TensorOptions options() const;
 
-  [[nodiscard]] IntArrayRef sizes() const;
+  CS_API [[nodiscard]] IntArrayRef sizes() const;
 
-  [[nodiscard]] int64_t size(int64_t dim) const;
+  CS_API [[nodiscard]] int64_t size(int64_t dim) const;
 
-  [[nodiscard]] int64_t numel() const;
+  CS_API [[nodiscard]] int64_t numel() const;
 
-  void wait() const;
+  CS_API void wait() const;
 
   struct Impl;
 
   [[nodiscard]] const std::shared_ptr<Impl> &impl() const;
 
-  void reset();
+  CS_API void reset();
 
  protected:
   std::shared_ptr<Impl> impl_;
 };
 
 struct Tensor : ReadOnlyTensor {
-  Tensor() = default;
+  CS_API Tensor() = default;
 
-  void wait() const;
+  CS_API void wait() const;
 };
 
-TORCH_API std::ostream &print(std::ostream &stream,
-                              const ReadOnlyTensor &tensor, int64_t linesize);
+CS_API std::ostream &print(std::ostream &stream, const ReadOnlyTensor &tensor,
+                           int64_t linesize);
 
 static std::ostream &operator<<(std::ostream &out, const ReadOnlyTensor &t) {
   return print(out, t, 80);
@@ -67,10 +69,13 @@ static std::ostream &operator<<(std::ostream &out, const ReadOnlyTensor &t) {
 }  // namespace cs
 
 namespace at {
-bool allclose(const cs::ReadOnlyTensor &t1, const at::Tensor &t2,
-              double rtol = 1e-05, double atol = 1e-08, bool equal_nan = false);
-bool allclose(const cs::ReadOnlyTensor &t1, const cs::ReadOnlyTensor &t2,
-              double rtol = 1e-05, double atol = 1e-08, bool equal_nan = false);
-bool allclose(const at::Tensor &t1, const cs::ReadOnlyTensor &t2,
-              double rtol = 1e-05, double atol = 1e-08, bool equal_nan = false);
+CS_API bool allclose(const cs::ReadOnlyTensor &t1, const at::Tensor &t2,
+                     double rtol = 1e-05, double atol = 1e-08,
+                     bool equal_nan = false);
+CS_API bool allclose(const cs::ReadOnlyTensor &t1, const cs::ReadOnlyTensor &t2,
+                     double rtol = 1e-05, double atol = 1e-08,
+                     bool equal_nan = false);
+CS_API bool allclose(const at::Tensor &t1, const cs::ReadOnlyTensor &t2,
+                     double rtol = 1e-05, double atol = 1e-08,
+                     bool equal_nan = false);
 }  // namespace at

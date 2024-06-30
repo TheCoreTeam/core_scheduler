@@ -21,7 +21,7 @@
 #include "threading/scheduler.h"
 
 namespace cs::compute {
-struct Linear {
+struct CS_API Linear {
   struct State : virtual module::State {
     struct Forward {
       Tensor weight;
@@ -38,8 +38,7 @@ struct Linear {
       const bool bias;
     } args;
 
-    State(const Forward &forward, const Backward &backward, const Args &args)
-        : forward{forward}, backward{backward}, args{args} {}
+    State(const Forward &forward, const Backward &backward, const Args &args);
 
     [[nodiscard]] OrderedDict<std::string, Tensor> parameters() const override;
 

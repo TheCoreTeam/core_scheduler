@@ -23,10 +23,10 @@
 #include <arrow/record_batch.h>
 #include <arrow/table.h>
 #include <arrow/type_fwd.h>
-#include <fmt/format.h>
 #include <parquet/arrow/reader.h>
 #include <parquet/arrow/writer.h>
 
+#include "logger.h"
 #include "tensor_impl.h"
 
 namespace cs::module {
@@ -38,23 +38,6 @@ void Module::apply_to_submodules(
     function(qualified_name, child.value());
     child.value()->apply_to_submodules(function, qualified_name);
   }
-}
-
-std::shared_ptr<Module> Module::shared_from_this_checked() const {
-  std::shared_ptr<const Module> ptr;
-  try {
-    ptr = shared_from_this();
-  } catch (const std::bad_weak_ptr&) {
-    CS_ASSERT_TRUE(
-        false,
-        "It looks like you attempted to retrieve your top-level module "
-        "as a shared_ptr, but it is not stored in a shared_ptr. "
-        "Use std::make_shared instead of creating your module on "
-        "the stack, or alternatively do not try to access your top-level "
-        "module at all by passing /*include_self=*/false "
-        "to modules() or named_modules()");
-  }
-  return std::const_pointer_cast<Module>(ptr);
 }
 
 void Module::apply(const ConstNamedModuleApplyFunction& function,

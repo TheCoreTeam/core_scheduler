@@ -24,21 +24,21 @@ namespace cs {
 struct Task {
   struct Impl;
 
-  explicit Task(std::shared_ptr<Impl> impl);
+  CS_API explicit Task(std::shared_ptr<Impl> impl);
 
-  [[nodiscard]] const std::vector<ReadOnlyTensor> &input() const;
+  CS_API [[nodiscard]] const std::vector<ReadOnlyTensor> &input() const;
 
-  [[nodiscard]] const std::vector<Tensor> &output() const;
+  CS_API [[nodiscard]] const std::vector<Tensor> &output() const;
 
-  [[nodiscard]] const char *name() const;
+  CS_API [[nodiscard]] const char *name() const;
 
-  void operator()() const;
+  CS_API void operator()() const;
 
   [[nodiscard]] const std::shared_ptr<Impl> &impl() const;
 
-  void reset();
+  CS_API void reset();
 
-  [[nodiscard]] bool valid() const;
+  CS_API [[nodiscard]] bool valid() const;
 
  private:
   std::shared_ptr<Impl> impl_;

@@ -21,15 +21,15 @@
 
 namespace cs::communication {
 struct AllReduceBucket : Bucket {
-  AllReduceBucket(int64_t byteThreshold, Operation operation);
+  CS_API AllReduceBucket(int64_t byteThreshold, Operation operation);
 
-  void push_back(const Scheduler& scheduler, const Comm& comm,
-                 Tensor tensor) const;
+  CS_API void push_back(const Scheduler& scheduler, const Comm& comm,
+                        Tensor tensor) const;
 };
 
 struct AllReduce {
-  static void runInplace(const Scheduler& scheduler, const Comm& comm,
-                         const std::vector<Tensor>& tensors,
-                         Operation operation);
+  CS_API static void runInplace(const Scheduler& scheduler, const Comm& comm,
+                                const std::vector<Tensor>& tensors,
+                                Operation operation);
 };
 }  // namespace cs::communication

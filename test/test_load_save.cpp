@@ -18,6 +18,7 @@
 #include <ATen/ops/allclose.h>
 #include <ATen/ops/cat.h>
 #include <cuda_fp16.h>
+#include <fmt/format.h>
 #include <gtest/gtest.h>
 #include <torch/nn/modules/normalization.h>
 

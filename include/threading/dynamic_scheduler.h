@@ -19,6 +19,6 @@
 
 namespace cs {
 struct DynamicScheduler : Scheduler {
-  explicit DynamicScheduler(int localRank);
+  CS_API explicit DynamicScheduler(int localRank);
 };
 }  // namespace cs

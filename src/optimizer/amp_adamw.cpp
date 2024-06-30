@@ -18,6 +18,7 @@
 
 #include <c10/cuda/CUDAStream.h>
 
+#include "logger.h"
 #include "module/amp_state.h"
 #include "tensor_impl.h"
 #include "threading/scheduler_impl.h"

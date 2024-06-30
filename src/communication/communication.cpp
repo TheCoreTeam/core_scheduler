@@ -102,6 +102,8 @@ Comm lookupMapOrCreate(const MPI_Comm group, const BackendType backendType) {
 }
 }  // namespace
 
+Comm::Comm(std::shared_ptr<Impl> impl) : impl_{std::move(impl)} {}
+
 const std::shared_ptr<Comm::Impl> &Comm::impl() const { return impl_; }
 
 int64_t Comm::getRank() const { return impl_->backend()->getRank(); }

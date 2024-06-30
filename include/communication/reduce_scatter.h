@@ -21,9 +21,10 @@
 
 namespace cs::communication {
 struct ReduceScatter {
-  static void run(const Scheduler &scheduler, const Comm &comm,
-                  const std::vector<Tensor> &tensorReceive,
-                  const std::vector<std::vector<ReadOnlyTensor>> &tensorSend,
-                  Operation operation);
+  CS_API static void run(
+      const Scheduler &scheduler, const Comm &comm,
+      const std::vector<Tensor> &tensorReceive,
+      const std::vector<std::vector<ReadOnlyTensor>> &tensorSend,
+      Operation operation);
 };
 }  // namespace cs::communication

@@ -19,6 +19,8 @@
 #include <memory>
 #include <vector>
 
+#include "export.h"
+
 namespace cs::data {
 struct Dataset {
   struct Impl;
@@ -31,18 +33,18 @@ struct Dataset {
 
 // This API is not stable
 struct LlmDataset : Dataset {
-  explicit LlmDataset(const std::string &directory);
+  CS_API explicit LlmDataset(const std::string &directory);
 
   void fillBatch(const std::vector<std::int64_t *> &ptrs,
                  const std::vector<std::int64_t> &ld, std::int64_t startingRow,
                  std::int64_t batchSize) const;
 
-  [[nodiscard]] std::int64_t attributeNum() const;
+  CS_API [[nodiscard]] std::int64_t attributeNum() const;
 
-  [[nodiscard]] const std::vector<std::string> &attributeNames() const;
+  CS_API [[nodiscard]] const std::vector<std::string> &attributeNames() const;
 
-  [[nodiscard]] std::int64_t rows() const;
+  CS_API [[nodiscard]] std::int64_t rows() const;
 
-  [[nodiscard]] std::int64_t cols() const;
+  CS_API [[nodiscard]] std::int64_t cols() const;
 };
 }  // namespace cs::data

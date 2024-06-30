@@ -21,8 +21,8 @@
 
 namespace cs::communication {
 struct AllGather {
-  static void run(const Scheduler &scheduler, const Comm &comm,
-                  const std::vector<std::vector<Tensor>> &tensorReceive,
-                  const std::vector<ReadOnlyTensor> &tensorSend);
+  CS_API static void run(const Scheduler &scheduler, const Comm &comm,
+                         const std::vector<std::vector<Tensor>> &tensorReceive,
+                         const std::vector<ReadOnlyTensor> &tensorSend);
 };
 }  // namespace cs::communication

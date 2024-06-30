@@ -15,7 +15,6 @@
  */
 
 #pragma once
-#include <fmt/format.h>
 #include <nvtx3/nvToolsExt.h>
 
 namespace cs {

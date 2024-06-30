@@ -17,6 +17,8 @@
 #pragma once
 #include <cstdint>
 
+#include "export.h"
+
 namespace cs {
-void manual_seed(int64_t seed);
+CS_API void manual_seed(int64_t seed);
 }

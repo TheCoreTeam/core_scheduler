@@ -18,9 +18,7 @@
 
 #include <torch/csrc/api/include/torch/nn/pimpl.h>
 
-#define CS_API TORCH_API
-
-#define CS_MODULE_IMPL(Name, ImplType)                               \
+#define CS_MODULE_IMPL(Name, ImplType)                                 \
   class Name : public torch::nn::ModuleHolder<ImplType> { /* NOLINT */ \
    public:                                                             \
     using torch::nn::ModuleHolder<ImplType>::ModuleHolder;             \

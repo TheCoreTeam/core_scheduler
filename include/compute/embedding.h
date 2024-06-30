@@ -21,7 +21,7 @@
 #include "threading/scheduler.h"
 
 namespace cs::compute {
-struct Embedding {
+struct CS_API Embedding {
   struct State final : module::State {
     struct Forward {
       Tensor weight;
@@ -40,8 +40,7 @@ struct Embedding {
       bool sparse;
     } args;
 
-    State(const Forward &forward, const Backward &backward, const Args &args)
-        : forward{forward}, backward{backward}, args{args} {}
+    State(const Forward &forward, const Backward &backward, const Args &args);
 
     [[nodiscard]] OrderedDict<std::string, Tensor> parameters() const override;
 
