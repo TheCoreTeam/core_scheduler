@@ -22,8 +22,6 @@
 
 namespace cs::module {
 struct AmpState : virtual State {
-  [[nodiscard]] virtual OrderedDict<std::string, Tensor> parametersFp32() const;
-
-  [[nodiscard]] OrderedDict<std::string, Tensor> parameters() const override;
+  [[nodiscard]] virtual OrderedDict<std::string, Tensor> parametersHighPrecision() const;
 };
 }  // namespace cs::module

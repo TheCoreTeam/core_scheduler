@@ -26,15 +26,17 @@
 
 namespace cs::compute {
 AmpGeluLinear::State::State(const Forward& forward,
-                            const ForwardFp32& forwardFp32,
+                            const ForwardHighPrecision& forwardHighPrecision,
                             const Backward& backward, const Args& args)
-    : GeluLinear::State{forward, backward, args}, forwardFp32{forwardFp32} {}
+    : GeluLinear::State{forward, backward, args},
+      forwardHighPrecision{forwardHighPrecision} {}
 
-OrderedDict<std::string, Tensor> AmpGeluLinear::State::parametersFp32() const {
+OrderedDict<std::string, Tensor> AmpGeluLinear::State::parametersHighPrecision()
+    const {
   OrderedDict<std::string, Tensor> dict;
-  dict.insert("weight", forwardFp32.weight);
+  dict.insert("weight", forwardHighPrecision.weight);
   if (args.bias) {
-    dict.insert("bias", forwardFp32.bias);
+    dict.insert("bias", forwardHighPrecision.bias);
   }
   return dict;
 }
@@ -96,7 +98,7 @@ std::shared_ptr<AmpGeluLinear::State> AmpGeluLinear::init(
                                          options.out_futures()})});
     return std::make_shared<State>(
         State::Forward{std::move(weight), std::move(bias)},
-        State::ForwardFp32{std::move(weightFp32), std::move(biasFp32)},
+        State::ForwardHighPrecision{std::move(weightFp32), std::move(biasFp32)},
         State::Backward{}, State::Args{options.bias()});
   } else {
     struct Impl : Task::Impl {
@@ -131,10 +133,10 @@ std::shared_ptr<AmpGeluLinear::State> AmpGeluLinear::init(
                                          tensorOptions,
                                          options.in_futures(),
                                          options.out_futures()})});
-    return std::make_shared<State>(State::Forward{std::move(weight)},
-                                   State::ForwardFp32{std::move(weightFp32)},
-                                   State::Backward{},
-                                   State::Args{options.bias()});
+    return std::make_shared<State>(
+        State::Forward{std::move(weight)},
+        State::ForwardHighPrecision{std::move(weightFp32)}, State::Backward{},
+        State::Args{options.bias()});
   }
 }
 }  // namespace cs::compute
