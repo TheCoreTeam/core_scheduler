@@ -32,7 +32,7 @@ struct ThreadPoolCompute;
 }
 
 namespace cs::optimizer {
-struct AdamW {
+struct CS_API AdamW {
   AdamW() = delete;
 
   struct State final : module::OptimizerState {
@@ -51,8 +51,7 @@ struct AdamW {
       long t = 0;
     } options;
 
-    State(const Tensors &tensors, const Options &options)
-        : tensors{tensors}, options{options} {}
+    State(const Tensors &tensors, const Options &options);
   };
 
   struct Options {

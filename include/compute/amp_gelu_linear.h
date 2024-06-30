@@ -21,7 +21,7 @@
 #include "threading/scheduler.h"
 
 namespace cs::compute {
-struct AmpGeluLinear {
+struct CS_API AmpGeluLinear {
   struct State final : module::AmpState, GeluLinear::State {
     using Forward = GeluLinear::State::Forward;
     using Backward = GeluLinear::State::Backward;
@@ -32,11 +32,14 @@ struct AmpGeluLinear {
       Tensor bias{};
     } forwardHighPrecision;
 
-    State(const Forward &forward, const ForwardHighPrecision &forwardHighPrecision,
+    State(const Forward &forward,
+          const ForwardHighPrecision &forwardHighPrecision,
           const Backward &backward, const Args &args);
 
     [[nodiscard]] OrderedDict<std::string, Tensor> parametersHighPrecision()
         const override;
+
+    [[nodiscard]] OrderedDict<std::string, Tensor> parameters() const override;
   };
 
   using Options = GeluLinear::Options;

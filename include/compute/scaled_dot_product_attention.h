@@ -20,7 +20,7 @@
 #include "threading/scheduler.h"
 
 namespace cs::compute {
-struct ScaledDotProductFlashAttention {
+struct CS_API ScaledDotProductFlashAttention {
   struct State {
     struct Forward {
     } forward;
@@ -70,7 +70,7 @@ struct ScaledDotProductFlashAttention {
                                         const ReadOnlyTensor &grad_out);
 };
 
-struct ScaledDotProductCuDnn {
+struct CS_API ScaledDotProductCuDnn {
   struct State {
     struct Forward {
     } forward;

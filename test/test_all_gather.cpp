@@ -22,7 +22,7 @@
 #include "communication/all_gather.h"
 #include "communication/communication.h"
 #include "compute/utils.h"
-#include "logger.h"
+#include "helper.h"
 #include "memory/to_torch.h"
 #include "threading/dynamic_scheduler.h"
 

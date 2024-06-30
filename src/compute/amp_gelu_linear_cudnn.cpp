@@ -41,6 +41,10 @@ OrderedDict<std::string, Tensor> AmpGeluLinear::State::parametersHighPrecision()
   return dict;
 }
 
+OrderedDict<std::string, Tensor> AmpGeluLinear::State::parameters() const {
+  return parametersHighPrecision();
+}
+
 std::shared_ptr<AmpGeluLinear::State> AmpGeluLinear::init(
     const Scheduler& scheduler, const Options& options) {
   TensorOptions tensorOptions{};

@@ -31,6 +31,7 @@ add_executable(core_scheduler_tests
 target_link_libraries(core_scheduler_tests PRIVATE
         core_scheduler
         GTest::gtest
+        fmt::fmt
 )
 
 target_compile_options(core_scheduler_tests PRIVATE
@@ -53,6 +54,8 @@ target_include_directories(core_scheduler_communication_tests PRIVATE
 target_link_libraries(core_scheduler_communication_tests PRIVATE
         core_scheduler
         GTest::gtest
+        MPI::MPI_C
+        fmt::fmt
 )
 
 target_compile_options(core_scheduler_communication_tests PRIVATE

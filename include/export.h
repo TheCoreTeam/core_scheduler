@@ -1,8 +1,8 @@
 /*
- * Copyright (c) 2024 The Core team
+ * Copyright (c) 2024 The Core Team
  *
  * Licensed under the Apache License, Version 2.0;
- * you may not use this file except in compliance with the License.
+ * You may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
  *     http://www.apache.org/licenses/LICENSE-2.0
@@ -14,15 +14,6 @@
  * limitations under the License.
  */
 
-#include <gtest/gtest.h>
-#include <mpi.h>
+#include <c10/macros/Export.h>
 
-#include "helper.h"
-
-int main(int argc, char **argv) {
-  CHECK_MPI(MPI_Init(&argc, &argv));
-  ::testing::InitGoogleTest(&argc, argv);
-  const auto error = RUN_ALL_TESTS();
-  CHECK_MPI(MPI_Finalize());
-  return error;
-}
+#define CS_API TORCH_API

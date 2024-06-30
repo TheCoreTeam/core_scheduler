@@ -311,6 +311,10 @@ create_gelu_linear_backward_weight_accumulate_graph(
 }
 
 namespace cs::compute {
+GeluLinear::State::State(const Forward &forward, const Backward &backward,
+                         const Args &args)
+    : forward{forward}, backward{backward}, args{args} {}
+
 OrderedDict<std::string, Tensor> GeluLinear::State::parameters() const {
   OrderedDict<std::string, Tensor> dict;
   dict.insert("weight", forward.weight);

@@ -30,7 +30,7 @@ struct ThreadPoolCompute;
 }
 
 namespace cs::optimizer {
-struct AmpAdamW : AdamW {
+struct CS_API AmpAdamW : AdamW {
   AmpAdamW() = delete;
 
   using State = AdamW::State;

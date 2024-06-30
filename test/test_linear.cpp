@@ -19,7 +19,6 @@
 
 #include "compute/linear.h"
 #include "compute/utils.h"
-#include "logger.h"
 #include "memory/to_torch.h"
 #include "module/linear.h"
 #include "threading/dynamic_scheduler.h"

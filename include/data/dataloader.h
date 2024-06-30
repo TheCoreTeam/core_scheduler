@@ -27,7 +27,7 @@ struct DataLoader {
 
   [[nodiscard]] const std::shared_ptr<Impl> &impl() const;
 
-  [[nodiscard]] int64_t iterationsPerEpoch() const;
+  CS_API [[nodiscard]] int64_t iterationsPerEpoch() const;
 
  protected:
   std::shared_ptr<Impl> impl_;
@@ -35,11 +35,11 @@ struct DataLoader {
 
 // This API is not stable
 struct LlmDataLoader : DataLoader {
-  std::unordered_map<std::string, Tensor> load(
+  CS_API std::unordered_map<std::string, Tensor> load(
       const Scheduler &scheduler) const;
 
-  LlmDataLoader(const LlmDataset &dataset, int64_t batchSize,
-                int64_t numWorkers, bool shuffle, int64_t rank,
-                int64_t worldSize);
+  CS_API LlmDataLoader(const LlmDataset &dataset, int64_t batchSize,
+                       int64_t numWorkers, bool shuffle, int64_t rank,
+                       int64_t worldSize);
 };
 }  // namespace cs::data

@@ -22,7 +22,7 @@
 #include "threading/scheduler.h"
 
 namespace cs::compute {
-struct CrossEntropy {
+struct CS_API CrossEntropy {
   struct State {
     struct Forward {
       ReadOnlyTensor weight;

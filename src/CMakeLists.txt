@@ -63,8 +63,9 @@ target_include_directories(core_scheduler_core PRIVATE
 target_link_libraries(core_scheduler_core PRIVATE CUDA::cudart CUDA::nvtx3 nvidia::cudnn_frontend)
 target_link_libraries(core_scheduler_core PRIVATE OpenMP::OpenMP_CXX)
 target_link_libraries(core_scheduler_core PRIVATE arrow_dataset Arrow::arrow_shared Parquet::parquet_shared)
-target_link_libraries(core_scheduler_core PRIVATE hwloc CUDA::nvml)
-target_link_libraries(core_scheduler_core PUBLIC fmt::fmt-header-only spdlog::spdlog_header_only MPI::MPI_C torch)
+target_link_libraries(core_scheduler_core PRIVATE hwloc CUDA::nvml fmt::fmt-header-only spdlog::spdlog_header_only MPI::MPI_C)
+target_link_libraries(core_scheduler_core PUBLIC torch)
+target_compile_options(core_scheduler_core PRIVATE -fvisibility=hidden)
 
 target_compile_definitions(core_scheduler_core PRIVATE -DCORE_SCHEDULER_ENABLE_INTERNAL_BUILD)
 

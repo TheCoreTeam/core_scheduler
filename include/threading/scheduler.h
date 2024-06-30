@@ -17,13 +17,15 @@
 #pragma once
 #include <memory>
 
+#include "export.h"
+
 namespace cs {
 struct Scheduler {
   struct Impl;
 
   [[nodiscard]] const std::shared_ptr<Impl> &impl() const;
 
-  [[nodiscard]] int64_t deviceRank() const;
+  CS_API [[nodiscard]] int64_t deviceRank() const;
 
  protected:
   std::shared_ptr<Impl> impl_;

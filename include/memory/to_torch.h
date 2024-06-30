@@ -19,6 +19,6 @@
 #include "threading/scheduler.h"
 
 namespace cs::memory {
-// dst is not ready immediately! you should wait for src
-at::Tensor toTorch(const Scheduler &scheduler, const ReadOnlyTensor &src);
+CS_API at::Tensor toTorch(const Scheduler &scheduler,
+                          const ReadOnlyTensor &src);
 }  // namespace cs::memory

@@ -15,14 +15,13 @@
  */
 
 #pragma once
-#include "arg.h"
 #include "compute/linear.h"
 #include "module/amp_state.h"
 #include "tensor.h"
 #include "threading/scheduler.h"
 
 namespace cs::compute {
-struct AmpLinear {
+struct CS_API AmpLinear {
   struct State final : module::AmpState, Linear::State {
     using Forward = Linear::State::Forward;
     using Backward = Linear::State::Backward;

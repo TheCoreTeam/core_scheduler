@@ -24,7 +24,6 @@
 #include <iostream>
 
 #include "compute/utils.h"
-#include "logger.h"
 #include "memory/to_torch.h"
 #include "tensor.h"
 #include "threading/dynamic_scheduler.h"

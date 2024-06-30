@@ -15,18 +15,16 @@
  */
 
 #pragma once
-#include <c10/util/Exception.h>
 #include <torch/nn/pimpl.h>
 #include <torch/ordered_dict.h>
 
 #include <memory>
 #include <string>
 
-#include "logger.h"
 #include "module/state.h"
 
 namespace cs::module {
-struct Module : std::enable_shared_from_this<Module> {
+struct CS_API Module : std::enable_shared_from_this<Module> {
   virtual ~Module() = default;
   using NamedModulePointerApplyFunction =
       std::function<void(const std::string&, const std::shared_ptr<Module>&)>;
@@ -36,8 +34,6 @@ struct Module : std::enable_shared_from_this<Module> {
   void apply_to_submodules(
       const NamedModulePointerApplyFunction& function,
       const std::string& name_prefix = std::string()) const;
-
-  std::shared_ptr<Module> shared_from_this_checked() const;
 
   void apply(const ConstNamedModuleApplyFunction& function,
              const std::string& name_prefix = {}) const;
@@ -68,9 +64,13 @@ struct Module : std::enable_shared_from_this<Module> {
 template <typename ModuleType>
 std::shared_ptr<ModuleType> Module::register_module(
     std::string name, std::shared_ptr<ModuleType> module) {
-  CS_ASSERT_TRUE(!name.empty(), "Submodule name must not be empty");
-  CS_ASSERT_TRUE(name.find('.') == std::string::npos,
-                   "Submodule name must not contain a dot (got '", name, "')");
+  if (name.empty()) {
+    throw std::runtime_error("Submodule name must not be empty");
+  }
+  if (name.find('.') != std::string::npos) {
+    throw std::runtime_error("Submodule name must not contain a dot (got '" +
+                             name + "')");
+  }
   auto& base_module = children_.insert(std::move(name), std::move(module));
   return std::dynamic_pointer_cast<ModuleType>(base_module);
 }
@@ -83,7 +83,7 @@ std::shared_ptr<ModuleType> Module::register_module(
 }  // namespace cs::module
 
 namespace cs {
-void save(const module::Module& module, const std::string& path);
+CS_API void save(const module::Module& module, const std::string& path);
 
 template <typename Module, typename = std::enable_if_t<
                                !std::is_base_of_v<module::Module, Module> &&
@@ -92,7 +92,7 @@ static void save(const Module& module, const std::string& path) {
   save(*module, path);
 }
 
-void load(const module::Module& module, const std::string& path);
+CS_API void load(const module::Module& module, const std::string& path);
 
 template <typename Module, typename = std::enable_if_t<
                                !std::is_base_of_v<module::Module, Module> &&

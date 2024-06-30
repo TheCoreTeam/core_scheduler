@@ -24,7 +24,7 @@ namespace cs {
 
 spdlog::logger &logger() {
   static spdlog::logger _logger{
-      "CS.cpp", std::make_shared<spdlog::sinks::stdout_color_sink_mt>()};
+      "CS", std::make_shared<spdlog::sinks::stdout_color_sink_mt>()};
   return _logger;
 }
 }  // namespace cs
