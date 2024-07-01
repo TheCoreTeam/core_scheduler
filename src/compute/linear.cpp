@@ -198,27 +198,25 @@ void Linear::backwardParameter(const Scheduler &scheduler,
         const auto reshapedGradOutput = input()[0].impl()->tensor().reshape(
             {-1, input()[0].impl()->tensor().size(-1)});
         const auto transposedGradOutput = reshapedGradOutput.t();
-        const auto reshapedInput = input()[1].impl()->tensor().reshape(
+        const auto reshapedInput = input()[1].impl()->tensor().view(
             {-1, input()[1].impl()->tensor().size(-1)});
         const auto result = at::matmul(transposedGradOutput, reshapedInput);
         output()[0].impl()->tensor() += result;
-        intermediate().resize(4);
+        intermediate().reserve(3);
         intermediate().push_back(reshapedGradOutput);
         intermediate().push_back(transposedGradOutput);
-        intermediate().push_back(reshapedInput);
         intermediate().push_back(result);
       } else {
         const auto reshapedGradOutput = input()[0].impl()->tensor().reshape(
             {-1, input()[0].impl()->tensor().size(-1)});
         const auto transposedGradOutput = reshapedGradOutput.t();
-        const auto reshapedInput = input()[1].impl()->tensor().reshape(
+        const auto reshapedInput = input()[1].impl()->tensor().view(
             {-1, input()[1].impl()->tensor().size(-1)});
         const auto result = at::matmul(transposedGradOutput, reshapedInput);
         output()[0].impl()->tensor() = result;
-        intermediate().resize(3);
+        intermediate().reserve(2);
         intermediate().push_back(reshapedGradOutput);
         intermediate().push_back(transposedGradOutput);
-        intermediate().push_back(reshapedInput);
       }
     }
     [[nodiscard]] const char *name() const override {

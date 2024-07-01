@@ -122,7 +122,7 @@ cudnnHandle_t getCurrentCuDnnHandle();
 
 std::shared_ptr<cudnn_frontend::graph::Graph> create_gelu_linear_forward_graph(
     const cudnn_frontend::DataType_t input_type, const int64_t b,
-    const int64_t m, const int64_t n, const int64_t k, const bool with_bias) {
+    const int64_t n, const int64_t k, const bool with_bias) {
   auto graph = std::make_shared<cudnn_frontend::graph::Graph>();
 
   graph->set_intermediate_data_type(cudnn_frontend::DataType_t::FLOAT)
@@ -131,8 +131,8 @@ std::shared_ptr<cudnn_frontend::graph::Graph> create_gelu_linear_forward_graph(
                              .set_name("X")
                              .set_uid(X_UID)
                              .set_data_type(input_type)
-                             .set_dim({1, b * m, k})
-                             .set_stride({b * m * k, k, 1}));
+                             .set_dim({1, b, k})
+                             .set_stride({b * k, k, 1}));
 
   auto pw_gelu_attributes =
       cudnn_frontend::graph::Pointwise_attributes()
@@ -178,7 +178,7 @@ std::shared_ptr<cudnn_frontend::graph::Graph> create_gelu_linear_forward_graph(
 std::shared_ptr<cudnn_frontend::graph::Graph>
 create_gelu_linear_backward_input_graph(
     const cudnn_frontend::DataType_t input_type, const int64_t b,
-    const int64_t m, const int64_t n, const int64_t k) {
+    const int64_t n, const int64_t k) {
   auto graph = std::make_shared<cudnn_frontend::graph::Graph>();
 
   graph->set_intermediate_data_type(cudnn_frontend::DataType_t::FLOAT)
@@ -187,8 +187,8 @@ create_gelu_linear_backward_input_graph(
                               .set_name("DY")
                               .set_uid(DY_UID)
                               .set_data_type(input_type)
-                              .set_dim({1, b * m, n})
-                              .set_stride({b * m * n, n, 1}));
+                              .set_dim({1, b, n})
+                              .set_stride({b * n, n, 1}));
 
   auto W = graph->tensor(cudnn_frontend::graph::Tensor_attributes()
                              .set_name("W")
@@ -206,8 +206,8 @@ create_gelu_linear_backward_input_graph(
                              .set_name("X")
                              .set_uid(X_UID)
                              .set_data_type(input_type)
-                             .set_dim({1, b * m, k})
-                             .set_stride({b * m * k, k, 1}));
+                             .set_dim({1, b, k})
+                             .set_stride({b * k, k, 1}));
 
   auto dgelu_attributes =
       cudnn_frontend::graph::Pointwise_attributes().set_name("GeLU").set_mode(
@@ -222,7 +222,7 @@ create_gelu_linear_backward_input_graph(
 std::shared_ptr<cudnn_frontend::graph::Graph>
 create_gelu_linear_backward_weight_graph(
     const cudnn_frontend::DataType_t input_type, const int64_t b,
-    const int64_t m, const int64_t n, const int64_t k) {
+    const int64_t n, const int64_t k) {
   auto graph = std::make_shared<cudnn_frontend::graph::Graph>();
 
   graph->set_intermediate_data_type(cudnn_frontend::DataType_t::FLOAT)
@@ -231,8 +231,8 @@ create_gelu_linear_backward_weight_graph(
                              .set_name("X")
                              .set_uid(X_UID)
                              .set_data_type(input_type)
-                             .set_dim({1, b * m, k})
-                             .set_stride({b * m * k, k, 1}));
+                             .set_dim({1, b, k})
+                             .set_stride({b * k, k, 1}));
 
   auto gelu_attributes =
       cudnn_frontend::graph::Pointwise_attributes().set_name("GeLU").set_mode(
@@ -245,8 +245,8 @@ create_gelu_linear_backward_weight_graph(
                               .set_name("DY")
                               .set_uid(DY_UID)
                               .set_data_type(input_type)
-                              .set_dim({1, n, b * m})
-                              .set_stride({n * b * m, 1, n}));
+                              .set_dim({1, n, b})
+                              .set_stride({n * b, 1, n}));
 
   auto matmul_attributes =
       cudnn_frontend::graph::Matmul_attributes().set_name("GEMM");
@@ -261,7 +261,7 @@ create_gelu_linear_backward_weight_graph(
 std::shared_ptr<cudnn_frontend::graph::Graph>
 create_gelu_linear_backward_weight_accumulate_graph(
     const cudnn_frontend::DataType_t input_type, const int64_t b,
-    const int64_t m, const int64_t n, const int64_t k) {
+    const int64_t n, const int64_t k) {
   auto graph = std::make_shared<cudnn_frontend::graph::Graph>();
 
   graph->set_intermediate_data_type(cudnn_frontend::DataType_t::FLOAT)
@@ -270,8 +270,8 @@ create_gelu_linear_backward_weight_accumulate_graph(
                              .set_name("X")
                              .set_uid(X_UID)
                              .set_data_type(input_type)
-                             .set_dim({1, b * m, k})
-                             .set_stride({b * m * k, k, 1}));
+                             .set_dim({1, b, k})
+                             .set_stride({b * k, k, 1}));
 
   auto gelu_attributes =
       cudnn_frontend::graph::Pointwise_attributes().set_name("GeLU").set_mode(
@@ -284,8 +284,8 @@ create_gelu_linear_backward_weight_accumulate_graph(
                               .set_name("DY")
                               .set_uid(DY_UID)
                               .set_data_type(input_type)
-                              .set_dim({1, n, b * m})
-                              .set_stride({n * b * m, 1, n}));
+                              .set_dim({1, n, b})
+                              .set_stride({n * b, 1, n}));
 
   auto matmul_attributes =
       cudnn_frontend::graph::Matmul_attributes().set_name("GEMM");
@@ -443,23 +443,24 @@ Tensor GeluLinear::forward(const Scheduler &scheduler,
                      "we do not support mixed input type.");
       CS_ASSERT_TRUE(x_cudnn_type != cudnn_frontend::DataType_t::FLOAT,
                      "we do not support float for now.");
-      const int64_t b = x.size(0);
-      const int64_t m = x.size(1);
-      const int64_t k = x.size(2);
+      auto xView = x.view({-1, x.size(-1)});
+      const int64_t b = xView.size(0);
+      const int64_t k = xView.size(1);
       const int64_t n = w.size(0);
       auto graph =
-          create_gelu_linear_forward_graph(x_cudnn_type, b, m, n, k, args.bias);
+          create_gelu_linear_forward_graph(x_cudnn_type, b, n, k, args.bias);
       cache_lookup_pre_built_forward_graph(graph, getCurrentCuDnnHandle());
 
-      auto result = at::empty({b, m, n}, x.options());
+      IntArray size{x.sizes().begin(), x.sizes().end()};
+      size[size.size() - 1] = n;
+      auto result = at::empty(size, x.options());
 
       std::unordered_map<cudnn_frontend::graph::Tensor_attributes::uid_t,
                          void *>
-          variant_pack;
-      variant_pack = {{X_UID, x.data_ptr()},
-                      {W_UID, w.data_ptr()},
-                      {Bias_UID, args.bias ? bias.data_ptr() : nullptr},
-                      {Y_UID, result.data_ptr()}};
+          variant_pack = {{X_UID, x.data_ptr()},
+                          {W_UID, w.data_ptr()},
+                          {Bias_UID, args.bias ? bias.data_ptr() : nullptr},
+                          {Y_UID, result.data_ptr()}};
 
       auto workspace = at::empty({graph->get_workspace_size()},
                                  x.options().dtype(at::kByte));
@@ -494,12 +495,12 @@ Tensor GeluLinear::backwardInput(const Scheduler &scheduler,
         std::vector<ReadOnlyTensor> input /* grad_output, weight, input */)
         : Task::Impl{std::move(output), std::move(input), compute} {}
     void operator()() const override {
-      const auto &grad_output = input()[0].impl()->tensor();
+      auto grad_output = input()[0].impl()->tensor();
       const auto &w = input()[1].impl()->tensor();
-      const auto &x = input()[2].impl()->tensor();
-      const int64_t b = x.size(0);
-      const int64_t m = x.size(1);
-      const int64_t k = x.size(2);
+      auto x = input()[2].impl()->tensor();
+      auto xView = x.view({-1, x.size(-1)});
+      const int64_t b = xView.size(0);
+      const int64_t k = xView.size(1);
       const int64_t n = w.size(0);
       const auto x_cudnn_type = torchToCudnnDataType(x.scalar_type());
       const auto w_cudnn_type = torchToCudnnDataType(w.scalar_type());
@@ -508,7 +509,7 @@ Tensor GeluLinear::backwardInput(const Scheduler &scheduler,
       CS_ASSERT_TRUE(x_cudnn_type != cudnn_frontend::DataType_t::FLOAT,
                      "we do not support float for now.");
       auto graph =
-          create_gelu_linear_backward_input_graph(x_cudnn_type, b, m, n, k);
+          create_gelu_linear_backward_input_graph(x_cudnn_type, b, n, k);
       cache_lookup_pre_built_backward_input_graph(graph,
                                                   getCurrentCuDnnHandle());
 
@@ -557,15 +558,15 @@ void GeluLinear::backwardParameter(const Scheduler &scheduler,
     void operator()() const override {
       const auto &grad_output = input()[0].impl()->tensor();
       const auto &x = input()[1].impl()->tensor();
-      const int64_t b = x.size(0);
-      const int64_t m = x.size(1);
-      const int64_t k = x.size(2);
+      auto xView = x.view({-1, x.size(-1)});
+      const int64_t b = xView.size(0);
+      const int64_t k = xView.size(1);
       const int64_t n = grad_output.size(-1);
       const auto x_cudnn_type = torchToCudnnDataType(x.scalar_type());
 
       if (output()[0].impl()->tensor().defined()) {
         auto graph = create_gelu_linear_backward_weight_accumulate_graph(
-            x_cudnn_type, b, m, n, k);
+            x_cudnn_type, b, n, k);
         cache_lookup_pre_built_backward_weight_graph(graph,
                                                      getCurrentCuDnnHandle());
 
@@ -587,7 +588,7 @@ void GeluLinear::backwardParameter(const Scheduler &scheduler,
         intermediate().emplace_back(std::move(workspace));
       } else {
         auto graph =
-            create_gelu_linear_backward_weight_graph(x_cudnn_type, b, m, n, k);
+            create_gelu_linear_backward_weight_graph(x_cudnn_type, b, n, k);
         cache_lookup_pre_built_backward_weight_graph(graph,
                                                      getCurrentCuDnnHandle());
 
@@ -617,7 +618,29 @@ void GeluLinear::backwardParameter(const Scheduler &scheduler,
   scheduler.impl()->submit(Task{std::make_shared<Impl>(Impl{
       {state->forward.grad_weight}, {grad_output, state->backward.input}})});
   if (state->args.bias) {
-    // TODO(Jie): implement this
+    struct Impl : Task::Impl {
+      explicit Impl(std::vector<Tensor> output /* grad_bias */,
+                    std::vector<ReadOnlyTensor> input /* grad_output */)
+          : Task::Impl{std::move(output), std::move(input), compute} {}
+      void operator()() const override {
+        const auto &grad_output = input()[0].impl()->tensor();
+
+        if (output()[0].impl()->tensor().defined()) {
+          auto grad = grad_output.view({-1, grad_output.size(-1)}).sum({0});
+          output()[0].impl()->tensor() += grad;
+          intermediate().push_back(grad);
+        } else {
+          output()[0].impl()->tensor() =
+              grad_output.view({-1, grad_output.size(-1)}).sum({0});
+        }
+      }
+      [[nodiscard]] const char *name() const override {
+        return "cs::compute::GeluLinear::backwardBias";
+      }
+    };
+
+    scheduler.impl()->submit(Task{std::make_shared<Impl>(
+        Impl{{state->forward.grad_bias}, {grad_output}})});
   }
   ++state->backward.inputSetCount;
   if (state->backward.inputSetCount == 2) {

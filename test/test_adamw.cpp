@@ -47,7 +47,7 @@ struct TypeToTorch<double> {
   static const at::ScalarType type = torch::kDouble;
 };
 
-class TestCSAdamW : public ::testing::Test {
+class TestAdamW : public ::testing::Test {
  protected:
   cs::DynamicScheduler scheduler{0};
 
@@ -59,7 +59,7 @@ class TestCSAdamW : public ::testing::Test {
 };
 
 template <typename Element>
-void TestCSAdamW::TestFunctionalRoutine(const int size) {
+void TestAdamW::TestFunctionalRoutine(const int size) {
   const double lr = 1;
   const double beta1 = 0.9;
   const double beta2 = 0.999;
@@ -102,20 +102,16 @@ void TestCSAdamW::TestFunctionalRoutine(const int size) {
   ASSERT_TRUE(torch::allclose(v_torch, state->tensors.v, 1e-4, 1e-5));
 }
 
-TEST_F(TestCSAdamW, TestFunctionalF32_128) {
-  TestFunctionalRoutine<float>(128);
-}
+TEST_F(TestAdamW, TestFunctionalF32_128) { TestFunctionalRoutine<float>(128); }
 
-TEST_F(TestCSAdamW, TestFunctionalF32_512) {
-  TestFunctionalRoutine<float>(512);
-}
+TEST_F(TestAdamW, TestFunctionalF32_512) { TestFunctionalRoutine<float>(512); }
 
-TEST_F(TestCSAdamW, TestFunctionalF32_1024) {
+TEST_F(TestAdamW, TestFunctionalF32_1024) {
   TestFunctionalRoutine<float>(1024);
 }
 
 template <typename Element>
-void TestCSAdamW::TestModuleRoutine(const int size) {
+void TestAdamW::TestModuleRoutine(const int size) {
   const double lr = 1;
   const double beta1 = 0.9;
   const double beta2 = 0.999;
@@ -178,8 +174,8 @@ void TestCSAdamW::TestModuleRoutine(const int size) {
                               1e-4, 1e-5));
 }
 
-TEST_F(TestCSAdamW, TestModuleF32_128) { TestModuleRoutine<float>(128); }
+TEST_F(TestAdamW, TestModuleF32_128) { TestModuleRoutine<float>(128); }
 
-TEST_F(TestCSAdamW, TestModuleF32_512) { TestModuleRoutine<float>(512); }
+TEST_F(TestAdamW, TestModuleF32_512) { TestModuleRoutine<float>(512); }
 
-TEST_F(TestCSAdamW, TestModuleF32_1024) { TestModuleRoutine<float>(1024); }
+TEST_F(TestAdamW, TestModuleF32_1024) { TestModuleRoutine<float>(1024); }
