@@ -59,50 +59,6 @@ class GeluLinearTestFixture : public ::testing::Test {
 
 namespace {
 template <typename Element>
-void TestBackwardT(cs::Scheduler& scheduler) {
-  const int m = 32, n = 16, k = 4, s = 3;
-  const torch::Device device = torch::kCUDA;
-  const torch::Dtype dtype = TypeToTorch<Element>::type;
-  const auto option = torch::TensorOptions().dtype(dtype).device(device);
-  auto x = cs::compute::Utils::randn(scheduler, {m, s, k}, option);
-  auto state = cs::compute::Linear::init(
-      scheduler,
-      cs::compute::Linear::Options{k, n}.bias(false).device(device).dtype(
-          dtype));
-  auto y = cs::compute::Linear::forward(scheduler, state, x);
-  auto yGrad = cs::compute::Utils::randn_like(scheduler, y);
-  auto dx = cs::compute::Linear::backwardInput(scheduler, state, yGrad);
-  cs::compute::Linear::backwardParameter(scheduler, state, yGrad);
-  dx.wait();
-  state->forward.grad_weight.wait();
-  auto xRef = cs::memory::toTorch(scheduler, x);
-  x.wait();
-  xRef.requires_grad_(true);
-  auto wRef = cs::memory::toTorch(scheduler, state->forward.weight);
-  state->forward.weight.wait();
-  wRef.requires_grad_(true);
-  auto yRef = torch::linear(xRef, wRef);
-  auto yGradRef = cs::memory::toTorch(scheduler, yGrad);
-  yGrad.wait();
-  yRef.backward(yGradRef);
-
-  ASSERT_TRUE(torch::allclose(y, yRef));
-  ASSERT_TRUE(torch::allclose(dx, xRef.grad()));
-  ASSERT_TRUE(torch::allclose(state->forward.grad_weight, wRef.grad()));
-}
-}  // namespace
-
-// TEST_F(GeluLinearTestFixture, TestBackwardF16) {
-//   TestBackwardT<nv_half>(scheduler_);
-// }
-// TEST_F(GeluLinearTestFixture, TestBackwardF32) {
-// TestBackwardT<float>(scheduler_); } TEST_F(GeluLinearTestFixture,
-// TestBackwardF64) {
-//   TestBackwardT<double>(scheduler_);
-// }
-
-namespace {
-template <typename Element>
 void TestModuleT(cs::Scheduler& scheduler, bool with_bias = true) {
   const int m = 128, n = 128, k = 128, s = 3;
   const torch::Device device = torch::kCUDA;
@@ -128,8 +84,9 @@ void TestModuleT(cs::Scheduler& scheduler, bool with_bias = true) {
   wRef.requires_grad_(true);
 
   at::Tensor yRef;
+  at::Tensor biasRef;
   if (with_bias) {
-    auto biasRef = cs::memory::toTorch(scheduler, fc->state()->forward.bias);
+    biasRef = cs::memory::toTorch(scheduler, fc->state()->forward.bias);
     fc->state()->forward.bias.wait();
     biasRef.requires_grad_(true);
     yRef = torch::linear(at::gelu(xRef), wRef, biasRef);
@@ -147,18 +104,22 @@ void TestModuleT(cs::Scheduler& scheduler, bool with_bias = true) {
   ASSERT_TRUE(torch::allclose(dx, xRef.grad(), 1e-4, 3e-2));
   ASSERT_TRUE(torch::allclose(fc->state()->forward.grad_weight, wRef.grad(),
                               1e-4, 0.0625));
+  if (with_bias) {
+    ASSERT_TRUE(torch::allclose(fc->state()->forward.grad_bias, biasRef.grad(),
+                                1e-4, 0.0625));
+  }
 }
 }  // namespace
 
-// TEST_F(GeluLinearTestFixture, TestModuleF16WithBias) {
-//   TestModuleT<nv_half>(scheduler_, true);
-// }
+TEST_F(GeluLinearTestFixture, TestModuleF16WithBias) {
+  TestModuleT<nv_half>(scheduler_, true);
+}
 TEST_F(GeluLinearTestFixture, TestModuleF16WithoutBias) {
   TestModuleT<nv_half>(scheduler_, false);
 }
-// TEST_F(GeluLinearTestFixture, TestModuleBF16WithBias) {
-//   TestModuleT<nv_bfloat16>(scheduler_, true);
-// }
+TEST_F(GeluLinearTestFixture, TestModuleBF16WithBias) {
+  TestModuleT<nv_bfloat16>(scheduler_, true);
+}
 TEST_F(GeluLinearTestFixture, TestModuleBF16WithoutBias) {
   TestModuleT<nv_bfloat16>(scheduler_, false);
 }
