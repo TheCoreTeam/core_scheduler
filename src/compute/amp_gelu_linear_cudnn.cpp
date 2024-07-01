@@ -70,21 +70,21 @@ std::shared_ptr<AmpGeluLinear::State> AmpGeluLinear::init(
             in_futures{in_futures},
             out_futures{out_futures} {}
       void operator()() const override {
-        const auto weight_ = torch::empty({out_futures, in_futures});
-        output()[0].impl()->tensor() = weight_;
-        const auto bias_ = torch::empty({out_futures}, options);
-        output()[1].impl()->tensor() = bias_;
-        torch::nn::init::kaiming_uniform_(output()[0].impl()->tensor(),
+        const auto weight =
+            torch::empty({out_futures, in_futures}, options.dtype(at::kFloat));
+        output()[2].impl()->tensor() = weight;
+        const auto bias =
+            torch::empty({out_futures}, options.dtype(at::kFloat));
+        output()[3].impl()->tensor() = bias;
+        torch::nn::init::kaiming_uniform_(output()[2].impl()->tensor(),
                                           std::sqrt(5));
         auto [fan_in, fan_out] = torch::nn::init::_calculate_fan_in_and_fan_out(
-            output()[0].impl()->tensor());
+            output()[2].impl()->tensor());
         const auto bound = 1 / std::sqrt(fan_in);
-        torch::nn::init::uniform_(output()[1].impl()->tensor(), -bound, bound);
+        torch::nn::init::uniform_(output()[3].impl()->tensor(), -bound, bound);
 
-        output()[2].impl()->tensor() =
-            output()[0].impl()->tensor().to(options.dtype(at::kFloat));
-        output()[3].impl()->tensor() =
-            output()[1].impl()->tensor().to(options.dtype(at::kFloat));
+        output()[0].impl()->tensor() = output()[2].impl()->tensor().to(options);
+        output()[1].impl()->tensor() = output()[3].impl()->tensor().to(options);
       }
       [[nodiscard]] const char* name() const override {
         return "cs::compute::AmpGeluLinear::init";
@@ -118,12 +118,12 @@ std::shared_ptr<AmpGeluLinear::State> AmpGeluLinear::init(
             in_futures{in_futures},
             out_futures{out_futures} {}
       void operator()() const override {
-        const auto weight_ = torch::empty({out_futures, in_futures}, options);
-        output()[0].impl()->tensor() = weight_;
-        torch::nn::init::kaiming_uniform_(output()[0].impl()->tensor(),
+        const auto weight =
+            torch::empty({out_futures, in_futures}, options.dtype(at::kFloat));
+        output()[1].impl()->tensor() = weight;
+        torch::nn::init::kaiming_uniform_(output()[1].impl()->tensor(),
                                           std::sqrt(5));
-        output()[1].impl()->tensor() =
-            output()[0].impl()->tensor().to(options.dtype(at::kFloat));
+        output()[0].impl()->tensor() = output()[1].impl()->tensor().to(options);
       }
       [[nodiscard]] const char* name() const override {
         return "cs::compute::AmpGeluLinear::init";
