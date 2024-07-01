@@ -55,8 +55,6 @@ OrderedDict<std::string, module::State::Increment> Linear::State::increments() {
 
 std::shared_ptr<Linear::State> Linear::init(const Scheduler &scheduler,
                                             const Options &options) {
-  CS_ASSERT_TRUE(options.bias() == false, "we do not supprot bias now");
-  // ReSharper disable once CppDFAUnreachableCode
   TensorOptions tensorOptions{};
   if (options.device().has_value()) {
     tensorOptions = tensorOptions.device(options.device().value());
@@ -144,24 +142,46 @@ std::shared_ptr<Linear::State> Linear::init(const Scheduler &scheduler,
 Tensor Linear::forward(const Scheduler &scheduler,
                        const std::shared_ptr<State> &state,
                        const ReadOnlyTensor &input) {
-  struct Impl : Task::Impl {
-    explicit Impl(std::vector<Tensor> output /* output */,
-                  std::vector<ReadOnlyTensor> input /* input, weight */)
-        : Task::Impl{std::move(output), std::move(input), compute} {}
-    void operator()() const override {
-      output()[0].impl()->tensor() =
-          at::linear(input()[0].impl()->tensor(), input()[1].impl()->tensor());
-    }
-    [[nodiscard]] const char *name() const override {
-      return "cs::compute::Linear::forward";
-    }
-  };
+  if (state->args.bias) {
+    struct Impl : Task::Impl {
+      explicit Impl(std::vector<Tensor> output /* output */,
+                    std::vector<ReadOnlyTensor> input /* input, weight, bias */)
+          : Task::Impl{std::move(output), std::move(input), compute} {}
+      void operator()() const override {
+        output()[0].impl()->tensor() =
+            at::linear(input()[0].impl()->tensor(), input()[1].impl()->tensor(),
+                       input()[2].impl()->tensor());
+      }
+      [[nodiscard]] const char *name() const override {
+        return "cs::compute::Linear::forward";
+      }
+    };
 
-  Tensor output;
-  state->backward.input = input;
-  scheduler.impl()->submit(Task{
-      std::make_shared<Impl>(Impl{{output}, {input, state->forward.weight}})});
-  return output;
+    Tensor output;
+    state->backward.input = input;
+    scheduler.impl()->submit(Task{std::make_shared<Impl>(
+        Impl{{output}, {input, state->forward.weight, state->forward.bias}})});
+    return output;
+  } else {
+    struct Impl : Task::Impl {
+      explicit Impl(std::vector<Tensor> output /* output */,
+                    std::vector<ReadOnlyTensor> input /* input, weight */)
+          : Task::Impl{std::move(output), std::move(input), compute} {}
+      void operator()() const override {
+        output()[0].impl()->tensor() = at::linear(input()[0].impl()->tensor(),
+                                                  input()[1].impl()->tensor());
+      }
+      [[nodiscard]] const char *name() const override {
+        return "cs::compute::Linear::forward";
+      }
+    };
+
+    Tensor output;
+    state->backward.input = input;
+    scheduler.impl()->submit(Task{std::make_shared<Impl>(
+        Impl{{output}, {input, state->forward.weight}})});
+    return output;
+  }
 }
 
 Tensor Linear::backwardInput(const Scheduler &scheduler,
@@ -195,38 +215,62 @@ void Linear::backwardParameter(const Scheduler &scheduler,
         : Task::Impl{std::move(output), std::move(input), compute} {}
     void operator()() const override {
       if (output()[0].impl()->tensor().defined()) {
-        const auto reshapedGradOutput = input()[0].impl()->tensor().reshape(
+        const auto reshapedGradOutput = input()[0].impl()->tensor().view(
             {-1, input()[0].impl()->tensor().size(-1)});
         const auto transposedGradOutput = reshapedGradOutput.t();
         const auto reshapedInput = input()[1].impl()->tensor().view(
             {-1, input()[1].impl()->tensor().size(-1)});
         const auto result = at::matmul(transposedGradOutput, reshapedInput);
         output()[0].impl()->tensor() += result;
-        intermediate().reserve(3);
-        intermediate().push_back(reshapedGradOutput);
+        intermediate().reserve(2);
         intermediate().push_back(transposedGradOutput);
         intermediate().push_back(result);
       } else {
-        const auto reshapedGradOutput = input()[0].impl()->tensor().reshape(
+        const auto reshapedGradOutput = input()[0].impl()->tensor().view(
             {-1, input()[0].impl()->tensor().size(-1)});
         const auto transposedGradOutput = reshapedGradOutput.t();
         const auto reshapedInput = input()[1].impl()->tensor().view(
             {-1, input()[1].impl()->tensor().size(-1)});
         const auto result = at::matmul(transposedGradOutput, reshapedInput);
         output()[0].impl()->tensor() = result;
-        intermediate().reserve(2);
-        intermediate().push_back(reshapedGradOutput);
         intermediate().push_back(transposedGradOutput);
       }
     }
     [[nodiscard]] const char *name() const override {
-      return "cs::compute::Linear::backwardParameter";
+      return "cs::compute::Linear::backwardWeight";
     }
   };
 
-  // decrease counter
   scheduler.impl()->submit(Task{std::make_shared<Impl>(Impl{
       {state->forward.grad_weight}, {grad_output, state->backward.input}})});
+  if (state->args.bias) {
+    struct Impl : Task::Impl {
+      explicit Impl(std::vector<Tensor> output /* grad_bias */,
+                    std::vector<ReadOnlyTensor> input /* grad_output */)
+          : Task::Impl{std::move(output), std::move(input), compute} {}
+      void operator()() const override {
+        if (output()[0].impl()->tensor().defined()) {
+          const auto reshapedGradOutput = input()[0].impl()->tensor().view(
+              {-1, input()[0].impl()->tensor().size(-1)});
+          const auto result = at::sum(reshapedGradOutput, 0);
+          output()[0].impl()->tensor() += result;
+          intermediate().push_back(result);
+        } else {
+          const auto reshapedGradOutput = input()[0].impl()->tensor().view(
+              {-1, input()[0].impl()->tensor().size(-1)});
+          const auto result = at::sum(reshapedGradOutput, 0);
+          output()[0].impl()->tensor() = result;
+        }
+      }
+      [[nodiscard]] const char *name() const override {
+        return "cs::compute::Linear::backwardBias";
+      }
+    };
+
+    scheduler.impl()->submit(Task{std::make_shared<Impl>(
+        Impl{{state->forward.grad_bias}, {grad_output}})});
+  }
+  // decrease counter
   state->backward.input.reset();
 }
 }  // namespace cs::compute
