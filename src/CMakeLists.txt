@@ -66,6 +66,7 @@ target_link_libraries(core_scheduler_core PRIVATE arrow_dataset Arrow::arrow_sha
 target_link_libraries(core_scheduler_core PRIVATE hwloc CUDA::nvml fmt::fmt-header-only spdlog::spdlog_header_only MPI::MPI_C)
 target_link_libraries(core_scheduler_core PUBLIC torch)
 target_compile_options(core_scheduler_core PRIVATE -fvisibility=hidden)
+target_link_options(core_scheduler_core PRIVATE -Wl,--as-needed)
 
 target_compile_definitions(core_scheduler_core PRIVATE -DCORE_SCHEDULER_ENABLE_INTERNAL_BUILD)
 

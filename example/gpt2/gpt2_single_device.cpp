@@ -20,6 +20,7 @@
 
 #include <chrono>
 #include <cstdint>
+#include <cxxopts.hpp>
 #include <memory>
 #include <string>
 #include <vector>
@@ -43,13 +44,13 @@
 #include "threading/dynamic_scheduler.h"
 
 struct ModelConfig {
-  const int64_t batch_size = 2;
-  const int64_t block_size = 1024;
+  const int64_t batch_size = 1;
+  const int64_t block_size = 8;
   const int64_t vocab_size = 50257;
   const int64_t pad_size = 50304;  // pad vocab_size to be more efficient
-  const int64_t n_embd = 2048;     // 2048
-  const int64_t n_head = 32;       // 32
-  const int64_t n_layer = 22;
+  const int64_t n_embd = 32;     // 2048
+  const int64_t n_head = 8;       // 32
+  const int64_t n_layer = 8;
   const bool use_bias = false;
   const float dropout = 0.0;
   const float epsilon = 1e-5;
@@ -64,10 +65,6 @@ struct TrainConfig {
   double beta1 = 0.9;
   double beta2 = 0.95;
   double weight_decay = 1e-1;
-};
-
-struct DataConfig {
-  const std::string path = "dataset_path/";
 };
 
 // Function to display the progress bar
@@ -375,12 +372,11 @@ struct GPT2 : cs::module::Module {
   }
 };
 
-void train() {
+void train(const std::string &path) {
   torch::manual_seed(42);
   cs::DynamicScheduler scheduler{0};
   ModelConfig modelConfig;
   TrainConfig trainConfig;
-  DataConfig dataConfig;
   std::unique_ptr<GPT2> model;
   cs::Tensor loss;
   const torch::TensorOptions option =
@@ -391,7 +387,7 @@ void train() {
 
   std::cout << "Prepare Dataset" << std::endl;
 
-  cs::data::LlmDataset dataset{{dataConfig.path}};
+  cs::data::LlmDataset dataset{{path}};
   cs::data::LlmDataLoader dataloader{
       dataset, modelConfig.batch_size, 4, false, 0, 1};
 
@@ -454,7 +450,18 @@ void train() {
             << std::endl;
 }
 
-int main() {
-  train();
+int main(const int argc, char **argv) {
+  cxxopts::Options options("GPT2", "An GPT2 example");
+
+  options.add_options()("path", "Dataset Path", cxxopts::value<std::string>());
+
+  const auto result = options.parse(argc, argv);
+
+  if (result.count("help")) {
+    std::cout << options.help() << std::endl;
+    exit(0);
+  }
+  const auto path = result["path"].as<std::string>();
+  train(path);
   return 0;
 }
