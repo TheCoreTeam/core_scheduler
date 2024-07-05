@@ -671,7 +671,7 @@ void train() {
 
     // Check
     cs::communication::AllReduce::runInplace(scheduler, comm, {loss},
-                                             cs::communication::SUM);
+                                             cs::communication::AVG);
     time_stop = std::chrono::high_resolution_clock::now();
     duration_ms = std::chrono::duration_cast<std::chrono::microseconds>(
         time_stop - time_start);
