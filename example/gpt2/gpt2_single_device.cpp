@@ -100,6 +100,13 @@ std::unordered_map<std::string, double> getTrainArgs(
     throw std::invalid_argument(
         "At least one of max_steps or max_epochs must be provided.");
   }
+  if (global_token_batch_size %
+          (batch_size_per_dprank_per_step * tokens_per_sample * num_dprank) !=
+      0) {
+    throw std::invalid_argument(
+        "global_token_batch_size must be divisible by "
+        "batch_size_per_dprank_per_step * tokens_per_sample * num_dprank.");
+  }
 
   int tokens_per_dprank_per_step =
       tokens_per_sample * batch_size_per_dprank_per_step;
