@@ -14,18 +14,15 @@
  * limitations under the License.
  */
 
-#pragma once
-#include "compute/amp_layer_norm.h"
-#include "module/layer_norm.h"
-#include "module/module.h"
-#include "module/pimpl.h"
+#include "module/amp_layer_norm.h"
+
+#include "threading/scheduler.h"
 
 namespace cs::module {
-struct CS_API AmpLayerNormImpl : LayerNormImpl {
-  using Options = compute::AmpLayerNorm::Options;
-
-  explicit AmpLayerNormImpl(const Scheduler &scheduler, const Options &options);
-};
-
-CS_MODULE(AmpLayerNorm);
+AmpLayerNormImpl::AmpLayerNormImpl(const Scheduler& scheduler,
+                                   const Options& options) {
+  const auto state = compute::AmpLayerNorm::init(scheduler, options);
+  register_state("AmpEmbeddingState", state);
+  state_ = state;
+}
 }  // namespace cs::module
