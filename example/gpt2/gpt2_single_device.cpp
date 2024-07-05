@@ -622,7 +622,8 @@ void train() {
 
     // Wait
     if (trainConfig.wait_every_step != -1 &&
-        (step + 1) % trainConfig.wait_every_step == 0) {
+        ((step + 1) % trainConfig.wait_every_step == 0 ||
+         step == max_steps - 1)) {
       model->lm_head->state()->forward.weight.wait();
     }
 
