@@ -651,6 +651,12 @@ void train() {
     cs::optimizer::AdamW::step(scheduler, model);
     // TODO: Add lr scheduler step
 
+    // Wait
+    if (trainConfig.wait_every_step != -1 &&
+        (step + 1) % trainConfig.wait_every_step == 0) {
+      model->lm_head->state()->forward.weight.wait();
+    }
+
     // Check
     cs::communication::AllReduce::runInplace(scheduler, comm, {loss},
                                              cs::communication::SUM);
