@@ -32,7 +32,9 @@ struct CS_API EmbeddingImpl : Module {
 
   std::shared_ptr<compute::Embedding::State> state() const;
 
- private:
+ protected:
+  EmbeddingImpl() = default;
+
   std::weak_ptr<compute::Embedding::State> state_;
 };
 

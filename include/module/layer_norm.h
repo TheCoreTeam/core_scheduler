@@ -19,10 +19,6 @@
 #include "module/module.h"
 #include "module/pimpl.h"
 
-namespace cs {
-struct ThreadPoolCompute;
-}
-
 namespace cs::module {
 struct CS_API LayerNormImpl : Module {
   using Options = compute::LayerNorm::Options;
@@ -36,7 +32,9 @@ struct CS_API LayerNormImpl : Module {
 
   std::shared_ptr<compute::LayerNorm::State> state() const;
 
- private:
+ protected:
+  LayerNormImpl() = default;
+
   std::weak_ptr<compute::LayerNorm::State> state_;
 };
 
