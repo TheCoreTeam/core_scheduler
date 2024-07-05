@@ -650,6 +650,14 @@ void train() {
       grad_output = cs::compute::CrossEntropy::backward(scheduler, loss_state);
       model->backward(scheduler, comm, allreduce_bucket, grad_output,
                       require_backward_grad_sync);
+
+      // Wait in micro steps
+      auto wait_step = step * (int)grad_accum_steps + micro_step;
+      if (trainConfig.wait_every_step != -1 &&
+          ((wait_step + 1) % trainConfig.wait_every_step == 0 ||
+           (wait_step + 1) == max_steps * grad_accum_steps)) {
+        model->wte->state()->forward.weight.wait();
+      }
     }
 
     // TODO: Add gradient clipping
@@ -658,7 +666,7 @@ void train() {
     cs::optimizer::AdamW::step(scheduler, model);
     // TODO: Add lr scheduler step
 
-    // Wait
+    // Wait in steps
     if (trainConfig.wait_every_step != -1 &&
         ((step + 1) % trainConfig.wait_every_step == 0 ||
          step == max_steps - 1)) {
