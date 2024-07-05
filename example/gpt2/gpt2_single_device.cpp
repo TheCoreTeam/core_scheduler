@@ -16,14 +16,18 @@
 
 #include <c10/core/ScalarType.h>
 #include <gtest/gtest.h>
+#include <torch/nn/init.h>
 #include <torch/torch.h>
 
 #include <chrono>
+#include <cmath>
 #include <cstdint>
-#include <cxxopts.hpp>
+#include <cstdio>
 #include <memory>
 #include <string>
 #include <vector>
+#include <stdexcept>
+#include <unordered_map>
 
 #include "compute/cross_entropy.h"
 #include "compute/embedding.h"
@@ -44,7 +48,7 @@
 #include "threading/dynamic_scheduler.h"
 
 struct ModelConfig {
-  const int64_t batch_size = 2;
+  int64_t batch_size = 2;
   const int64_t block_size = 1024;
   const int64_t vocab_size = 50257;
   const int64_t pad_size = 50304;  // pad vocab_size to be more efficient
@@ -59,47 +63,139 @@ struct ModelConfig {
 };
 
 struct TrainConfig {
-  const int64_t epoch = 5;
-  const int64_t wait_every_step = 1;
-  double lr = 1e-5;
+  int64_t epoch = 5;
+  int64_t total_token_batch_size = 1024*2;  // 524288, 2**19, about 0.5 tokens per batch
+  int64_t warmup_steps = 715;
+  int64_t max_steps = -1;
+  int64_t check_every_steps = 5;
+  int64_t val_every_steps = 250;
+  int64_t save_every_steps = 5000;
+  double max_lr = 6e-4;
+  double min_lr = 0.1 * max_lr;
   double beta1 = 0.9;
   double beta2 = 0.95;
   double weight_decay = 1e-1;
+  double eps = 1e-8;
+  double grad_clip_value = 1.0;
+  int64_t seed = 1337;
+  torch::Dtype amp_precision = torch::kBFloat16; // torch::kBFloat16, torch::kFloat16 (Now we only support bf16)
+  int64_t wait_every_step = 1;
 };
 
-// Function to display the progress bar
-void display_progress(int completed, int total, const std::string &prefix = "",
-                      int rank = 0) {
-  int width = 50;  // Width of the progress bar
-  float progress = total > 1 ? (float)completed / (total - 1)
-                             : 1.0;  // Adjusted to avoid division by zero
-  int pos = width * progress;
+struct DataConfig {
+  const std::string path = "../example/dataset_path/train/";
+  int64_t num_workers = 4;
+  bool shuffle = false;
+};
 
-  if (completed == 0) {
-    std::cout << "";
-  }
-  std::cout << prefix;
-  std::cout << "[";
-  for (int i = 0; i < width; ++i) {
-    if (i < pos)
-      std::cout << "=";
-    else if (i == pos)
-      std::cout << ">";
-    else
-      std::cout << " ";
-  }
-  std::cout << "] " << completed + 1 << "/" << total << " | "
-            << int(progress * 100.0) << " %\r";
-  if (rank == 0) {
-    std::cout.flush();
-  } else {
-    std::cout << std::endl;
-    std::cout.flush();
-  }
-  if (completed == total - 1) {
-    std::cout << "" << std::endl;
-  }
+// Helper function to calculate the training arguments
+std::unordered_map<std::string, double> getTrainArgs(
+    int num_samples,
+    int tokens_per_sample,
+    int global_token_batch_size, 
+    int batch_size_per_dprank_per_step, 
+    int num_dprank,
+    int max_steps = -1,
+    int max_epochs = -1
+) {
+    if (max_steps == -1 && max_epochs == -1) {
+        throw std::invalid_argument("At least one of max_steps or max_epochs must be provided.");
+    }
+
+    int tokens_per_dprank_per_step = tokens_per_sample * batch_size_per_dprank_per_step;
+    int total_tokens_per_step = tokens_per_dprank_per_step * num_dprank;
+    int grad_accum_steps = global_token_batch_size / total_tokens_per_step;
+    int total_tokens_in_dataset = num_samples * tokens_per_sample;
+
+    if (max_steps != -1 && max_epochs != -1) {
+        int calculated_max_steps = (max_epochs * total_tokens_in_dataset) / global_token_batch_size;
+        double calculated_max_epochs = (max_steps * global_token_batch_size) / static_cast<double>(total_tokens_in_dataset);
+
+        if (!(calculated_max_steps == max_steps && static_cast<int>(calculated_max_epochs) == max_epochs)) {
+            throw std::invalid_argument(
+                "Inconsistent max_steps and max_epochs based on the dataset and configuration. "
+                "Calculated max_steps from max_epochs: " + std::to_string(calculated_max_steps) + ", provided max_steps: " + std::to_string(max_steps) + ". "
+                "Calculated max_epochs from max_steps: " + std::to_string(static_cast<int>(calculated_max_epochs)) + ", provided max_epochs: " + std::to_string(max_epochs) + "."
+            );
+        }
+    } else if (max_steps == -1) {
+        max_steps = (max_epochs * total_tokens_in_dataset) / global_token_batch_size;
+    } else if (max_epochs == -1) {
+        max_epochs = (max_steps * global_token_batch_size) / total_tokens_in_dataset;
+    }
+
+    std::unordered_map<std::string, double> result;
+    result["epochs"] = max_epochs;
+    result["max_steps"] = max_steps;
+    result["grad_accum_steps"] = grad_accum_steps;
+    result["total_tokens_per_step"] = total_tokens_per_step;
+
+    return result;
 }
+
+// Class to display the progress bar
+struct ProgressBar {
+    int total;
+    int width;
+    std::chrono::time_point<std::chrono::high_resolution_clock> start_time;
+    std::chrono::time_point<std::chrono::high_resolution_clock> last_time;
+
+    ProgressBar(int total_steps, int bar_width = 50)
+        : total(total_steps), width(bar_width) {
+        start_time = std::chrono::high_resolution_clock::now();
+        last_time = start_time;
+    }
+
+    std::string format_time(std::chrono::seconds time) const {
+        int minutes = std::chrono::duration_cast<std::chrono::minutes>(time).count();
+        int seconds = (time - std::chrono::minutes(minutes)).count();
+        std::ostringstream oss;
+        oss << std::setw(2) << std::setfill('0') << minutes << ":"
+            << std::setw(2) << std::setfill('0') << seconds;
+        return oss.str();
+    }
+
+    void display(int completed, const std::string &prefix = "", int rank = 0) {
+      float progress = total > 1 ? static_cast<float>(completed) / (total - 1)
+                                : 1.0;  // Adjusted to avoid division by zero
+      int pos = width * progress;
+
+      auto current_time = std::chrono::high_resolution_clock::now();
+      std::chrono::seconds elapsed_time = std::chrono::duration_cast<std::chrono::seconds>(current_time - start_time);
+      std::chrono::seconds step_time = std::chrono::duration_cast<std::chrono::seconds>(current_time - last_time);
+      std::chrono::seconds remaining_time(0);
+      if (completed > 0) {
+          double avg_step_time = elapsed_time.count() / static_cast<double>(completed);
+          remaining_time = std::chrono::seconds(static_cast<long long>(avg_step_time * (total - completed - 1)));
+      }
+
+      // Clear the line before printing progress
+      std::cout << "\r" << std::string(width + 50, ' ') << "\r";  // Clear the line
+
+      std::cout << prefix;
+      std::cout << "[";
+      for (int i = 0; i < width; ++i) {
+          if (i < pos)
+              std::cout << "=";
+          else if (i == pos)
+              std::cout << ">";
+          else
+              std::cout << " ";
+      }
+      std::cout << "] " << completed + 1 << "/" << total << " | "
+                << format_time(elapsed_time) << "<" << format_time(remaining_time) << " | "
+                << int(progress * 100.0) << " %";
+
+      // Ensure the progress bar always ends with a newline
+      if (rank == 0) {
+          std::cout.flush();
+      } else {
+          std::cout << std::endl;  // Force a newline if not the main rank or completing the bar
+      }
+
+      last_time = current_time;  // Update last_time after displaying progress
+    }
+};
 
 struct Attn : cs::module::Module {
   cs::DynamicScheduler scheduler;
@@ -129,6 +225,13 @@ struct Attn : cs::module::Module {
                           .bias(config.use_bias)
                           .device(config.device)
                           .dtype(config.dtype)));
+  
+    _init_weights(scheduler, config);
+  }
+
+  void _init_weights(cs::DynamicScheduler scheduler, const ModelConfig &config) {
+    // TODO: reinitialize the weights
+    // torch::nn::init::normal_(c_proj->state()->forward.weight, 0.0, 0.02/sqrt(2*config.n_layer));
   }
 
   cs::Tensor forward(const cs::DynamicScheduler &scheduler, cs::Tensor &Input) {
@@ -226,6 +329,13 @@ struct MLP : cs::module::Module {
                                   .bias(config.use_bias)
                                   .device(config.device)
                                   .dtype(config.dtype)));
+    
+    _init_weights(scheduler, config);
+  }
+
+  void _init_weights(cs::DynamicScheduler scheduler, const ModelConfig &config) {
+    // TODO: reinitialize the weights
+    // torch::nn::init::normal_(fc2->state()->forward.weight, 0.0, 0.02/sqrt(2*config.n_layer));
   }
 
   cs::Tensor forward(const cs::DynamicScheduler &scheduler, cs::Tensor &Input) {
@@ -268,6 +378,12 @@ struct Block : cs::module::Module {
                                   .device(config.device)
                                   .dtype(config.dtype)));
     mlp = register_module("mlp", std::make_shared<MLP>(scheduler, config));
+  
+    _init_weights(scheduler, config);
+  }
+
+  void _init_weights(cs::DynamicScheduler scheduler, const ModelConfig &config) {
+    // TODO: reinitialize the weights
   }
 
   cs::Tensor forward(const cs::DynamicScheduler &scheduler, cs::Tensor &Input) {
@@ -336,6 +452,15 @@ struct GPT2 : cs::module::Module {
                                           .bias(config.use_bias)
                                           .device(config.device)
                                           .dtype(config.dtype)));
+  
+    _init_weights(scheduler, config);
+  }
+
+  void _init_weights(cs::DynamicScheduler scheduler, const ModelConfig &config) {
+    // TODO: reinitialize the weights
+    // torch::nn::init::normal_(wte->state()->forward.weight, 0.0, 0.02);
+    // torch::nn::init::normal_(wpe->state()->forward.weight, 0.0, 0.02);
+    // torch::nn::init::normal_(lm_head->state()->forward.weight, 0.0, 0.02);
   }
 
   void forward(cs::DynamicScheduler scheduler, cs::Tensor &Output,
@@ -372,11 +497,15 @@ struct GPT2 : cs::module::Module {
   }
 };
 
-void train(const std::string &path) {
-  torch::manual_seed(42);
-  cs::DynamicScheduler scheduler{0};
+void train() {
   ModelConfig modelConfig;
   TrainConfig trainConfig;
+  DataConfig dataConfig;
+  torch::manual_seed(trainConfig.seed);
+  cs::DynamicScheduler scheduler{0};
+  bool master_process = true;
+  std::chrono::time_point<std::chrono::high_resolution_clock> time_start, time_stop;
+  std::chrono::duration<double> duration_ms;
   std::unique_ptr<GPT2> model;
   cs::Tensor loss;
   const torch::TensorOptions option =
@@ -384,31 +513,57 @@ void train(const std::string &path) {
   const torch::TensorOptions act_option = torch::TensorOptions()
                                               .dtype(modelConfig.dtype)
                                               .device(modelConfig.device);
-
-  std::cout << "Prepare Dataset" << std::endl;
-
-  cs::data::LlmDataset dataset{{path}};
-  cs::data::LlmDataLoader dataloader{dataset, modelConfig.batch_size, 4, false};
-
-  std::cout << "Init" << std::endl;
+  if (master_process) {
+    std::cout << "Prepare Dataset" << std::endl;
+  }
+  cs::data::LlmDataset dataset{{dataConfig.path}};
+  cs::data::LlmDataLoader dataloader{
+      dataset, modelConfig.batch_size, dataConfig.num_workers, dataConfig.shuffle};
+  
+  if (master_process) {
+    std::cout << "Init" << std::endl;
+  }
   model = std::make_unique<GPT2>(scheduler, modelConfig);
 
   auto loss_state = cs::compute::CrossEntropy::init(scheduler);
 
   cs::optimizer::AdamW::init(scheduler, model,
                              cs::optimizer::AdamW::Options{}
-                                 .lr(trainConfig.lr)
+                                 .lr(trainConfig.max_lr)
                                  .beta1(trainConfig.beta1)
                                  .beta2(trainConfig.beta2)
                                  .weight_decay(trainConfig.weight_decay));
+  
+  std::unordered_map<std::string, double> training_args = getTrainArgs(dataloader.iterationsPerEpoch(), 
+                                                                       modelConfig.block_size, 
+                                                                       trainConfig.total_token_batch_size, 
+                                                                       modelConfig.batch_size, 
+                                                                       1, 
+                                                                       trainConfig.max_steps, 
+                                                                       trainConfig.epoch);
+  double epochs = training_args["epochs"];
+  double max_steps = training_args["max_steps"];
+  double grad_accum_steps = training_args["grad_accum_steps"];
+  double total_tokens_per_step = training_args["total_tokens_per_step"];
 
-  auto time_start = std::chrono::high_resolution_clock::now();
-  for (int i = 0; i < trainConfig.epoch; ++i) {
-    std::cout << "Epoch " << i << std::endl;
-    for (int j = 0; j < dataloader.iterationsPerEpoch(); ++j) {
-      display_progress(j, dataloader.iterationsPerEpoch(),
-                       " Training: ");  // Display progress for the inner loop
+  if (master_process) {
+    std::cout << "The training process will train " << epochs << " epochs, " << max_steps << " steps." << std::endl;
+    std::cout << "=> calculated gradient accumulation steps: " << grad_accum_steps << std::endl;
+    std::cout << "=> calculated tokens per step: " << total_tokens_per_step << std::endl;
+  }
 
+  ProgressBar progressBar(max_steps);
+  for (int step = 0; step < max_steps; ++step) {
+    time_start = std::chrono::high_resolution_clock::now();
+    progressBar.display(step, "Training: ", 0);
+
+    // TODO: Add validation
+    if ((step + 1) % trainConfig.val_every_steps == 0 && master_process) {
+      // validation
+    }
+
+    // Training micro steps
+    for (int micro_step = 0; micro_step < grad_accum_steps; ++micro_step) {
       auto data = dataloader.load(scheduler);
       auto input = data["input_ids"];
       auto target = data["labels"];
@@ -420,7 +575,7 @@ void train(const std::string &path) {
       output = cs::compute::Utils::view(
           scheduler, output,
           {modelConfig.batch_size * modelConfig.block_size,
-           modelConfig.pad_size});
+            modelConfig.pad_size});
       target = cs::compute::Utils::view(
           scheduler, target, {modelConfig.batch_size * modelConfig.block_size});
       loss = cs::compute::CrossEntropy::forward(scheduler, loss_state, output,
@@ -429,38 +584,28 @@ void train(const std::string &path) {
       // Backward
       auto grad_output =
           cs::compute::CrossEntropy::backward(scheduler, loss_state);
-
       model->backward(scheduler, grad_output);
-
-      // Optimizer step
-      cs::optimizer::AdamW::step(scheduler, model);
-
-      if ((i + 1) % trainConfig.wait_every_step == 0 or
-          i + 1 == trainConfig.epoch) {
-        model->lm_head->state()->forward.weight.wait();
-      }
     }
-    std::cout << "loss: " << loss << std::endl;
+
+    // TODO: Add gradient clipping
+
+    // Optimizer step
+    cs::optimizer::AdamW::step(scheduler, model);
+    // TODO: Add lr scheduler step
+
+    // Check
+    time_stop = std::chrono::high_resolution_clock::now();
+    duration_ms = std::chrono::duration_cast<std::chrono::microseconds>(
+        time_stop - time_start);
+    if (trainConfig.check_every_steps != -1 && (step + 1) % trainConfig.check_every_steps == 0 && master_process) {
+      printf("\nstep %5d | lr %.4e | grad norm: %.4f | dt: %.2fms | tok/sec: %.2f\n", 
+             step+1, trainConfig.max_lr, 1.0, duration_ms.count(), total_tokens_per_step/(duration_ms.count() / 1e3));
+      std::cout << "loss: " << loss << std::endl;
+    }
   }
-  auto time_stop = std::chrono::high_resolution_clock::now();
-  auto duration = std::chrono::duration_cast<std::chrono::microseconds>(
-      time_stop - time_start);
-  std::cout << "Time taken by loop: " << duration.count() / 1000 << " s"
-            << std::endl;
 }
 
-int main(const int argc, char **argv) {
-  cxxopts::Options options("GPT2", "An GPT2 example");
-
-  options.add_options()("path", "Dataset Path", cxxopts::value<std::string>());
-
-  const auto result = options.parse(argc, argv);
-
-  if (result.count("help")) {
-    std::cout << options.help() << std::endl;
-    exit(0);
-  }
-  const auto path = result["path"].as<std::string>();
-  train(path);
+int main() {
+  train();
   return 0;
 }

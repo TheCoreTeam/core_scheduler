@@ -15,19 +15,20 @@
  */
 
 #include <c10/core/ScalarType.h>
-#include <mpi.h>
+#include <gtest/gtest.h>
+#include <torch/nn/init.h>
 #include <torch/torch.h>
 
 #include <chrono>
+#include <cmath>
 #include <cstdint>
 #include <cstdio>
-#include <iostream>
 #include <memory>
 #include <string>
 #include <vector>
+#include <stdexcept>
+#include <unordered_map>
 
-#include "communication/all_reduce.h"
-#include "communication/communication.h"
 #include "compute/cross_entropy.h"
 #include "compute/embedding.h"
 #include "compute/gelu.h"
@@ -38,35 +39,36 @@
 #include "data/dataloader.h"
 #include "data/dataset.h"
 #include "logger.h"
-#include "module/embedding.h"
-#include "module/layer_norm.h"
-#include "module/linear.h"
+// #include "module/embedding.h"
+#include "module/amp_embedding.h"
+// #include "module/layer_norm.h"
+#include "module/amp_layer_norm.h"
+// #include "module/linear.h"
+#include "module/amp_linear.h"
 #include "module/module.h"
-#include "optimizer/adamw.h"
+// #include "optimizer/adamw.h"
+#include "optimizer/amp_adamw.h"
 #include "tensor.h"
 #include "threading/dynamic_scheduler.h"
 
 struct ModelConfig {
-  int64_t batch_size = 2;
+  int64_t batch_size = 8;
   const int64_t block_size = 1024;
   const int64_t vocab_size = 50257;
   const int64_t pad_size = 50304;  // pad vocab_size to be more efficient
-  const int64_t n_embd = 2048;
-  const int64_t n_head = 32;
-  const int64_t n_layer = 22;
+  const int64_t n_embd = 768;     // 2048
+  const int64_t n_head = 12;       // 32
+  const int64_t n_layer = 12;     // 22
   const bool use_bias = false;
   const float dropout = 0.0;
   const float epsilon = 1e-5;
-  torch::Device device{
-      torch::kCUDA,
-      static_cast<torch::DeviceIndex>(
-          cs::communication::getCommWorld(cs::communication::NCCL).getRank())};
+  torch::Device device = torch::kCUDA;
   torch::Dtype dtype = torch::kBFloat16;
 };
 
 struct TrainConfig {
   int64_t epoch = 5;
-  int64_t total_token_batch_size = 1024*2;  // 524288, 2**19, about 0.5 tokens per batch
+  int64_t total_token_batch_size = 1024*8;  // 524288, 2**19, about 0.5 tokens per batch
   int64_t warmup_steps = 715;
   int64_t max_steps = -1;
   int64_t check_every_steps = 5;
@@ -82,7 +84,6 @@ struct TrainConfig {
   int64_t seed = 1337;
   torch::Dtype amp_precision = torch::kBFloat16; // torch::kBFloat16, torch::kFloat16 (Now we only support bf16)
   int64_t wait_every_step = 1;
-  int64_t bucket_size = 30 * 1024 * 1024;  // 30M
 };
 
 struct DataConfig {
@@ -200,19 +201,18 @@ struct ProgressBar {
     }
 };
 
-
 struct Attn : cs::module::Module {
-  const cs::Scheduler &scheduler;
+  cs::DynamicScheduler scheduler;
   const ModelConfig &config;
-  cs::module::Linear c_attn{nullptr}, c_proj{nullptr};
+  cs::module::AmpLinear c_attn{nullptr}, c_proj{nullptr};
   std::shared_ptr<cs::compute::ScaledDotProductFlashAttention::State>
       attn_state;
 
-  Attn(const cs::Scheduler &scheduler, const ModelConfig &config)
+  Attn(cs::DynamicScheduler scheduler, const ModelConfig &config)
       : scheduler(scheduler), config{config} {
     c_attn = register_module(
-        "c_attn", cs::module::Linear(
-                      scheduler, cs::compute::Linear::Options{config.n_embd,
+        "c_attn", cs::module::AmpLinear(
+                      scheduler, cs::compute::AmpLinear::Options{config.n_embd,
                                                               3 * config.n_embd}
                                      .bias(config.use_bias)
                                      .device(config.device)
@@ -223,15 +223,22 @@ struct Attn : cs::module::Module {
         scheduler,
         cs::compute::ScaledDotProductFlashAttention::Options{}.is_causal(true));
     c_proj = register_module(
-        "c_proj", cs::module::Linear(
+        "c_proj", cs::module::AmpLinear(
                       scheduler,
-                      cs::compute::Linear::Options{config.n_embd, config.n_embd}
+                      cs::compute::AmpLinear::Options{config.n_embd, config.n_embd}
                           .bias(config.use_bias)
                           .device(config.device)
                           .dtype(config.dtype)));
+  
+    _init_weights(scheduler, config);
   }
 
-  cs::Tensor forward(const cs::Scheduler &scheduler, cs::Tensor &Input) {
+  void _init_weights(cs::DynamicScheduler scheduler, const ModelConfig &config) {
+    // TODO: reinitialize the weights
+    // torch::nn::init::normal_(c_proj->state()->forward.weight, 0.0, 0.02/sqrt(2*config.n_layer));
+  }
+
+  cs::Tensor forward(const cs::DynamicScheduler &scheduler, cs::Tensor &Input) {
     // Fc Attn
     auto FcAttnOut = c_attn->forward(scheduler, Input);
 
@@ -270,20 +277,14 @@ struct Attn : cs::module::Module {
     return c_proj->forward(scheduler, AttnOutView);
   }
 
-  cs::Tensor backward(
-      const cs::Scheduler &scheduler, const cs::communication::Comm &comm,
-      const cs::communication::AllReduceBucket &allreduce_bucket,
-      cs::Tensor &DOutput, bool require_backward_grad_sync = false) {
+  cs::Tensor backward(const cs::DynamicScheduler &scheduler,
+                      cs::Tensor &DOutput) {
     // Fc Proj, we first run backward for input and then backward for parameter.
     auto DAttnOut = c_proj->backwardInput(scheduler, DOutput);
     c_proj->backwardParameter(scheduler, DOutput);
-    if (require_backward_grad_sync) {
-      allreduce_bucket.push_back(scheduler, comm,
-                                 c_proj->state()->forward.grad_weight);
-    }
 
-    // Attn
     cs::Tensor DFcAttnOut;
+    // Attn
     {
       DAttnOut = cs::compute::Utils::view(
           scheduler, DAttnOut,
@@ -305,93 +306,91 @@ struct Attn : cs::module::Module {
     // Fc Attn, we first run backward for input and then backward for parameter.
     auto DInput = c_attn->backwardInput(scheduler, DFcAttnOut);
     c_attn->backwardParameter(scheduler, DFcAttnOut);
-    if (require_backward_grad_sync) {
-      allreduce_bucket.push_back(scheduler, comm,
-                                 c_attn->state()->forward.grad_weight);
-    }
     return DInput;
   }
 };
 
 struct MLP : cs::module::Module {
-  const cs::Scheduler &scheduler;
+  cs::DynamicScheduler scheduler;
   const ModelConfig &config;
-  cs::module::Linear fc1{nullptr}, fc2{nullptr};
+  cs::module::AmpLinear fc1{nullptr}, fc2{nullptr};
   std::shared_ptr<cs::compute::GeLU::State> gelu_state;
 
-  MLP(const cs::Scheduler &scheduler, const ModelConfig &config)
+  MLP(cs::DynamicScheduler scheduler, const ModelConfig &config)
       : scheduler(scheduler), config{config} {
     fc1 = register_module(
-        "fc1", cs::module::Linear(
-                   scheduler, cs::compute::Linear::Options{config.n_embd,
+        "fc1", cs::module::AmpLinear(
+                   scheduler, cs::compute::AmpLinear::Options{config.n_embd,
                                                            4 * config.n_embd}
                                   .bias(config.use_bias)
                                   .device(config.device)
                                   .dtype(config.dtype)));
     gelu_state = cs::compute::GeLU::init(scheduler);
     fc2 = register_module(
-        "fc2", cs::module::Linear(
-                   scheduler, cs::compute::Linear::Options{4 * config.n_embd,
+        "fc2", cs::module::AmpLinear(
+                   scheduler, cs::compute::AmpLinear::Options{4 * config.n_embd,
                                                            config.n_embd}
                                   .bias(config.use_bias)
                                   .device(config.device)
                                   .dtype(config.dtype)));
+    
+    _init_weights(scheduler, config);
   }
 
-  cs::Tensor forward(const cs::Scheduler &scheduler, const cs::Tensor &Input) {
+  void _init_weights(cs::DynamicScheduler scheduler, const ModelConfig &config) {
+    // TODO: reinitialize the weights
+    // torch::nn::init::normal_(fc2->state()->forward.weight, 0.0, 0.02/sqrt(2*config.n_layer));
+  }
+
+  cs::Tensor forward(const cs::DynamicScheduler &scheduler, cs::Tensor &Input) {
     auto Fc1Out = fc1->forward(scheduler, Input);
     auto GeluOut = cs::compute::GeLU::forward(scheduler, gelu_state, Fc1Out);
     return fc2->forward(scheduler, GeluOut);
   }
 
-  cs::Tensor backward(
-      const cs::Scheduler &scheduler, const cs::communication::Comm &comm,
-      const cs::communication::AllReduceBucket &allreduce_bucket,
-      cs::Tensor &DOutput, bool require_backward_grad_sync = false) {
+  void backward(const cs::DynamicScheduler &scheduler, cs::Tensor &DInput,
+                cs::Tensor &DOutput) {
     // Fc2
     auto DGeluOut = fc2->backwardInput(scheduler, DOutput);
     fc2->backwardParameter(scheduler, DOutput);
-    if (require_backward_grad_sync) {
-      allreduce_bucket.push_back(scheduler, comm,
-                                 fc2->state()->forward.grad_weight);
-    }
     // GeLU
     auto DFc1Out = cs::compute::GeLU::backward(scheduler, gelu_state, DGeluOut);
     // Fc1
-    auto DInput = fc1->backwardInput(scheduler, DFc1Out);
+    DInput = fc1->backwardInput(scheduler, DFc1Out);
     fc1->backwardParameter(scheduler, DFc1Out);
-    if (require_backward_grad_sync) {
-      allreduce_bucket.push_back(scheduler, comm,
-                                 fc1->state()->forward.grad_weight);
-    }
-    return DInput;
   }
 };
 
 struct Block : cs::module::Module {
   const ModelConfig &config;
-  const cs::Scheduler &scheduler;
-  cs::module::LayerNorm ln1{nullptr}, ln2{nullptr};
+  cs::DynamicScheduler scheduler;
+  cs::module::AmpLayerNorm ln1{nullptr}, ln2{nullptr};
   std::shared_ptr<Attn> attn;
   std::shared_ptr<MLP> mlp;
 
-  Block(const cs::Scheduler &scheduler, const ModelConfig &config)
+  Block(cs::DynamicScheduler scheduler, const ModelConfig &config)
       : scheduler(scheduler), config{config} {
     ln1 = register_module(
-        "ln1", cs::module::LayerNorm(
-                   scheduler, cs::compute::LayerNorm::Options(config.n_embd)
+        "ln1", cs::module::AmpLayerNorm(
+                   scheduler, cs::compute::AmpLayerNorm::Options(config.n_embd)
                                   .device(config.device)
                                   .dtype(config.dtype)));
     attn = register_module("attn", std::make_shared<Attn>(scheduler, config));
     ln2 = register_module(
-        "ln2", cs::module::LayerNorm(
-                   scheduler, cs::compute::LayerNorm::Options(config.n_embd)
+        "ln2", cs::module::AmpLayerNorm(
+                   scheduler, cs::compute::AmpLayerNorm::Options(config.n_embd)
                                   .device(config.device)
                                   .dtype(config.dtype)));
     mlp = register_module("mlp", std::make_shared<MLP>(scheduler, config));
+  
+    _init_weights(scheduler, config);
   }
 
-  cs::Tensor forward(const cs::Scheduler &scheduler, cs::Tensor &Input) {
+  void _init_weights(cs::DynamicScheduler scheduler, const ModelConfig &config) {
+    // TODO: reinitialize the weights
+  }
+
+  cs::Tensor forward(const cs::DynamicScheduler &scheduler, cs::Tensor &Input) {
     auto LN1Out = ln1->forward(scheduler, Input);
     auto AttnOut = attn->forward(scheduler, LN1Out);
     auto ResAttnOut = cs::compute::Utils::add(scheduler, Input, AttnOut);
@@ -400,57 +399,42 @@ struct Block : cs::module::Module {
     return cs::compute::Utils::add(scheduler, ResAttnOut, MLPOut);
   }
 
-  cs::Tensor backward(
-      const cs::Scheduler &scheduler, const cs::communication::Comm &comm,
-      const cs::communication::AllReduceBucket &allreduce_bucket,
-      cs::Tensor &DOutput, bool require_backward_grad_sync = false) {
+  cs::Tensor backward(const cs::DynamicScheduler &scheduler,
+                      cs::Tensor &DOutput) {
     auto DMLPOut = DOutput;
-    auto DLN2Out = mlp->backward(scheduler, comm, allreduce_bucket, DMLPOut,
-                                 require_backward_grad_sync);
+    cs::Tensor DLN2Out;
+    mlp->backward(scheduler, DLN2Out, DMLPOut);
     auto DResAttnOut = ln2->backward(scheduler, DLN2Out);
-    if (require_backward_grad_sync) {
-      allreduce_bucket.push_back(scheduler, comm,
-                                 ln2->state()->forward.grad_weight);
-      allreduce_bucket.push_back(scheduler, comm,
-                                 ln2->state()->forward.grad_bias);
-    }
     auto DAttnOut = cs::compute::Utils::add(scheduler, DResAttnOut, DMLPOut);
-    auto DLN1Out = attn->backward(scheduler, comm, allreduce_bucket, DAttnOut,
-                                  require_backward_grad_sync);
+    auto DLN1Out = attn->backward(scheduler, DAttnOut);
     auto DInput = ln1->backward(scheduler, DLN1Out);
-    if (require_backward_grad_sync) {
-      allreduce_bucket.push_back(scheduler, comm,
-                                 ln1->state()->forward.grad_weight);
-      allreduce_bucket.push_back(scheduler, comm,
-                                 ln1->state()->forward.grad_bias);
-    }
     return cs::compute::Utils::add(scheduler, DInput, DAttnOut);
   }
 };
 
 struct GPT2 : cs::module::Module {
   const ModelConfig &config;
-  const cs::Scheduler &scheduler;
-  cs::module::Embedding wte{nullptr}, wpe{nullptr};
+  cs::DynamicScheduler scheduler;
+  cs::module::AmpEmbedding wte{nullptr}, wpe{nullptr};
   std::vector<std::shared_ptr<Block>> h;
-  cs::module::LayerNorm lnf{nullptr};
-  cs::module::Linear lm_head{nullptr};
+  cs::module::AmpLayerNorm lnf{nullptr};
+  cs::module::AmpLinear lm_head{nullptr};
   cs::Tensor Pos;
 
-  GPT2(const cs::Scheduler &scheduler, const ModelConfig &config)
+  GPT2(cs::DynamicScheduler scheduler, const ModelConfig &config)
       : scheduler(scheduler), config{config} {
     Pos = cs::compute::Utils::arange(
         scheduler, 0, config.block_size,
         torch::TensorOptions().dtype(torch::kInt64).device(config.device));
     wte = register_module(
         "wte",
-        cs::module::Embedding(scheduler, cs::compute::Embedding::Options(
+        cs::module::AmpEmbedding(scheduler, cs::compute::AmpEmbedding::Options(
                                              config.pad_size, config.n_embd)
                                              .device(config.device)
                                              .dtype(config.dtype)));
     wpe = register_module(
         "wpe",
-        cs::module::Embedding(scheduler, cs::compute::Embedding::Options(
+        cs::module::AmpEmbedding(scheduler, cs::compute::AmpEmbedding::Options(
                                              config.block_size, config.n_embd)
                                              .device(config.device)
                                              .dtype(config.dtype)));
@@ -461,20 +445,30 @@ struct GPT2 : cs::module::Module {
                                   std::make_shared<Block>(scheduler, config)));
     }
     lnf = register_module(
-        "lnf", cs::module::LayerNorm(
-                   scheduler, cs::compute::LayerNorm::Options(config.n_embd)
+        "lnf", cs::module::AmpLayerNorm(
+                   scheduler, cs::compute::AmpLayerNorm::Options(config.n_embd)
                                   .device(config.device)
                                   .dtype(config.dtype)));
     lm_head = register_module(
         "lm_head",
-        cs::module::Linear(scheduler, cs::compute::Linear::Options(
+        cs::module::AmpLinear(scheduler, cs::compute::AmpLinear::Options(
                                           config.n_embd, config.pad_size)
                                           .bias(config.use_bias)
                                           .device(config.device)
                                           .dtype(config.dtype)));
+  
+    _init_weights(scheduler, config);
   }
 
-  cs::Tensor forward(const cs::Scheduler &scheduler, cs::Tensor &Input) {
+  void _init_weights(cs::DynamicScheduler scheduler, const ModelConfig &config) {
+    // TODO: reinitialize the weights
+    // torch::nn::init::normal_(wte->state()->forward.weight, 0.0, 0.02);
+    // torch::nn::init::normal_(wpe->state()->forward.weight, 0.0, 0.02);
+    // torch::nn::init::normal_(lm_head->state()->forward.weight, 0.0, 0.02);
+  }
+
+  void forward(cs::DynamicScheduler scheduler, cs::Tensor &Output,
+               cs::Tensor &Input) {
     cs::Tensor EmbOut;
     {
       auto WteOut = wte->forward(scheduler, Input);
@@ -488,43 +482,21 @@ struct GPT2 : cs::module::Module {
       BlockOut = block->forward(scheduler, BlockOut);
     }
     auto LNfOut = lnf->forward(scheduler, BlockOut);
-    return lm_head->forward(scheduler, LNfOut);
+    Output = lm_head->forward(scheduler, LNfOut);
   }
 
-  void backward(const cs::Scheduler &scheduler,
-                const cs::communication::Comm &comm,
-                const cs::communication::AllReduceBucket &allreduce_bucket,
-                cs::Tensor &DOutput, bool require_backward_grad_sync = false) {
+  void backward(const cs::DynamicScheduler &scheduler, cs::Tensor &DOutput) {
     auto DLNfOut = lm_head->backwardInput(scheduler, DOutput);
     lm_head->backwardParameter(scheduler, DOutput);
-    if (require_backward_grad_sync) {
-      allreduce_bucket.push_back(scheduler, comm,
-                                 lm_head->state()->forward.grad_weight);
-    }
     auto DBlockOut = lnf->backward(scheduler, DLNfOut);
-    if (require_backward_grad_sync) {
-      allreduce_bucket.push_back(scheduler, comm,
-                                 lnf->state()->forward.grad_weight);
-      allreduce_bucket.push_back(scheduler, comm,
-                                 lnf->state()->forward.grad_bias);
-    }
     for (auto &block : h) {
-      DBlockOut = block->backward(scheduler, comm, allreduce_bucket, DBlockOut,
-                                  require_backward_grad_sync);
+      DBlockOut = block->backward(scheduler, DBlockOut);
     }
     auto DEmbOut = DBlockOut;
     {
       auto DEmbOutSum0 = cs::compute::Utils::sum(scheduler, DEmbOut, 0);
       wpe->backward(scheduler, DEmbOutSum0);
-      if (require_backward_grad_sync) {
-        allreduce_bucket.push_back(scheduler, comm,
-                                   wpe->state()->forward.grad_weight);
-      }
       wte->backward(scheduler, DEmbOut);
-      if (require_backward_grad_sync) {
-        allreduce_bucket.push_back(scheduler, comm,
-                                   wte->state()->forward.grad_weight);
-      }
     }
   }
 };
@@ -534,37 +506,30 @@ void train() {
   TrainConfig trainConfig;
   DataConfig dataConfig;
   torch::manual_seed(trainConfig.seed);
-  std::unique_ptr<GPT2> model;
-  cs::Tensor loss;
-  cs::Tensor output, grad_output;
-  const cs::communication::Comm comm =
-      cs::communication::getCommWorld(cs::communication::NCCL);
-  cs::DynamicScheduler scheduler{(int)comm.getRank()};
-  bool master_process = (int)comm.getRank() == 0;
+  cs::DynamicScheduler scheduler{0};
+  bool master_process = true;
   std::chrono::time_point<std::chrono::high_resolution_clock> time_start, time_stop;
   std::chrono::duration<double> duration_ms;
+  std::unique_ptr<GPT2> model;
+  cs::Tensor loss;
   const torch::TensorOptions option =
       torch::TensorOptions().dtype(torch::kInt64).device(modelConfig.device);
   const torch::TensorOptions act_option = torch::TensorOptions()
                                               .dtype(modelConfig.dtype)
                                               .device(modelConfig.device);
-
   if (master_process) {
     std::cout << "Prepare Dataset" << std::endl;
   }
   cs::data::LlmDataset dataset{{dataConfig.path}};
   cs::data::LlmDataLoader dataloader{
-      dataset, comm, modelConfig.batch_size, dataConfig.num_workers, dataConfig.shuffle};
-
+      dataset, modelConfig.batch_size, dataConfig.num_workers, dataConfig.shuffle};
+  
   if (master_process) {
     std::cout << "Init" << std::endl;
   }
   model = std::make_unique<GPT2>(scheduler, modelConfig);
-  auto loss_state = cs::compute::CrossEntropy::init(scheduler);
 
-  bool require_backward_grad_sync = true;
-  cs::communication::AllReduceBucket allreduce_bucket(trainConfig.bucket_size,
-                                                      cs::communication::SUM);
+  auto loss_state = cs::compute::CrossEntropy::init(scheduler);
 
   cs::optimizer::AdamW::init(scheduler, model,
                              cs::optimizer::AdamW::Options{}
@@ -595,7 +560,7 @@ void train() {
   for (int step = 0; step < max_steps; ++step) {
     time_start = std::chrono::high_resolution_clock::now();
     progressBar.display(step, "Training: ", 0);
-    
+
     // TODO: Add validation
     if ((step + 1) % trainConfig.val_every_steps == 0 && master_process) {
       // validation
@@ -607,22 +572,23 @@ void train() {
       auto input = data["input_ids"];
       auto target = data["labels"];
       // Forward
-      output = model->forward(scheduler, input);
+      cs::Tensor output;
+      model->forward(scheduler, output, input);
 
       // compute loss
       output = cs::compute::Utils::view(
           scheduler, output,
           {modelConfig.batch_size * modelConfig.block_size,
-           modelConfig.pad_size});
+            modelConfig.pad_size});
       target = cs::compute::Utils::view(
           scheduler, target, {modelConfig.batch_size * modelConfig.block_size});
       loss = cs::compute::CrossEntropy::forward(scheduler, loss_state, output,
                                                 target);
 
       // Backward
-      grad_output = cs::compute::CrossEntropy::backward(scheduler, loss_state);
-      model->backward(scheduler, comm, allreduce_bucket, grad_output,
-                      require_backward_grad_sync);
+      auto grad_output =
+          cs::compute::CrossEntropy::backward(scheduler, loss_state);
+      model->backward(scheduler, grad_output);
     }
 
     // TODO: Add gradient clipping
@@ -632,8 +598,6 @@ void train() {
     // TODO: Add lr scheduler step
 
     // Check
-    cs::communication::AllReduce::runInplace(scheduler, comm, {loss},
-                                            cs::communication::SUM);
     time_stop = std::chrono::high_resolution_clock::now();
     duration_ms = std::chrono::duration_cast<std::chrono::microseconds>(
         time_stop - time_start);
@@ -645,9 +609,7 @@ void train() {
   }
 }
 
-int main(int argc, char **argv) {
-  MPI_Init(&argc, &argv);
+int main() {
   train();
-  MPI_Finalize();
   return 0;
 }
