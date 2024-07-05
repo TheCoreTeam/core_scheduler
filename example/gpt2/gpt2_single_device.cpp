@@ -44,13 +44,13 @@
 #include "threading/dynamic_scheduler.h"
 
 struct ModelConfig {
-  const int64_t batch_size = 1;
-  const int64_t block_size = 8;
+  const int64_t batch_size = 2;
+  const int64_t block_size = 1024;
   const int64_t vocab_size = 50257;
   const int64_t pad_size = 50304;  // pad vocab_size to be more efficient
-  const int64_t n_embd = 32;     // 2048
-  const int64_t n_head = 8;       // 32
-  const int64_t n_layer = 8;
+  const int64_t n_embd = 2048;     // 2048
+  const int64_t n_head = 32;       // 32
+  const int64_t n_layer = 22;
   const bool use_bias = false;
   const float dropout = 0.0;
   const float epsilon = 1e-5;
@@ -388,8 +388,7 @@ void train(const std::string &path) {
   std::cout << "Prepare Dataset" << std::endl;
 
   cs::data::LlmDataset dataset{{path}};
-  cs::data::LlmDataLoader dataloader{
-      dataset, modelConfig.batch_size, 4, false, 0, 1};
+  cs::data::LlmDataLoader dataloader{dataset, modelConfig.batch_size, 4, false};
 
   std::cout << "Init" << std::endl;
   model = std::make_unique<GPT2>(scheduler, modelConfig);
