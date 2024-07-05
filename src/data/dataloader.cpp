@@ -295,15 +295,57 @@ LlmDataLoader::LlmDataLoader(const LlmDataset &dataset, int64_t batchSize,
   impl->threadVector_.reserve(numWorkers);
   impl->events_.reserve(numWorkers);
   impl->buffers_.reserve(numWorkers);
-  for (int8_t i = 0; i < numWorkers; ++i) {
+  const auto batchEachProcess = impl->dataset_.size() / worldSize;
+  const auto batchOffsetOfThisProcess = batchEachProcess * rank;
+  auto &fileOffsets = impl->dataset_.fileOffsets();
+  size_t startFileIdxOfThisProcess;
+  for (startFileIdxOfThisProcess = 0;
+       startFileIdxOfThisProcess < fileOffsets.size();
+       ++startFileIdxOfThisProcess) {
+    if (fileOffsets[startFileIdxOfThisProcess + 1] > batchOffsetOfThisProcess) {
+      break;
+    }
+  }
+  CS_ASSERT_TRUE(startFileIdxOfThisProcess != fileOffsets.size(),
+                 "Wrong config, maybe batch size is too large");
+  const auto batchEachWorker = batchEachProcess / numWorkers;
+  const int64_t totalIterPerWorker = batchEachProcess / batchSize / numWorkers;
+  for (int64_t i = 0; i < numWorkers; ++i) {
     impl->startBarrier_.emplace_back(std::make_shared<std::barrier<>>(2));
     impl->endBarrier_.emplace_back(std::make_shared<std::barrier<>>(2));
     impl->events_.emplace_back();
     impl->buffers_.emplace_back(new HostBuffer[2]);
+    const auto batchOffsetOfThisThread =
+        batchOffsetOfThisProcess + i * batchEachWorker;
+    size_t startFileIdxOfThisThread;
+    for (startFileIdxOfThisThread = startFileIdxOfThisProcess;
+         startFileIdxOfThisThread < fileOffsets.size();
+         ++startFileIdxOfThisThread) {
+      if (fileOffsets[startFileIdxOfThisThread + 1] > batchOffsetOfThisThread) {
+        break;
+      }
+    }
+    CS_ASSERT_TRUE(startFileIdxOfThisThread != fileOffsets.size(),
+                   "Internal error");
+    const int64_t startIter =
+        (batchOffsetOfThisThread - fileOffsets[startFileIdxOfThisThread]) /
+        batchSize;
+    size_t endFileIdx;
+    for (endFileIdx = startFileIdxOfThisThread; endFileIdx < fileOffsets.size();
+         ++endFileIdx) {
+      if (fileOffsets[endFileIdx + 1] >
+          batchOffsetOfThisThread + batchEachWorker) {
+        break;
+      }
+    }
     impl->threadVector_.emplace_back(
-        threadLoaderTask, std::span{impl->dataset_.files()}, batchSize, 0,
-        impl->dataset_.size() / batchSize, impl->buffers_[i], impl->events_[i],
-        impl->shutDown_, impl->startBarrier_[i], impl->endBarrier_[i]);
+        threadLoaderTask,
+        std::span{impl->dataset_.files().data() + startFileIdxOfThisThread,
+                  impl->dataset_.files().data() + endFileIdx + 1},
+        batchSize, startIter, totalIterPerWorker, impl->buffers_[i],
+        impl->events_[i], impl->shutDown_, impl->startBarrier_[i],
+        impl->endBarrier_[i]);
+
     impl->startBarrier_[i]->arrive_and_wait();
   }
   impl->lastThreadIdx_ = 0;
@@ -370,7 +412,7 @@ LlmDataLoader::LlmDataLoader(const LlmDataset &dataset,
     impl->threadVector_.emplace_back(
         threadLoaderTask,
         std::span{impl->dataset_.files().data() + startFileIdxOfThisThread,
-                  impl->dataset_.files().data() + endFileIdx},
+                  impl->dataset_.files().data() + endFileIdx + 1},
         batchSize, startIter, totalIterPerWorker, impl->buffers_[i],
         impl->events_[i], impl->shutDown_, impl->startBarrier_[i],
         impl->endBarrier_[i]);
