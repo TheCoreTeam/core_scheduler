@@ -25,10 +25,6 @@ namespace cs::module {
 struct Module;
 }
 
-namespace cs {
-struct ThreadPoolCompute;
-}
-
 namespace cs::optimizer {
 struct CS_API AmpAdamW : AdamW {
   AmpAdamW() = delete;
