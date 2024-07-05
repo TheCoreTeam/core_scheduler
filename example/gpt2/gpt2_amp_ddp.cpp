@@ -51,7 +51,7 @@
 #include "threading/dynamic_scheduler.h"
 
 struct ModelConfig {
-  int64_t batch_size = 2;
+  int64_t batch_size = 4;
   const int64_t block_size = 1024;
   const int64_t vocab_size = 50257;
   const int64_t pad_size = 50304;  // pad vocab_size to be more efficient
@@ -70,7 +70,7 @@ struct ModelConfig {
 
 struct TrainConfig {
   int64_t epoch = 5;
-  int64_t total_token_batch_size = 1024*2;  // 524288, 2**19, about 0.5 tokens per batch
+  int64_t total_token_batch_size = 1024*8;  // 524288, 2**19, about 0.5 tokens per batch
   int64_t warmup_steps = 715;
   int64_t max_steps = -1;
   int64_t check_every_steps = 5;
@@ -581,7 +581,7 @@ void train() {
                                                                        modelConfig.block_size, 
                                                                        trainConfig.total_token_batch_size, 
                                                                        modelConfig.batch_size, 
-                                                                       1, 
+                                                                       comm.getSize(), 
                                                                        trainConfig.max_steps, 
                                                                        trainConfig.epoch);
   double epochs = training_args["epochs"];

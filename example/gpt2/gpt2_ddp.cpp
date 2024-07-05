@@ -577,7 +577,7 @@ void train() {
                                                                        modelConfig.block_size, 
                                                                        trainConfig.total_token_batch_size, 
                                                                        modelConfig.batch_size, 
-                                                                       1, 
+                                                                       comm.getSize(), 
                                                                        trainConfig.max_steps, 
                                                                        trainConfig.epoch);
   double epochs = training_args["epochs"];
