@@ -17,6 +17,7 @@
 #pragma once
 #include <memory>
 
+#include "communication/communication.h"
 #include "data/dataset.h"
 #include "tensor.h"
 #include "threading/scheduler.h"
@@ -34,12 +35,14 @@ struct DataLoader {
 };
 
 // This API is not stable
-struct LlmDataLoader : DataLoader {
-  CS_API std::unordered_map<std::string, Tensor> load(
+struct CS_API LlmDataLoader : DataLoader {
+  [[nodiscard]] std::unordered_map<std::string, Tensor> load(
       const Scheduler &scheduler) const;
 
-  CS_API LlmDataLoader(const LlmDataset &dataset, int64_t batchSize,
-                       int64_t numWorkers, bool shuffle, int64_t rank,
-                       int64_t worldSize);
+  LlmDataLoader(const LlmDataset &dataset, int64_t batchSize,
+                int64_t numWorkers, bool shuffle);
+
+  LlmDataLoader(const LlmDataset &dataset, const communication::Comm &comm,
+                int64_t batchSize, int64_t numWorkers, bool shuffle);
 };
 }  // namespace cs::data

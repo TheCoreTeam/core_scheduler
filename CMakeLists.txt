@@ -58,6 +58,7 @@ find_package(Parquet REQUIRED)
 find_package(NCCL REQUIRED)
 find_package(fmt REQUIRED)
 find_package(spdlog REQUIRED)
+find_package(cxxopts REQUIRED)
 
 if (DEFINED ENV{CONDA_PREFIX})
     list(APPEND MPI_HOME ENV{CONDA_PREFIX}/bin/)

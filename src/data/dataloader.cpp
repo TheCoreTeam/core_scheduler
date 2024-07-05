@@ -18,12 +18,18 @@
 
 #include <ATen/Dispatch.h>
 #include <ATen/ops/empty.h>
+#include <arrow/array/array_nested.h>
+#include <arrow/array/array_primitive.h>
+#include <arrow/dataset/discovery.h>
+#include <arrow/dataset/file_parquet.h>
+#include <arrow/filesystem/localfs.h>
+#include <arrow/type.h>
+#include <arrow/type_fwd.h>
 #include <c10/cuda/CUDAGuard.h>
 #include <c10/cuda/CUDAStream.h>
 
 #include <barrier>
-#include <future>
-#include <queue>
+#include <cstdint>
 #include <span>
 
 #include "data/dataloader_impl.h"
@@ -62,17 +68,13 @@ struct LlmDataLoaderImpl final : DataLoader::Impl {
                     const int64_t num_workers, const bool shuffle,
                     const int64_t rank, const int64_t worldSize)
       : Impl{batch_size, num_workers, shuffle, rank, worldSize},
-        dataset{dataset} {}
-
-  const LlmDataset dataset;
-
-  [[nodiscard]] std::function<void(const std::span<HostBuffer> &, int64_t)>
-  getFiller(int64_t batchsize) const;
+        dataset_{dataset} {}
 
   ~LlmDataLoaderImpl() override;
 
   [[nodiscard]] int64_t iterationsPerEpoch() const override;
 
+  const LlmDataset dataset_;
   std::vector<std::shared_ptr<std::barrier<>>> startBarrier_{};
   std::vector<Event> events_{};
   std::vector<std::shared_ptr<HostBuffer[]>> buffers_{};
@@ -83,37 +85,6 @@ struct LlmDataLoaderImpl final : DataLoader::Impl {
   std::int64_t lastThreadIdx_ = 0;
 };
 
-std::function<void(const std::span<HostBuffer> &, int64_t)>
-LlmDataLoaderImpl::getFiller(int64_t batchsize) const {
-  return std::function{
-      [batchsize = batchsize, dataset = dataset](
-          const std::span<HostBuffer> &buffer, const int64_t iteration) {
-        const auto rows = batchsize;
-        const auto cols = dataset.cols();
-        // TODO(Jie): maybe padding
-        const auto ld = cols;
-
-        for (auto &i : buffer) {
-          i.options = i.options.dtype(at::kLong);
-          const auto size = sizeof(std::int64_t) * rows * ld;
-          if (i.size < size) {
-            CHECK_CUDART(cudaFreeHost(i.ptr));
-            CHECK_CUDART(cudaMallocHost(&i.ptr, size));
-            i.size = size;
-            i.validDataSize = size;
-          }
-          i.sizes = {rows, cols};
-        }
-        std::vector<int64_t *> ptrs;
-        std::vector<int64_t> lds;
-        ptrs.reserve(buffer.size());
-        for (const auto &i : buffer) {
-          ptrs.push_back(static_cast<int64_t *>(i.ptr));
-          lds.push_back(ld);
-        }
-        dataset.fillBatch(ptrs, lds, iteration * batchsize, batchsize);
-      }};
-}
 LlmDataLoaderImpl::~LlmDataLoaderImpl() {
   shutDown_->store(true);
   for (const auto &b : startBarrier_) {
@@ -124,7 +95,7 @@ LlmDataLoaderImpl::~LlmDataLoaderImpl() {
   }
 }
 int64_t LlmDataLoaderImpl::iterationsPerEpoch() const {
-  return dataset.rows() / (batchSize * worldSize);
+  return dataset_.size() / (batchSize * worldSize);
 }
 
 HostBuffer::~HostBuffer() { CHECK_CUDART(cudaFreeHost(ptr)); }
@@ -137,28 +108,117 @@ int64_t DataLoader::iterationsPerEpoch() const {
   return impl()->iterationsPerEpoch();
 }
 
-void threadLoaderTask(
-    const std::function<void(const std::span<HostBuffer> &, int64_t)> filler,
-    const int64_t threadRank, const int64_t threadNum,
-    const int64_t processRank, const int64_t worldSize,
-    const int64_t iterations, const std::shared_ptr<HostBuffer[]> buffer,
-    const int64_t bufferNum, const Event event,
-    const std::shared_ptr<std::atomic<bool>> shutDown,
-    const std::shared_ptr<std::barrier<>> startBarrier,
-    const std::shared_ptr<std::barrier<>> endBarrier) {
-  int64_t iteration = processRank + threadRank * worldSize;
+void threadLoaderTask(const std::span<const std::string> files,
+                      const int64_t batchSize, const int64_t startIter,
+                      const int64_t totalIters,
+                      const std::shared_ptr<HostBuffer[]> buffer,
+                      const Event event,
+                      const std::shared_ptr<std::atomic<bool>> shutDown,
+                      const std::shared_ptr<std::barrier<>> startBarrier,
+                      const std::shared_ptr<std::barrier<>> endBarrier) {
   startBarrier->arrive_and_wait();
+  const auto filesystem = std::make_shared<arrow::fs::LocalFileSystem>();
+  const auto format = std::make_shared<arrow::dataset::ParquetFileFormat>();
+  auto result = arrow::dataset::FileSystemDatasetFactory::Make(
+      filesystem, std::vector<std::string>{files.begin(), files.end()}, format,
+      {});
+  CS_ASSERT_TRUE(result.ok(), fmt::format("Failed to make dataset factory: {}",
+                                          result.status().ToString()));
+  const auto factory = result.ValueOrDie();
+  const auto dataset_result = factory->Finish();
+  CS_ASSERT_TRUE(dataset_result.ok(),
+                 fmt::format("Failed to finish dataset: {}",
+                             dataset_result.status().ToString()));
+  const auto &dataset = dataset_result.ValueOrDie();
+  auto scanner_builder_result = dataset->NewScan();
+  CS_ASSERT_TRUE(scanner_builder_result.ok(),
+                 fmt::format("Failed to start a new scan: {}",
+                             scanner_builder_result.status().ToString()));
+
+  const auto scanner_builder = scanner_builder_result.ValueOrDie();
+  scanner_builder->GetScanOptions().ValueOrDie()->batch_size = batchSize;
+
+  const auto project_status = scanner_builder->Project({"input_ids", "labels"});
+  CS_ASSERT_TRUE(project_status.ok(),
+                 fmt::format("Failed to set projection columns: {}",
+                             project_status.ToString()));
+
+  const auto scanner_result = scanner_builder->Finish();
+  CS_ASSERT_TRUE(scanner_result.ok(),
+                 fmt::format("Failed to create scanner: {}",
+                             scanner_result.status().ToString()));
+  const auto &scanner = scanner_result.ValueOrDie();
+  auto it = scanner->ScanBatches().ValueOrDie();
+  auto batch = it.Next().ValueOrDie();
+  for (int64_t i = 1; i < startIter; ++i) {
+    batch = it.Next().ValueOrDie();
+  }
+  int64_t itCount = 1;
+
+  const auto rows = batchSize;
+  const auto cols =
+      std::static_pointer_cast<arrow::ListArray>(batch.record_batch->column(0))
+          ->value_length(0);
+  // TODO(Jie): maybe padding
+  const auto ld = cols;
+
+  for (int i = 0; i < 2; ++i) {
+    buffer[i].options = buffer[i].options.dtype(at::kLong);
+    const auto size = sizeof(std::int64_t) * rows * ld;
+    if (buffer[i].size < size) {
+      CHECK_CUDART(cudaFreeHost(buffer[i].ptr));
+      CHECK_CUDART(cudaMallocHost(&buffer[i].ptr, size));
+      buffer[i].size = size;
+      buffer[i].validDataSize = size;
+    }
+    buffer[i].sizes = {rows, cols};
+  }
+
   while (true) {
-    filler({buffer.get(), buffer.get() + bufferNum}, iteration);
+    for (int i = 0; i < 2; ++i) {
+      auto listArray = std::static_pointer_cast<arrow::ListArray>(
+          batch.record_batch->column(i));
+      if (listArray->value_type()->id() == arrow::Type::INT32) {
+        for (int j = 0; j < listArray->length(); j++) {
+          auto subArray = std::static_pointer_cast<arrow::Int32Array>(
+              listArray->values()->Slice(listArray->value_offset(j),
+                                         listArray->value_length(j)));
+          for (int k = 0; k < subArray->length(); k++) {
+            static_cast<int64_t *>(buffer[i].ptr)[k + j * cols] =
+                subArray->Value(k);
+          }
+        }
+      } else if (listArray->value_type()->id() == arrow::Type::INT64) {
+        for (int j = 0; j < listArray->length(); j++) {
+          auto subArray = std::static_pointer_cast<arrow::Int64Array>(
+              listArray->values()->Slice(listArray->value_offset(j),
+                                         listArray->value_length(j)));
+          for (int k = 0; k < subArray->length(); k++) {
+            static_cast<int64_t *>(buffer[i].ptr)[k + j * cols] =
+                subArray->Value(k);
+          }
+        }
+      } else {
+        CS_ASSERT_TRUE(false,
+                       fmt::format("Not supported dataset value type: {}",
+                                   listArray->value_type()->ToString()));
+      }
+    }
     startBarrier->arrive_and_wait();
     if (shutDown->load()) {
       break;
     }
     endBarrier->arrive_and_wait();
     event.synchronize();
-    iteration += threadNum * worldSize;
-    if (iteration >= iterations) {
-      iteration = processRank + threadRank * worldSize;
+    ++itCount;
+    if (itCount >= totalIters) {
+      itCount = 0;
+      it = scanner->ScanBatches().ValueOrDie();
+      for (int64_t i = 0; i < startIter; ++i) {
+        (void)it.Next();
+      }
+    } else {
+      batch = it.Next().ValueOrDie();
     }
   }
 }
@@ -202,20 +262,17 @@ std::unordered_map<std::string, Tensor> LlmDataLoader::load(
   };
 
   std::vector<Tensor> output;
-  const auto attributeNum = implCast->dataset.attributeNum();
-  const auto &attributeNames = implCast->dataset.attributeNames();
-  output.resize(attributeNum);
+  output.resize(2);
   std::unordered_map<std::string, Tensor> map;
-  for (int i = 0; i < attributeNum; ++i) {
-    map.insert({attributeNames[i], output[i]});
-  }
+  map.insert({"input_ids", output[0]});
+  map.insert({"labels", output[1]});
 
   implCast->startBarrier_[implCast->lastThreadIdx_]->arrive_and_wait();
-  scheduler.impl()->submit(Task{std::make_shared<Impl>(Impl{
-      output,
-      implCast->events_[implCast->lastThreadIdx_],
-      {implCast->buffers_[implCast->lastThreadIdx_].get(),
-       implCast->buffers_[implCast->lastThreadIdx_].get() + attributeNum}})});
+  scheduler.impl()->submit(Task{std::make_shared<Impl>(
+      Impl{output,
+           implCast->events_[implCast->lastThreadIdx_],
+           {implCast->buffers_[implCast->lastThreadIdx_].get(),
+            implCast->buffers_[implCast->lastThreadIdx_].get() + 2}})});
   implCast->endBarrier_[implCast->lastThreadIdx_]->arrive_and_wait();
   ++implCast->lastThreadIdx_;
   implCast->lastThreadIdx_ =
@@ -225,9 +282,10 @@ std::unordered_map<std::string, Tensor> LlmDataLoader::load(
 }
 
 LlmDataLoader::LlmDataLoader(const LlmDataset &dataset, int64_t batchSize,
-                             int64_t numWorkers, bool shuffle, int64_t rank,
-                             int64_t worldSize) {
+                             int64_t numWorkers, bool shuffle) {
   CS_ASSERT_TRUE(shuffle == false, "We do not support shuffle now");
+  auto rank = 0;
+  auto worldSize = 1;
   const auto impl = std::make_shared<LlmDataLoaderImpl>(
       dataset, batchSize, numWorkers, shuffle, rank, worldSize);
   impl_ = impl;
@@ -237,16 +295,128 @@ LlmDataLoader::LlmDataLoader(const LlmDataset &dataset, int64_t batchSize,
   impl->threadVector_.reserve(numWorkers);
   impl->events_.reserve(numWorkers);
   impl->buffers_.reserve(numWorkers);
-  for (int8_t i = 0; i < numWorkers; ++i) {
+  const auto batchEachProcess = impl->dataset_.size() / worldSize;
+  const auto batchOffsetOfThisProcess = batchEachProcess * rank;
+  auto &fileOffsets = impl->dataset_.fileOffsets();
+  size_t startFileIdxOfThisProcess;
+  for (startFileIdxOfThisProcess = 0;
+       startFileIdxOfThisProcess < fileOffsets.size();
+       ++startFileIdxOfThisProcess) {
+    if (fileOffsets[startFileIdxOfThisProcess + 1] > batchOffsetOfThisProcess) {
+      break;
+    }
+  }
+  CS_ASSERT_TRUE(startFileIdxOfThisProcess != fileOffsets.size(),
+                 "Wrong config, maybe batch size is too large");
+  const auto batchEachWorker = batchEachProcess / numWorkers;
+  const int64_t totalIterPerWorker = batchEachProcess / batchSize / numWorkers;
+  for (int64_t i = 0; i < numWorkers; ++i) {
     impl->startBarrier_.emplace_back(std::make_shared<std::barrier<>>(2));
     impl->endBarrier_.emplace_back(std::make_shared<std::barrier<>>(2));
     impl->events_.emplace_back();
-    impl->buffers_.emplace_back(new HostBuffer[impl->dataset.attributeNum()]);
+    impl->buffers_.emplace_back(new HostBuffer[2]);
+    const auto batchOffsetOfThisThread =
+        batchOffsetOfThisProcess + i * batchEachWorker;
+    size_t startFileIdxOfThisThread;
+    for (startFileIdxOfThisThread = startFileIdxOfThisProcess;
+         startFileIdxOfThisThread < fileOffsets.size();
+         ++startFileIdxOfThisThread) {
+      if (fileOffsets[startFileIdxOfThisThread + 1] > batchOffsetOfThisThread) {
+        break;
+      }
+    }
+    CS_ASSERT_TRUE(startFileIdxOfThisThread != fileOffsets.size(),
+                   "Internal error");
+    const int64_t startIter =
+        (batchOffsetOfThisThread - fileOffsets[startFileIdxOfThisThread]) /
+        batchSize;
+    size_t endFileIdx;
+    for (endFileIdx = startFileIdxOfThisThread; endFileIdx < fileOffsets.size();
+         ++endFileIdx) {
+      if (fileOffsets[endFileIdx + 1] >
+          batchOffsetOfThisThread + batchEachWorker) {
+        break;
+      }
+    }
     impl->threadVector_.emplace_back(
-        threadLoaderTask, impl->getFiller(batchSize), i, numWorkers, rank,
-        worldSize, impl->iterationsPerEpoch(), impl->buffers_[i],
-        impl->dataset.attributeNum(), impl->events_[i], impl->shutDown_,
-        impl->startBarrier_[i], impl->endBarrier_[i]);
+        threadLoaderTask,
+        std::span{impl->dataset_.files().data() + startFileIdxOfThisThread,
+                  impl->dataset_.files().data() + endFileIdx + 1},
+        batchSize, startIter, totalIterPerWorker, impl->buffers_[i],
+        impl->events_[i], impl->shutDown_, impl->startBarrier_[i],
+        impl->endBarrier_[i]);
+
+    impl->startBarrier_[i]->arrive_and_wait();
+  }
+  impl->lastThreadIdx_ = 0;
+}
+
+LlmDataLoader::LlmDataLoader(const LlmDataset &dataset,
+                             const communication::Comm &comm, int64_t batchSize,
+                             int64_t numWorkers, bool shuffle) {
+  CS_ASSERT_TRUE(shuffle == false, "We do not support shuffle now");
+  auto rank = comm.getRank();
+  auto worldSize = comm.getSize();
+  const auto impl = std::make_shared<LlmDataLoaderImpl>(
+      dataset, batchSize, numWorkers, shuffle, rank, worldSize);
+  impl_ = impl;
+  impl->shutDown_ = std::make_shared<std::atomic<bool>>(false);
+  impl->startBarrier_.reserve(numWorkers);
+  impl->endBarrier_.reserve(numWorkers);
+  impl->threadVector_.reserve(numWorkers);
+  impl->events_.reserve(numWorkers);
+  impl->buffers_.reserve(numWorkers);
+  const auto batchEachProcess = impl->dataset_.size() / worldSize;
+  const auto batchOffsetOfThisProcess = batchEachProcess * rank;
+  auto &fileOffsets = impl->dataset_.fileOffsets();
+  size_t startFileIdxOfThisProcess;
+  for (startFileIdxOfThisProcess = 0;
+       startFileIdxOfThisProcess < fileOffsets.size();
+       ++startFileIdxOfThisProcess) {
+    if (fileOffsets[startFileIdxOfThisProcess + 1] > batchOffsetOfThisProcess) {
+      break;
+    }
+  }
+  CS_ASSERT_TRUE(startFileIdxOfThisProcess != fileOffsets.size(),
+                 "Wrong config, maybe batch size is too large");
+  const auto batchEachWorker = batchEachProcess / numWorkers;
+  const int64_t totalIterPerWorker = batchEachProcess / batchSize / numWorkers;
+  for (int64_t i = 0; i < numWorkers; ++i) {
+    impl->startBarrier_.emplace_back(std::make_shared<std::barrier<>>(2));
+    impl->endBarrier_.emplace_back(std::make_shared<std::barrier<>>(2));
+    impl->events_.emplace_back();
+    impl->buffers_.emplace_back(new HostBuffer[2]);
+    const auto batchOffsetOfThisThread =
+        batchOffsetOfThisProcess + i * batchEachWorker;
+    size_t startFileIdxOfThisThread;
+    for (startFileIdxOfThisThread = startFileIdxOfThisProcess;
+         startFileIdxOfThisThread < fileOffsets.size();
+         ++startFileIdxOfThisThread) {
+      if (fileOffsets[startFileIdxOfThisThread + 1] > batchOffsetOfThisThread) {
+        break;
+      }
+    }
+    CS_ASSERT_TRUE(startFileIdxOfThisThread != fileOffsets.size(),
+                   "Internal error");
+    const int64_t startIter =
+        (batchOffsetOfThisThread - fileOffsets[startFileIdxOfThisThread]) /
+        batchSize;
+    size_t endFileIdx;
+    for (endFileIdx = startFileIdxOfThisThread; endFileIdx < fileOffsets.size();
+         ++endFileIdx) {
+      if (fileOffsets[endFileIdx + 1] >
+          batchOffsetOfThisProcess + batchEachWorker) {
+        break;
+      }
+    }
+    impl->threadVector_.emplace_back(
+        threadLoaderTask,
+        std::span{impl->dataset_.files().data() + startFileIdxOfThisThread,
+                  impl->dataset_.files().data() + endFileIdx + 1},
+        batchSize, startIter, totalIterPerWorker, impl->buffers_[i],
+        impl->events_[i], impl->shutDown_, impl->startBarrier_[i],
+        impl->endBarrier_[i]);
+
     impl->startBarrier_[i]->arrive_and_wait();
   }
   impl->lastThreadIdx_ = 0;

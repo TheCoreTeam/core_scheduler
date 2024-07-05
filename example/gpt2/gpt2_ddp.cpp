@@ -20,6 +20,7 @@
 
 #include <chrono>
 #include <cstdint>
+#include <cxxopts.hpp>
 #include <iostream>
 #include <memory>
 #include <string>
@@ -71,10 +72,6 @@ struct TrainConfig {
   double beta1 = 0.9;
   double beta2 = 0.95;
   double weight_decay = 1e-1;
-};
-
-struct DataConfig {
-  const std::string path = "dataset_path/";
 };
 
 // Function to display the progress bar
@@ -439,11 +436,10 @@ struct GPT2 : cs::module::Module {
   }
 };
 
-void train() {
+void train(const std::string path) {
   torch::manual_seed(42);
   ModelConfig modelConfig;
   TrainConfig trainConfig;
-  DataConfig dataConfig;
   std::unique_ptr<GPT2> model;
   cs::Tensor loss;
   cs::Tensor output, grad_output;
@@ -458,10 +454,9 @@ void train() {
 
   std::cout << "Prepare Dataset" << std::endl;
 
-  cs::data::LlmDataset dataset{{dataConfig.path}};
-  cs::data::LlmDataLoader dataloader{
-      dataset, modelConfig.batch_size, 4,
-      false,   comm.getRank(),         comm.getSize()};
+  cs::data::LlmDataset dataset{{path}};
+  cs::data::LlmDataLoader dataloader{dataset, comm, modelConfig.batch_size, 4,
+                                     false};
 
   std::cout << "Init" << std::endl;
   model = std::make_unique<GPT2>(scheduler, modelConfig);
@@ -531,8 +526,19 @@ void train() {
 }
 
 int main(int argc, char **argv) {
+  cxxopts::Options options("GPT2", "An GPT2 example");
+
+  options.add_options()("path", "Dataset Path", cxxopts::value<std::string>());
+
+  const auto result = options.parse(argc, argv);
+
+  if (result.count("help")) {
+    std::cout << options.help() << std::endl;
+    exit(0);
+  }
+  const auto path = result["path"].as<std::string>();
   MPI_Init(&argc, &argv);
-  train();
+  train(path);
   MPI_Finalize();
   return 0;
 }

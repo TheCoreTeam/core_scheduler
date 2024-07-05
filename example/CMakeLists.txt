@@ -17,6 +17,7 @@ function(create_executable target_name source_files)
     target_link_libraries(${target_name} PRIVATE
             core_scheduler
             MPI::MPI_C
+            cxxopts::cxxopts
     )
     target_compile_options(${target_name} PRIVATE
             $<$<CONFIG:Release>:-Ofast>
