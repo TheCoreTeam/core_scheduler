@@ -66,7 +66,8 @@ struct ModelConfig {
 
 struct TrainConfig {
   int64_t epoch = 5;
-  int64_t total_token_batch_size = 1024*2;  // 524288, 2**19, about 0.5 tokens per batch
+  int64_t total_token_batch_size =
+      1024 * 2;  // 524288, 2**19, about 0.5 tokens per batch
   int64_t warmup_steps = 715;
   int64_t max_steps = -1;
   int64_t check_every_steps = 5;
@@ -80,7 +81,9 @@ struct TrainConfig {
   double eps = 1e-8;
   double grad_clip_value = 1.0;
   int64_t seed = 1337;
-  torch::Dtype amp_precision = torch::kBFloat16; // torch::kBFloat16, torch::kFloat16 (Now we only support bf16)
+  torch::Dtype amp_precision =
+      torch::kBFloat16;  // torch::kBFloat16, torch::kFloat16 (Now we only
+                         // support bf16)
   int64_t wait_every_step = 1;
   int64_t bucket_size = 30 * 1024 * 1024;  // 30M
 };
@@ -93,113 +96,128 @@ struct DataConfig {
 
 // Helper function to calculate the training arguments
 std::unordered_map<std::string, double> getTrainArgs(
-    int num_samples,
-    int tokens_per_sample,
-    int global_token_batch_size, 
-    int batch_size_per_dprank_per_step, 
-    int num_dprank,
-    int max_steps = -1,
-    int max_epochs = -1
-) {
-    if (max_steps == -1 && max_epochs == -1) {
-        throw std::invalid_argument("At least one of max_steps or max_epochs must be provided.");
+    int num_samples, int tokens_per_sample, int global_token_batch_size,
+    int batch_size_per_dprank_per_step, int num_dprank, int max_steps = -1,
+    int max_epochs = -1) {
+  if (max_steps == -1 && max_epochs == -1) {
+    throw std::invalid_argument(
+        "At least one of max_steps or max_epochs must be provided.");
+  }
+
+  int tokens_per_dprank_per_step =
+      tokens_per_sample * batch_size_per_dprank_per_step;
+  int total_tokens_per_step = tokens_per_dprank_per_step * num_dprank;
+  int grad_accum_steps = global_token_batch_size / total_tokens_per_step;
+  int total_tokens_in_dataset = num_samples * tokens_per_sample;
+
+  if (max_steps != -1 && max_epochs != -1) {
+    int calculated_max_steps =
+        (max_epochs * total_tokens_in_dataset) / global_token_batch_size;
+    double calculated_max_epochs = (max_steps * global_token_batch_size) /
+                                   static_cast<double>(total_tokens_in_dataset);
+
+    if (!(calculated_max_steps == max_steps &&
+          static_cast<int>(calculated_max_epochs) == max_epochs)) {
+      throw std::invalid_argument(
+          "Inconsistent max_steps and max_epochs based on the dataset and "
+          "configuration. "
+          "Calculated max_steps from max_epochs: " +
+          std::to_string(calculated_max_steps) +
+          ", provided max_steps: " + std::to_string(max_steps) +
+          ". "
+          "Calculated max_epochs from max_steps: " +
+          std::to_string(static_cast<int>(calculated_max_epochs)) +
+          ", provided max_epochs: " + std::to_string(max_epochs) + ".");
     }
+  } else if (max_steps == -1) {
+    max_steps =
+        (max_epochs * total_tokens_in_dataset) / global_token_batch_size;
+  } else if (max_epochs == -1) {
+    max_epochs =
+        (max_steps * global_token_batch_size) / total_tokens_in_dataset;
+  }
 
-    int tokens_per_dprank_per_step = tokens_per_sample * batch_size_per_dprank_per_step;
-    int total_tokens_per_step = tokens_per_dprank_per_step * num_dprank;
-    int grad_accum_steps = global_token_batch_size / total_tokens_per_step;
-    int total_tokens_in_dataset = num_samples * tokens_per_sample;
+  std::unordered_map<std::string, double> result;
+  result["epochs"] = max_epochs;
+  result["max_steps"] = max_steps;
+  result["grad_accum_steps"] = grad_accum_steps;
+  result["total_tokens_per_step"] = total_tokens_per_step;
 
-    if (max_steps != -1 && max_epochs != -1) {
-        int calculated_max_steps = (max_epochs * total_tokens_in_dataset) / global_token_batch_size;
-        double calculated_max_epochs = (max_steps * global_token_batch_size) / static_cast<double>(total_tokens_in_dataset);
-
-        if (!(calculated_max_steps == max_steps && static_cast<int>(calculated_max_epochs) == max_epochs)) {
-            throw std::invalid_argument(
-                "Inconsistent max_steps and max_epochs based on the dataset and configuration. "
-                "Calculated max_steps from max_epochs: " + std::to_string(calculated_max_steps) + ", provided max_steps: " + std::to_string(max_steps) + ". "
-                "Calculated max_epochs from max_steps: " + std::to_string(static_cast<int>(calculated_max_epochs)) + ", provided max_epochs: " + std::to_string(max_epochs) + "."
-            );
-        }
-    } else if (max_steps == -1) {
-        max_steps = (max_epochs * total_tokens_in_dataset) / global_token_batch_size;
-    } else if (max_epochs == -1) {
-        max_epochs = (max_steps * global_token_batch_size) / total_tokens_in_dataset;
-    }
-
-    std::unordered_map<std::string, double> result;
-    result["epochs"] = max_epochs;
-    result["max_steps"] = max_steps;
-    result["grad_accum_steps"] = grad_accum_steps;
-    result["total_tokens_per_step"] = total_tokens_per_step;
-
-    return result;
+  return result;
 }
 
 // Class to display the progress bar
 struct ProgressBar {
-    int total;
-    int width;
-    std::chrono::time_point<std::chrono::high_resolution_clock> start_time;
-    std::chrono::time_point<std::chrono::high_resolution_clock> last_time;
+  int total;
+  int width;
+  std::chrono::time_point<std::chrono::high_resolution_clock> start_time;
+  std::chrono::time_point<std::chrono::high_resolution_clock> last_time;
 
-    ProgressBar(int total_steps, int bar_width = 50)
-        : total(total_steps), width(bar_width) {
-        start_time = std::chrono::high_resolution_clock::now();
-        last_time = start_time;
+  ProgressBar(int total_steps, int bar_width = 50)
+      : total(total_steps), width(bar_width) {
+    start_time = std::chrono::high_resolution_clock::now();
+    last_time = start_time;
+  }
+
+  std::string format_time(std::chrono::seconds time) const {
+    int minutes =
+        std::chrono::duration_cast<std::chrono::minutes>(time).count();
+    int seconds = (time - std::chrono::minutes(minutes)).count();
+    std::ostringstream oss;
+    oss << std::setw(2) << std::setfill('0') << minutes << ":" << std::setw(2)
+        << std::setfill('0') << seconds;
+    return oss.str();
+  }
+
+  void display(int completed, const std::string &prefix = "", int rank = 0) {
+    float progress = total > 1 ? static_cast<float>(completed) / (total - 1)
+                               : 1.0;  // Adjusted to avoid division by zero
+    int pos = width * progress;
+
+    auto current_time = std::chrono::high_resolution_clock::now();
+    std::chrono::seconds elapsed_time =
+        std::chrono::duration_cast<std::chrono::seconds>(current_time -
+                                                         start_time);
+    std::chrono::seconds step_time =
+        std::chrono::duration_cast<std::chrono::seconds>(current_time -
+                                                         last_time);
+    std::chrono::seconds remaining_time(0);
+    if (completed > 0) {
+      double avg_step_time =
+          elapsed_time.count() / static_cast<double>(completed);
+      remaining_time = std::chrono::seconds(
+          static_cast<long long>(avg_step_time * (total - completed - 1)));
     }
 
-    std::string format_time(std::chrono::seconds time) const {
-        int minutes = std::chrono::duration_cast<std::chrono::minutes>(time).count();
-        int seconds = (time - std::chrono::minutes(minutes)).count();
-        std::ostringstream oss;
-        oss << std::setw(2) << std::setfill('0') << minutes << ":"
-            << std::setw(2) << std::setfill('0') << seconds;
-        return oss.str();
+    // Clear the line before printing progress
+    std::cout << "\r" << std::string(width + 50, ' ')
+              << "\r";  // Clear the line
+
+    std::cout << prefix;
+    std::cout << "[";
+    for (int i = 0; i < width; ++i) {
+      if (i < pos)
+        std::cout << "=";
+      else if (i == pos)
+        std::cout << ">";
+      else
+        std::cout << " ";
+    }
+    std::cout << "] " << completed + 1 << "/" << total << " | "
+              << format_time(elapsed_time) << "<" << format_time(remaining_time)
+              << " | " << int(progress * 100.0) << " %";
+
+    // Ensure the progress bar always ends with a newline
+    if (rank == 0) {
+      std::cout.flush();
+    } else {
+      std::cout << std::endl;  // Force a newline if not the main rank or
+                               // completing the bar
     }
 
-    void display(int completed, const std::string &prefix = "", int rank = 0) {
-      float progress = total > 1 ? static_cast<float>(completed) / (total - 1)
-                                : 1.0;  // Adjusted to avoid division by zero
-      int pos = width * progress;
-
-      auto current_time = std::chrono::high_resolution_clock::now();
-      std::chrono::seconds elapsed_time = std::chrono::duration_cast<std::chrono::seconds>(current_time - start_time);
-      std::chrono::seconds step_time = std::chrono::duration_cast<std::chrono::seconds>(current_time - last_time);
-      std::chrono::seconds remaining_time(0);
-      if (completed > 0) {
-          double avg_step_time = elapsed_time.count() / static_cast<double>(completed);
-          remaining_time = std::chrono::seconds(static_cast<long long>(avg_step_time * (total - completed - 1)));
-      }
-
-      // Clear the line before printing progress
-      std::cout << "\r" << std::string(width + 50, ' ') << "\r";  // Clear the line
-
-      std::cout << prefix;
-      std::cout << "[";
-      for (int i = 0; i < width; ++i) {
-          if (i < pos)
-              std::cout << "=";
-          else if (i == pos)
-              std::cout << ">";
-          else
-              std::cout << " ";
-      }
-      std::cout << "] " << completed + 1 << "/" << total << " | "
-                << format_time(elapsed_time) << "<" << format_time(remaining_time) << " | "
-                << int(progress * 100.0) << " %";
-
-      // Ensure the progress bar always ends with a newline
-      if (rank == 0) {
-          std::cout.flush();
-      } else {
-          std::cout << std::endl;  // Force a newline if not the main rank or completing the bar
-      }
-
-      last_time = current_time;  // Update last_time after displaying progress
-    }
+    last_time = current_time;  // Update last_time after displaying progress
+  }
 };
-
 
 struct Attn : cs::module::Module {
   const cs::Scheduler &scheduler;
@@ -541,7 +559,8 @@ void train() {
       cs::communication::getCommWorld(cs::communication::NCCL);
   cs::DynamicScheduler scheduler{(int)comm.getRank()};
   bool master_process = (int)comm.getRank() == 0;
-  std::chrono::time_point<std::chrono::high_resolution_clock> time_start, time_stop;
+  std::chrono::time_point<std::chrono::high_resolution_clock> time_start,
+      time_stop;
   std::chrono::duration<double> duration_ms;
   const torch::TensorOptions option =
       torch::TensorOptions().dtype(torch::kInt64).device(modelConfig.device);
@@ -553,8 +572,9 @@ void train() {
     std::cout << "Prepare Dataset" << std::endl;
   }
   cs::data::LlmDataset dataset{{dataConfig.path}};
-  cs::data::LlmDataLoader dataloader{
-      dataset, comm, modelConfig.batch_size, dataConfig.num_workers, dataConfig.shuffle};
+  cs::data::LlmDataLoader dataloader{dataset, comm, modelConfig.batch_size,
+                                     dataConfig.num_workers,
+                                     dataConfig.shuffle};
 
   if (master_process) {
     std::cout << "Init" << std::endl;
@@ -572,30 +592,30 @@ void train() {
                                  .beta1(trainConfig.beta1)
                                  .beta2(trainConfig.beta2)
                                  .weight_decay(trainConfig.weight_decay));
-  
-  std::unordered_map<std::string, double> training_args = getTrainArgs(dataloader.iterationsPerEpoch(), 
-                                                                       modelConfig.block_size, 
-                                                                       trainConfig.total_token_batch_size, 
-                                                                       modelConfig.batch_size, 
-                                                                       comm.getSize(), 
-                                                                       trainConfig.max_steps, 
-                                                                       trainConfig.epoch);
+
+  std::unordered_map<std::string, double> training_args =
+      getTrainArgs(dataloader.iterationsPerEpoch(), modelConfig.block_size,
+                   trainConfig.total_token_batch_size, modelConfig.batch_size,
+                   comm.getSize(), trainConfig.max_steps, trainConfig.epoch);
   double epochs = training_args["epochs"];
   double max_steps = training_args["max_steps"];
   double grad_accum_steps = training_args["grad_accum_steps"];
   double total_tokens_per_step = training_args["total_tokens_per_step"];
 
   if (master_process) {
-    std::cout << "The training process will train " << epochs << " epochs, " << max_steps << " steps." << std::endl;
-    std::cout << "=> calculated gradient accumulation steps: " << grad_accum_steps << std::endl;
-    std::cout << "=> calculated tokens per step: " << total_tokens_per_step << std::endl;
+    std::cout << "The training process will train " << epochs << " epochs, "
+              << max_steps << " steps." << std::endl;
+    std::cout << "=> calculated gradient accumulation steps: "
+              << grad_accum_steps << std::endl;
+    std::cout << "=> calculated tokens per step: " << total_tokens_per_step
+              << std::endl;
   }
 
   ProgressBar progressBar(max_steps);
   for (int step = 0; step < max_steps; ++step) {
     time_start = std::chrono::high_resolution_clock::now();
     progressBar.display(step, "Training: ", 0);
-    
+
     // TODO: Add validation
     if ((step + 1) % trainConfig.val_every_steps == 0 && master_process) {
       // validation
@@ -633,13 +653,17 @@ void train() {
 
     // Check
     cs::communication::AllReduce::runInplace(scheduler, comm, {loss},
-                                            cs::communication::SUM);
+                                             cs::communication::SUM);
     time_stop = std::chrono::high_resolution_clock::now();
     duration_ms = std::chrono::duration_cast<std::chrono::microseconds>(
         time_stop - time_start);
-    if (trainConfig.check_every_steps != -1 && (step + 1) % trainConfig.check_every_steps == 0 && master_process) {
-      printf("\nstep %5d | lr %.4e | grad norm: %.4f | dt: %.2fms | tok/sec: %.2f\n", 
-             step+1, trainConfig.max_lr, 1.0, duration_ms.count(), total_tokens_per_step/(duration_ms.count() / 1e3));
+    if (trainConfig.check_every_steps != -1 &&
+        (step + 1) % trainConfig.check_every_steps == 0 && master_process) {
+      printf(
+          "\nstep %5d | lr %.4e | grad norm: %.4f | dt: %.2fms | tok/sec: "
+          "%.2f\n",
+          step + 1, trainConfig.max_lr, 1.0, duration_ms.count(),
+          total_tokens_per_step / (duration_ms.count() / 1e3));
       std::cout << "loss: " << loss << std::endl;
     }
   }
