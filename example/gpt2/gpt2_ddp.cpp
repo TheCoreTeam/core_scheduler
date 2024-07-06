@@ -67,7 +67,7 @@ struct ModelConfig {
 struct TrainConfig {
   int64_t epoch = 5;
   int64_t total_token_batch_size =
-      1024 * 2;  // 524288, 2**19, about 0.5 tokens per batch
+      1024 * 4;  // 524288, 2**19, about 0.5 tokens per batch
   int64_t warmup_steps = 715;
   int64_t max_steps = -1;
   int64_t check_every_steps = 5;
@@ -621,7 +621,7 @@ void train() {
   ProgressBar progressBar(max_steps);
   for (int step = 0; step < max_steps; ++step) {
     time_start = std::chrono::high_resolution_clock::now();
-    progressBar.display(step, "Training: ", 0);
+    progressBar.display(step, "Training: ", comm.getRank());
 
     // TODO: Add validation
     if ((step + 1) % trainConfig.val_every_steps == 0 && master_process) {

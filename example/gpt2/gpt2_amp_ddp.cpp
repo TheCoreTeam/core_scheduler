@@ -625,7 +625,7 @@ void train() {
   ProgressBar progressBar(max_steps);
   for (int step = 0; step < max_steps; ++step) {
     time_start = std::chrono::high_resolution_clock::now();
-    progressBar.display(step, "Training: ", 0);
+    progressBar.display(step, "Training: ", comm.getRank());
 
     // TODO: Add validation
     if ((step + 1) % trainConfig.val_every_steps == 0 && master_process) {
