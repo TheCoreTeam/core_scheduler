@@ -50,7 +50,7 @@ struct Bucket {
 
 enum BackendType { MPI, NCCL, NVP2P };
 
-enum Operation { SUM };
+enum Operation { SUM, AVG };
 
 CS_API Comm getComm(MPI_Comm group, BackendType backendType);
 

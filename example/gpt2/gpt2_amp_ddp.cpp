@@ -38,22 +38,26 @@
 #include "data/dataloader.h"
 #include "data/dataset.h"
 #include "logger.h"
-#include "module/embedding.h"
-#include "module/layer_norm.h"
-#include "module/linear.h"
+// #include "module/embedding.h"
+#include "module/amp_embedding.h"
+// #include "module/layer_norm.h"
+#include "module/amp_layer_norm.h"
+// #include "module/linear.h"
+#include "module/amp_linear.h"
 #include "module/module.h"
-#include "optimizer/adamw.h"
+// #include "optimizer/adamw.h"
+#include "optimizer/amp_adamw.h"
 #include "tensor.h"
 #include "threading/dynamic_scheduler.h"
 
 struct ModelConfig {
-  int64_t batch_size = 2;
+  int64_t batch_size = 16;
   const int64_t block_size = 1024;
   const int64_t vocab_size = 50257;
   const int64_t pad_size = 50304;  // pad vocab_size to be more efficient
-  const int64_t n_embd = 2048;
-  const int64_t n_head = 32;
-  const int64_t n_layer = 22;
+  const int64_t n_embd = 768;      // 2048
+  const int64_t n_head = 12;       // 32
+  const int64_t n_layer = 12;      // 22
   const bool use_bias = false;
   const float dropout = 0.0;
   const float epsilon = 1e-5;
@@ -65,9 +69,9 @@ struct ModelConfig {
 };
 
 struct TrainConfig {
-  int64_t epoch = 5;
+  int64_t epoch = 500;
   int64_t total_token_batch_size =
-      1024 * 4;  // 524288, 2**19, about 0.5 tokens per batch
+      1024 * 512;  // 524288, 2**19, about 0.5 tokens per batch
   int64_t warmup_steps = 715;
   int64_t max_steps = -1;
   int64_t check_every_steps = 5;
@@ -231,31 +235,31 @@ struct ProgressBar {
 struct Attn : cs::module::Module {
   const cs::Scheduler &scheduler;
   const ModelConfig &config;
-  cs::module::Linear c_attn{nullptr}, c_proj{nullptr};
+  cs::module::AmpLinear c_attn{nullptr}, c_proj{nullptr};
   std::shared_ptr<cs::compute::ScaledDotProductFlashAttention::State>
       attn_state;
 
   Attn(const cs::Scheduler &scheduler, const ModelConfig &config)
       : scheduler(scheduler), config{config} {
     c_attn = register_module(
-        "c_attn", cs::module::Linear(
-                      scheduler, cs::compute::Linear::Options{config.n_embd,
-                                                              3 * config.n_embd}
-                                     .bias(config.use_bias)
-                                     .device(config.device)
-                                     .dtype(config.dtype)));
+        "c_attn", cs::module::AmpLinear(scheduler,
+                                        cs::compute::AmpLinear::Options{
+                                            config.n_embd, 3 * config.n_embd}
+                                            .bias(config.use_bias)
+                                            .device(config.device)
+                                            .dtype(config.dtype)));
     // we don't need to register flash attention to module because it does not
     // have parameters.
     attn_state = cs::compute::ScaledDotProductFlashAttention::init(
         scheduler,
         cs::compute::ScaledDotProductFlashAttention::Options{}.is_causal(true));
     c_proj = register_module(
-        "c_proj", cs::module::Linear(
-                      scheduler,
-                      cs::compute::Linear::Options{config.n_embd, config.n_embd}
-                          .bias(config.use_bias)
-                          .device(config.device)
-                          .dtype(config.dtype)));
+        "c_proj", cs::module::AmpLinear(
+                      scheduler, cs::compute::AmpLinear::Options{config.n_embd,
+                                                                 config.n_embd}
+                                     .bias(config.use_bias)
+                                     .device(config.device)
+                                     .dtype(config.dtype)));
   }
 
   cs::Tensor forward(const cs::Scheduler &scheduler, cs::Tensor &Input) {
@@ -343,23 +347,23 @@ struct Attn : cs::module::Module {
 struct MLP : cs::module::Module {
   const cs::Scheduler &scheduler;
   const ModelConfig &config;
-  cs::module::Linear fc1{nullptr}, fc2{nullptr};
+  cs::module::AmpLinear fc1{nullptr}, fc2{nullptr};
   std::shared_ptr<cs::compute::GeLU::State> gelu_state;
 
   MLP(const cs::Scheduler &scheduler, const ModelConfig &config)
       : scheduler(scheduler), config{config} {
     fc1 = register_module(
-        "fc1", cs::module::Linear(
-                   scheduler, cs::compute::Linear::Options{config.n_embd,
-                                                           4 * config.n_embd}
+        "fc1", cs::module::AmpLinear(
+                   scheduler, cs::compute::AmpLinear::Options{config.n_embd,
+                                                              4 * config.n_embd}
                                   .bias(config.use_bias)
                                   .device(config.device)
                                   .dtype(config.dtype)));
     gelu_state = cs::compute::GeLU::init(scheduler);
     fc2 = register_module(
-        "fc2", cs::module::Linear(
-                   scheduler, cs::compute::Linear::Options{4 * config.n_embd,
-                                                           config.n_embd}
+        "fc2", cs::module::AmpLinear(
+                   scheduler, cs::compute::AmpLinear::Options{4 * config.n_embd,
+                                                              config.n_embd}
                                   .bias(config.use_bias)
                                   .device(config.device)
                                   .dtype(config.dtype)));
@@ -398,21 +402,21 @@ struct MLP : cs::module::Module {
 struct Block : cs::module::Module {
   const ModelConfig &config;
   const cs::Scheduler &scheduler;
-  cs::module::LayerNorm ln1{nullptr}, ln2{nullptr};
+  cs::module::AmpLayerNorm ln1{nullptr}, ln2{nullptr};
   std::shared_ptr<Attn> attn;
   std::shared_ptr<MLP> mlp;
 
   Block(const cs::Scheduler &scheduler, const ModelConfig &config)
       : scheduler(scheduler), config{config} {
     ln1 = register_module(
-        "ln1", cs::module::LayerNorm(
-                   scheduler, cs::compute::LayerNorm::Options(config.n_embd)
+        "ln1", cs::module::AmpLayerNorm(
+                   scheduler, cs::compute::AmpLayerNorm::Options(config.n_embd)
                                   .device(config.device)
                                   .dtype(config.dtype)));
     attn = register_module("attn", std::make_shared<Attn>(scheduler, config));
     ln2 = register_module(
-        "ln2", cs::module::LayerNorm(
-                   scheduler, cs::compute::LayerNorm::Options(config.n_embd)
+        "ln2", cs::module::AmpLayerNorm(
+                   scheduler, cs::compute::AmpLayerNorm::Options(config.n_embd)
                                   .device(config.device)
                                   .dtype(config.dtype)));
     mlp = register_module("mlp", std::make_shared<MLP>(scheduler, config));
@@ -458,10 +462,10 @@ struct Block : cs::module::Module {
 struct GPT2 : cs::module::Module {
   const ModelConfig &config;
   const cs::Scheduler &scheduler;
-  cs::module::Embedding wte{nullptr}, wpe{nullptr};
+  cs::module::AmpEmbedding wte{nullptr}, wpe{nullptr};
   std::vector<std::shared_ptr<Block>> h;
-  cs::module::LayerNorm lnf{nullptr};
-  cs::module::Linear lm_head{nullptr};
+  cs::module::AmpLayerNorm lnf{nullptr};
+  cs::module::AmpLinear lm_head{nullptr};
   cs::Tensor Pos;
 
   GPT2(const cs::Scheduler &scheduler, const ModelConfig &config)
@@ -471,16 +475,16 @@ struct GPT2 : cs::module::Module {
         torch::TensorOptions().dtype(torch::kInt64).device(config.device));
     wte = register_module(
         "wte",
-        cs::module::Embedding(scheduler, cs::compute::Embedding::Options(
-                                             config.pad_size, config.n_embd)
-                                             .device(config.device)
-                                             .dtype(config.dtype)));
+        cs::module::AmpEmbedding(scheduler, cs::compute::AmpEmbedding::Options(
+                                                config.pad_size, config.n_embd)
+                                                .device(config.device)
+                                                .dtype(config.dtype)));
     wpe = register_module(
-        "wpe",
-        cs::module::Embedding(scheduler, cs::compute::Embedding::Options(
-                                             config.block_size, config.n_embd)
-                                             .device(config.device)
-                                             .dtype(config.dtype)));
+        "wpe", cs::module::AmpEmbedding(scheduler,
+                                        cs::compute::AmpEmbedding::Options(
+                                            config.block_size, config.n_embd)
+                                            .device(config.device)
+                                            .dtype(config.dtype)));
     // dropout
     for (int layer = 0; layer < config.n_layer; ++layer) {
       // Adding layers to the module list
@@ -488,17 +492,17 @@ struct GPT2 : cs::module::Module {
                                   std::make_shared<Block>(scheduler, config)));
     }
     lnf = register_module(
-        "lnf", cs::module::LayerNorm(
-                   scheduler, cs::compute::LayerNorm::Options(config.n_embd)
+        "lnf", cs::module::AmpLayerNorm(
+                   scheduler, cs::compute::AmpLayerNorm::Options(config.n_embd)
                                   .device(config.device)
                                   .dtype(config.dtype)));
     lm_head = register_module(
         "lm_head",
-        cs::module::Linear(scheduler, cs::compute::Linear::Options(
-                                          config.n_embd, config.pad_size)
-                                          .bias(config.use_bias)
-                                          .device(config.device)
-                                          .dtype(config.dtype)));
+        cs::module::AmpLinear(scheduler, cs::compute::AmpLinear::Options(
+                                             config.n_embd, config.pad_size)
+                                             .bias(config.use_bias)
+                                             .device(config.device)
+                                             .dtype(config.dtype)));
   }
 
   cs::Tensor forward(const cs::Scheduler &scheduler, cs::Tensor &Input) {
@@ -687,7 +691,7 @@ void train() {
           "step %5d | lr %.4e | grad norm: %.4f | dt: %.2fs | tok/sec: "
           "%.2f\n",
           step + 1, trainConfig.max_lr, 1.0, duration.count(),
-          total_tokens_per_step / (duration.count()));
+          total_tokens_per_step / (duration.count() / 1e6));
       std::cout << "loss: " << loss << std::endl;
     }
   }

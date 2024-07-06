@@ -32,6 +32,8 @@ constexpr auto toC10dRedOp(const Operation operation) {
   switch (operation) {
     case SUM:
       return c10d::ReduceOp::SUM;
+    case AVG:
+      return c10d::ReduceOp::AVG;
     default:
       CS_ASSERT_TRUE(false, "unsupported operation for NCCL all reduce");
   }
