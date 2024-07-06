@@ -113,8 +113,9 @@ std::unordered_map<std::string, double> getTrainArgs(
 
   int tokens_per_dprank_per_step =
       tokens_per_sample * batch_size_per_dprank_per_step;
-  int total_tokens_per_step = tokens_per_dprank_per_step * num_dprank;
-  int grad_accum_steps = global_token_batch_size / total_tokens_per_step;
+  int total_tokens_per_micro_step = tokens_per_dprank_per_step * num_dprank;
+  int grad_accum_steps = global_token_batch_size / total_tokens_per_micro_step;
+  int total_tokens_per_step = total_tokens_per_micro_step * grad_accum_steps;
   int total_tokens_in_dataset = num_samples * tokens_per_sample;
 
   if (max_steps != -1 && max_epochs != -1) {
@@ -149,6 +150,7 @@ std::unordered_map<std::string, double> getTrainArgs(
   result["max_steps"] = max_steps;
   result["grad_accum_steps"] = grad_accum_steps;
   result["total_tokens_per_step"] = total_tokens_per_step;
+  result["total_tokens_per_micro_step"] = total_tokens_per_micro_step;
 
   return result;
 }
@@ -568,7 +570,7 @@ void train() {
   bool master_process = (int)comm.getRank() == 0;
   std::chrono::time_point<std::chrono::high_resolution_clock> time_start,
       time_stop;
-  std::chrono::duration<double> duration_ms;
+  std::chrono::duration<double> duration;
   const torch::TensorOptions option =
       torch::TensorOptions().dtype(torch::kInt64).device(modelConfig.device);
   const torch::TensorOptions act_option = torch::TensorOptions()
@@ -677,15 +679,15 @@ void train() {
     cs::communication::AllReduce::runInplace(scheduler, comm, {loss},
                                              cs::communication::AVG);
     time_stop = std::chrono::high_resolution_clock::now();
-    duration_ms = std::chrono::duration_cast<std::chrono::microseconds>(
+    duration = std::chrono::duration_cast<std::chrono::microseconds>(
         time_stop - time_start);
     if (trainConfig.check_every_steps != -1 &&
         (step + 1) % trainConfig.check_every_steps == 0 && master_process) {
       printf(
-          "\nstep %5d | lr %.4e | grad norm: %.4f | dt: %.2fms | tok/sec: "
+          "step %5d | lr %.4e | grad norm: %.4f | dt: %.2fs | tok/sec: "
           "%.2f\n",
-          step + 1, trainConfig.max_lr, 1.0, duration_ms.count(),
-          total_tokens_per_step / (duration_ms.count() / 1e3));
+          step + 1, trainConfig.max_lr, 1.0, duration.count(),
+          total_tokens_per_step / (duration.count()));
       std::cout << "loss: " << loss << std::endl;
     }
   }

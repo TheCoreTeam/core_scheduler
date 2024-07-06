@@ -52,7 +52,7 @@
 #include "threading/dynamic_scheduler.h"
 
 struct ModelConfig {
-  int64_t batch_size = 8;
+  int64_t batch_size = 16;
   const int64_t block_size = 1024;
   const int64_t vocab_size = 50257;
   const int64_t pad_size = 50304;  // pad vocab_size to be more efficient
@@ -67,15 +67,15 @@ struct ModelConfig {
 };
 
 struct TrainConfig {
-  int64_t epoch = 5;
+  int64_t epoch = 500;
   int64_t total_token_batch_size =
-      1024 * 8;  // 524288, 2**19, about 0.5 tokens per batch
+      1024 * 512;  // 524288, 2**19, about 0.5 tokens per batch
   int64_t warmup_steps = 715;
   int64_t max_steps = -1;
   int64_t check_every_steps = 5;
   int64_t val_every_steps = 250;
   int64_t save_every_steps = 5000;
-  double max_lr = 6e-4;
+  double max_lr = 6e-5;
   double min_lr = 0.1 * max_lr;
   double beta1 = 0.9;
   double beta2 = 0.95;
@@ -114,8 +114,9 @@ std::unordered_map<std::string, double> getTrainArgs(
 
   int tokens_per_dprank_per_step =
       tokens_per_sample * batch_size_per_dprank_per_step;
-  int total_tokens_per_step = tokens_per_dprank_per_step * num_dprank;
-  int grad_accum_steps = global_token_batch_size / total_tokens_per_step;
+  int total_tokens_per_micro_step = tokens_per_dprank_per_step * num_dprank;
+  int grad_accum_steps = global_token_batch_size / total_tokens_per_micro_step;
+  int total_tokens_per_step = total_tokens_per_micro_step * grad_accum_steps;
   int total_tokens_in_dataset = num_samples * tokens_per_sample;
 
   if (max_steps != -1 && max_epochs != -1) {
@@ -150,6 +151,7 @@ std::unordered_map<std::string, double> getTrainArgs(
   result["max_steps"] = max_steps;
   result["grad_accum_steps"] = grad_accum_steps;
   result["total_tokens_per_step"] = total_tokens_per_step;
+  result["total_tokens_per_micro_step"] = total_tokens_per_micro_step;
 
   return result;
 }
@@ -542,7 +544,7 @@ void train() {
   bool master_process = true;
   std::chrono::time_point<std::chrono::high_resolution_clock> time_start,
       time_stop;
-  std::chrono::duration<double> duration_ms;
+  std::chrono::duration<double> duration;
   std::unique_ptr<GPT2> model;
   cs::Tensor loss;
   const torch::TensorOptions option =
@@ -648,15 +650,15 @@ void train() {
 
     // Check
     time_stop = std::chrono::high_resolution_clock::now();
-    duration_ms = std::chrono::duration_cast<std::chrono::microseconds>(
+    duration = std::chrono::duration_cast<std::chrono::microseconds>(
         time_stop - time_start);
     if (trainConfig.check_every_steps != -1 &&
         (step + 1) % trainConfig.check_every_steps == 0 && master_process) {
-      printf(
-          "\nstep %5d | lr %.4e | grad norm: %.4f | dt: %.2fms | tok/sec: "
+      printf(  // Noting: add \n to the beginning of the string
+          "\nstep %5d | lr %.4e | grad norm: %.4f | dt: %.2fs | tok/sec: "
           "%.2f\n",
-          step + 1, trainConfig.max_lr, 1.0, duration_ms.count(),
-          total_tokens_per_step / (duration_ms.count() / 1e3));
+          step + 1, trainConfig.max_lr, 1.0, duration.count(),
+          total_tokens_per_step / (duration.count()));
       std::cout << "loss: " << loss << std::endl;
     }
   }
