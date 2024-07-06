@@ -90,9 +90,11 @@ CS_API Tensor add(const Scheduler &scheduler, ReadOnlyTensor x,
 
 CS_API void zero_(const Scheduler &scheduler, const Tensor &tensor);
 
-CS_API void uniform_(const Scheduler &scheduler, const Tensor &tensor);
+CS_API void uniform_(const Scheduler &scheduler, const Tensor &tensor,
+                     double from = 0, double to = 1);
 
-CS_API void normal_(const Scheduler &scheduler, const Tensor &tensor);
+CS_API void normal_(const Scheduler &scheduler, const Tensor &tensor,
+                    double mean = 0, double std = 1);
 
 CS_API Tensor clone(const Scheduler &scheduler, const Tensor &tensor);
 }  // namespace cs::compute::Utils
