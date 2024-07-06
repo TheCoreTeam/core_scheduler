@@ -26,5 +26,6 @@ set(CORE_SCHEDULER_COMPUTE_SRCS
         ${CMAKE_CURRENT_SOURCE_DIR}/amp_layer_norm.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/amp_gelu_linear_cudnn.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/gelu_linear_cudnn.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/init.cpp
 )
 set(CORE_SCHEDULER_COMPUTE_SRCS ${CORE_SCHEDULER_COMPUTE_SRCS} PARENT_SCOPE)
