@@ -562,7 +562,7 @@ Tensor add(const Scheduler &scheduler, ReadOnlyTensor x, ReadOnlyTensor y) {
 
 void zero_(const Scheduler &scheduler, const Tensor &tensor) {
   struct Impl : Task::Impl {
-    explicit Impl(Tensor tensor /* tensor */)
+    explicit Impl(const Tensor &tensor /* tensor */)
         : Task::Impl{{tensor}, {tensor}, compute} {}
     void operator()() const override {
       (void)output()[0].impl()->tensor().zero_();
@@ -575,9 +575,39 @@ void zero_(const Scheduler &scheduler, const Tensor &tensor) {
   scheduler.impl()->submit(Task{std::make_shared<Impl>(Impl{tensor})});
 }
 
-Tensor clone(const Scheduler &scheduler, Tensor tensor) {
+void uniform_(const Scheduler &scheduler, const Tensor &tensor) {
   struct Impl : Task::Impl {
-    explicit Impl(Tensor result, ReadOnlyTensor input)
+    explicit Impl(const Tensor &tensor /* tensor */)
+        : Task::Impl{{tensor}, {tensor}, compute} {}
+    void operator()() const override {
+      (void)output()[0].impl()->tensor().uniform_();
+    }
+    [[nodiscard]] const char *name() const override {
+      return "cs::compute::Utils::uniform_";
+    }
+  };
+
+  scheduler.impl()->submit(Task{std::make_shared<Impl>(Impl{tensor})});
+}
+
+void normal_(const Scheduler &scheduler, const Tensor &tensor) {
+  struct Impl : Task::Impl {
+    explicit Impl(const Tensor &tensor /* tensor */)
+        : Task::Impl{{tensor}, {tensor}, compute} {}
+    void operator()() const override {
+      (void)output()[0].impl()->tensor().normal_();
+    }
+    [[nodiscard]] const char *name() const override {
+      return "cs::compute::Utils::normal_";
+    }
+  };
+
+  scheduler.impl()->submit(Task{std::make_shared<Impl>(Impl{tensor})});
+}
+
+Tensor clone(const Scheduler &scheduler, const Tensor &tensor) {
+  struct Impl : Task::Impl {
+    explicit Impl(const Tensor &result, const ReadOnlyTensor &input)
         : Task::Impl{{result}, {input}, compute} {}
     void operator()() const override {
       output()[0].impl()->tensor() = input()[0].impl()->tensor().clone();
