@@ -20,7 +20,7 @@ from itertools import chain
 from collections import deque
 import random
 from tqdm.auto import tqdm
-from multiprocessing import Pool
+from multiprocessing import Pool, cpu_count
 from datasets import DatasetDict, Dataset, load_dataset, concatenate_datasets
 from transformers import AutoTokenizer
 
@@ -31,8 +31,8 @@ config = {
     'num_proc': 64,
     'seed': 42,
     'process_batch_size': 1000,  # Number of samples to process in each batch
-    'streaming': False,  # Set to True if the dataset is too large to fit in memory
-    'max_shard_size': int(0.1*1024**3),  # Maximum size of each parquet shard in bytes, default is 0.1GB
+    'streaming': False,  # Set to True if the CPU memory is enough to handle the dataset (will be faster than non-streaming mode)
+    'max_shard_size': int(1*1024**3),  # Maximum size of each parquet shard in bytes, default is 1GB
     'num_shards': None,  # Number of shards to split the dataset into
     'datasets_info': [
         # {
@@ -161,7 +161,7 @@ def save_split_as_parquet(dataset, output_dir, max_shard_size=None, num_shards=N
         num_shards_calculated = int((total_size_bytes + max_shard_size - 1) // max_shard_size) \
             if max_shard_size is not None else num_shards if num_shards is not None else 1
         rows_per_shard = (total_rows + num_shards_calculated - 1) // num_shards_calculated
-        print(f"The subdataset will be saved in {num_shards_calculated} shards, and each shard has size of {total_size_bytes/1024**3}GB.")
+        print(f"The subdataset will be saved in {num_shards_calculated} shards, and each shard has size of {total_size_bytes/num_shards_calculated/1024**3}GB.")
         
         # Prepare arguments for multiprocessing
         args_list = []
@@ -173,7 +173,7 @@ def save_split_as_parquet(dataset, output_dir, max_shard_size=None, num_shards=N
             args_list.append((shard_dataset, output_dir, key, shard_idx, num_shards_calculated))
         
         # Use multiprocessing to save shards
-        effective_num_proc = min(num_proc, num_shards_calculated)
+        effective_num_proc = min(num_proc, num_shards_calculated, cpu_count())
         if effective_num_proc < num_proc:
             print(f"Reduced number of processes from {num_proc} to {effective_num_proc} due to fewer shards than processes.")
         with Pool(effective_num_proc) as pool:

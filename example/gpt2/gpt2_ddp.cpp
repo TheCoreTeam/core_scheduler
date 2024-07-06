@@ -21,6 +21,7 @@
 #include <chrono>
 #include <cstdint>
 #include <cstdio>
+#include <cassert>
 #include <iostream>
 #include <memory>
 #include <string>
@@ -31,6 +32,7 @@
 #include "compute/cross_entropy.h"
 #include "compute/embedding.h"
 #include "compute/gelu.h"
+#include "compute/init.h"
 #include "compute/layer_norm.h"
 #include "compute/linear.h"
 #include "compute/scaled_dot_product_attention.h"
@@ -226,6 +228,32 @@ struct ProgressBar {
 
     last_time = current_time;  // Update last_time after displaying progress
   }
+};
+
+struct LRScheduler {
+    int warmup_steps;
+    double max_lr;
+    int max_steps;
+    double min_lr;
+
+    LRScheduler(int warmupSteps, double maxLr, int maxSteps, double minLr)
+        : warmup_steps(warmupSteps), max_lr(maxLr), max_steps(maxSteps), min_lr(minLr) {}
+
+    double get_lr(int step) const {
+        // 1) Linear warmup for warmup_iters steps
+        if (step < warmup_steps) {
+            return max_lr * (step + 1) / warmup_steps;
+        }
+        // 2) If it > max_steps, return minimum learning rate
+        if (step > max_steps) {
+            return min_lr;
+        }
+        // 3) In between, use cosine decay down to minimum learning rate
+        double decay_ratio = static_cast<double>(step - warmup_steps) / (max_steps - warmup_steps);
+        assert(0 <= decay_ratio && decay_ratio <= 1);
+        double coeff = 0.5 * (1.0 + cos(M_PI * decay_ratio));
+        return min_lr + coeff * (max_lr - min_lr);
+    }
 };
 
 struct Attn : cs::module::Module {
@@ -602,6 +630,9 @@ void train() {
                                  .beta2(trainConfig.beta2)
                                  .weight_decay(trainConfig.weight_decay));
 
+  LRScheduler lr_scheduler(trainConfig.warmup_steps, trainConfig.max_lr,
+                           trainConfig.max_steps, trainConfig.min_lr);
+
   std::unordered_map<std::string, double> training_args =
       getTrainArgs(dataloader.iterationsPerEpoch(), modelConfig.block_size,
                    trainConfig.total_token_batch_size, modelConfig.batch_size,
@@ -667,6 +698,7 @@ void train() {
     // Optimizer step
     cs::optimizer::AdamW::step(scheduler, model);
     // TODO: Add lr scheduler step
+    lr_scheduler.get_lr(step);
 
     // Wait in steps
     if (trainConfig.wait_every_step != -1 &&
@@ -686,7 +718,7 @@ void train() {
       printf(
           "step %5d | lr %.4e | grad norm: %.4f | dt: %.2fs | tok/sec: "
           "%.2f\n",
-          step + 1, trainConfig.max_lr, 1.0, duration.count(),
+          step + 1, lr_scheduler.get_lr(step), 1.0, duration.count(),
           total_tokens_per_step / (duration.count()));
       std::cout << "loss: " << loss << std::endl;
     }
