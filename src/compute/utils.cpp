@@ -575,34 +575,46 @@ void zero_(const Scheduler &scheduler, const Tensor &tensor) {
   scheduler.impl()->submit(Task{std::make_shared<Impl>(Impl{tensor})});
 }
 
-void uniform_(const Scheduler &scheduler, const Tensor &tensor) {
+void uniform_(const Scheduler &scheduler, const Tensor &tensor,
+              const double from, const double to) {
   struct Impl : Task::Impl {
-    explicit Impl(const Tensor &tensor /* tensor */)
-        : Task::Impl{{tensor}, {tensor}, compute} {}
+    const double from;
+    const double to;
+
+    explicit Impl(const Tensor &tensor /* tensor */, const double from,
+                  const double to)
+        : Task::Impl{{tensor}, {tensor}, compute}, from{from}, to{to} {}
     void operator()() const override {
-      (void)output()[0].impl()->tensor().uniform_();
+      (void)output()[0].impl()->tensor().uniform_(from, to);
     }
     [[nodiscard]] const char *name() const override {
       return "cs::compute::Utils::uniform_";
     }
   };
 
-  scheduler.impl()->submit(Task{std::make_shared<Impl>(Impl{tensor})});
+  scheduler.impl()->submit(
+      Task{std::make_shared<Impl>(Impl{tensor, from, to})});
 }
 
-void normal_(const Scheduler &scheduler, const Tensor &tensor) {
+void normal_(const Scheduler &scheduler, const Tensor &tensor,
+             const double mean, const double std) {
   struct Impl : Task::Impl {
-    explicit Impl(const Tensor &tensor /* tensor */)
-        : Task::Impl{{tensor}, {tensor}, compute} {}
+    const double mean;
+    const double std;
+
+    explicit Impl(const Tensor &tensor /* tensor */, const double mean,
+                  const double std)
+        : Task::Impl{{tensor}, {tensor}, compute}, mean{mean}, std{std} {}
     void operator()() const override {
-      (void)output()[0].impl()->tensor().normal_();
+      (void)output()[0].impl()->tensor().normal_(mean, std);
     }
     [[nodiscard]] const char *name() const override {
       return "cs::compute::Utils::normal_";
     }
   };
 
-  scheduler.impl()->submit(Task{std::make_shared<Impl>(Impl{tensor})});
+  scheduler.impl()->submit(
+      Task{std::make_shared<Impl>(Impl{tensor, mean, std})});
 }
 
 Tensor clone(const Scheduler &scheduler, const Tensor &tensor) {
