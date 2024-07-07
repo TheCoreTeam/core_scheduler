@@ -22,6 +22,8 @@
 #include "export.h"
 
 namespace cs {
+using Scalar = at::Scalar;
+
 using IntArrayRef = at::IntArrayRef;
 
 using IntArray = c10::SmallVector<IntArrayRef::value_type>;

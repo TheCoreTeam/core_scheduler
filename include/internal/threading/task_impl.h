@@ -34,8 +34,6 @@ struct Task::Impl {
        const Type type)
       : output_{std::move(output)}, input_{std::move(input)}, type_{type} {}
 
-  [[nodiscard]] auto &latch() const { return latch_; }
-
   [[nodiscard]] auto &input() const { return input_; }
 
   [[nodiscard]] auto &output() const { return output_; }
@@ -49,8 +47,6 @@ struct Task::Impl {
   [[nodiscard]] virtual const char *name() const = 0;
 
  private:
-  std::shared_ptr<std::latch> latch_{new std::latch{1}};
-
   std::vector<Tensor> output_;
 
   std::vector<ReadOnlyTensor> input_;
