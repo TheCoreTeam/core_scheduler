@@ -633,4 +633,63 @@ Tensor clone(const Scheduler &scheduler, const Tensor &tensor) {
   scheduler.impl()->submit(Task{std::make_shared<Impl>(Impl{result, tensor})});
   return result;
 }
+
+Tensor linalg_vector_norm(const Scheduler &scheduler,
+                          const ReadOnlyTensor &self, const Scalar &ord,
+                          at::OptionalIntArrayRef dim, const bool keepdim,
+                          const c10::optional<at::ScalarType> dtype) {
+  Tensor result;
+  if (dim.has_value()) {
+    struct Impl : Task::Impl {
+      const Scalar ord;
+      const IntArray dim;
+      const bool keepdim;
+      const c10::optional<at::ScalarType> dtype;
+
+      explicit Impl(const Tensor &result, const ReadOnlyTensor &input,
+                    const Scalar &ord, const IntArray &dim, const bool keepdim,
+                    const c10::optional<at::ScalarType> dtype)
+          : Task::Impl{{result}, {input}, kCompute},
+            ord{ord},
+            dim{dim},
+            keepdim{keepdim},
+            dtype{dtype} {}
+      void operator()() const override {
+        output()[0].impl()->tensor() = at::linalg_vector_norm(
+            input()[0].impl()->tensor(), ord, dim, keepdim, dtype);
+      }
+      [[nodiscard]] const char *name() const override {
+        return "cs::compute::Utils::linalg_vector_norm";
+      }
+    };
+
+    scheduler.impl()->submit(Task{std::make_shared<Impl>(
+        Impl{result, self, ord, {dim->begin(), dim->end()}, keepdim, dtype})});
+  } else {
+    struct Impl : Task::Impl {
+      const Scalar ord;
+      const bool keepdim;
+      const c10::optional<at::ScalarType> dtype;
+
+      explicit Impl(const Tensor &result, const ReadOnlyTensor &input,
+                    const Scalar &ord, const bool keepdim,
+                    const c10::optional<at::ScalarType> dtype)
+          : Task::Impl{{result}, {input}, kCompute},
+            ord{ord},
+            keepdim{keepdim},
+            dtype{dtype} {}
+      void operator()() const override {
+        output()[0].impl()->tensor() = at::linalg_vector_norm(
+            input()[0].impl()->tensor(), ord, c10::nullopt, keepdim, dtype);
+      }
+      [[nodiscard]] const char *name() const override {
+        return "cs::compute::Utils::linalg_vector_norm";
+      }
+    };
+
+    scheduler.impl()->submit(
+        Task{std::make_shared<Impl>(Impl{result, self, ord, keepdim, dtype})});
+  }
+  return result;
+}
 }  // namespace cs::compute::Utils
