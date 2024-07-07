@@ -27,6 +27,10 @@ using OrderedDict = torch::OrderedDict<Key, Value>;
 namespace cs::module {
 struct OptimizerState {
   virtual ~OptimizerState() = default;
+
+  virtual void set_lr(double lr) const = 0;
+
+  virtual double get_lr() const = 0;
 };
 
 struct CS_API State {

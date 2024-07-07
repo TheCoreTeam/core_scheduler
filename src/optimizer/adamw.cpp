@@ -39,6 +39,10 @@ void stepKernelAmsgrad(cudaStream_t stream,
 AdamW::State::State(const Tensors &tensors, const Options &options)
     : tensors{tensors}, options{options} {}
 
+void AdamW::State::set_lr(const double lr) const { options.lr = lr; }
+
+double AdamW::State::get_lr() const { return options.lr; }
+
 void AdamW::init(const Scheduler &scheduler, const module::Module &module,
                  const Options &options) {
   for (auto &kvState : module.named_states()) {
