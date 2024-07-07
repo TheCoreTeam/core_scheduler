@@ -257,7 +257,7 @@ struct Attn : cs::module::Module {
   cs::DynamicScheduler scheduler;
   const ModelConfig &config;
   cs::module::Linear c_attn{nullptr}, c_proj{nullptr};
-  std::shared_ptr<cs::compute::ScaledDotProductCuDnn::State>
+  std::shared_ptr<cs::compute::ScaledDotProductFlashAttention::State>
       attn_state;
 
   Attn(cs::DynamicScheduler scheduler, const ModelConfig &config)
@@ -271,9 +271,9 @@ struct Attn : cs::module::Module {
                                      .dtype(config.dtype)));
     // we don't need to register flash attention to module because it does not
     // have parameters.
-    attn_state = cs::compute::ScaledDotProductCuDnn::init(
+    attn_state = cs::compute::ScaledDotProductFlashAttention::init(
         scheduler,
-        cs::compute::ScaledDotProductCuDnn::Options{}.is_causal(true));
+        cs::compute::ScaledDotProductFlashAttention::Options{}.is_causal(true));
     c_proj = register_module(
         "c_proj", cs::module::Linear(
                       scheduler,
@@ -319,7 +319,7 @@ struct Attn : cs::module::Module {
           {config.batch_size, config.block_size, config.n_head,
            config.n_embd / config.n_head});
 
-      auto AttnOut = cs::compute::ScaledDotProductCuDnn::forward(
+      auto AttnOut = cs::compute::ScaledDotProductFlashAttention::forward(
           scheduler, attn_state, qview, kview, vview);
 
       AttnOutView = cs::compute::Utils::view(
@@ -345,7 +345,7 @@ struct Attn : cs::module::Module {
           {config.batch_size, config.block_size, config.n_head,
            config.n_embd / config.n_head});
 
-      auto [dq, dk, dv] = cs::compute::ScaledDotProductCuDnn::backward(
+      auto [dq, dk, dv] = cs::compute::ScaledDotProductFlashAttention::backward(
           scheduler, attn_state, DAttnOut);
 
       dq = cs::compute::Utils::view(
