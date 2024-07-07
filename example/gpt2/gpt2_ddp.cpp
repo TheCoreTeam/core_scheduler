@@ -62,7 +62,8 @@ struct ModelConfig {
   torch::Device device{
       torch::kCUDA,
       static_cast<torch::DeviceIndex>(
-          cs::communication::getCommWorld(cs::communication::NCCL).getRank())};
+          cs::communication::get_comm_world(cs::communication::kNCCL)
+              .get_rank())};
   torch::Dtype dtype = torch::kBFloat16;
 };
 
@@ -336,8 +337,8 @@ struct Attn : cs::module::Module {
       const cs::communication::AllReduceBucket &allreduce_bucket,
       cs::Tensor &DOutput, bool require_backward_grad_sync = false) {
     // Fc Proj, we first run backward for input and then backward for parameter.
-    auto DAttnOut = c_proj->backwardInput(scheduler, DOutput);
-    c_proj->backwardParameter(scheduler, DOutput);
+    auto DAttnOut = c_proj->backward_input(scheduler, DOutput);
+    c_proj->backward_parameter(scheduler, DOutput);
     if (require_backward_grad_sync) {
       allreduce_bucket.push_back(scheduler, comm,
                                  c_proj->state()->forward.grad_weight);
@@ -364,8 +365,8 @@ struct Attn : cs::module::Module {
     }
 
     // Fc Attn, we first run backward for input and then backward for parameter.
-    auto DInput = c_attn->backwardInput(scheduler, DFcAttnOut);
-    c_attn->backwardParameter(scheduler, DFcAttnOut);
+    auto DInput = c_attn->backward_input(scheduler, DFcAttnOut);
+    c_attn->backward_parameter(scheduler, DFcAttnOut);
     if (require_backward_grad_sync) {
       allreduce_bucket.push_back(scheduler, comm,
                                  c_attn->state()->forward.grad_weight);
@@ -410,8 +411,8 @@ struct MLP : cs::module::Module {
       const cs::communication::AllReduceBucket &allreduce_bucket,
       cs::Tensor &DOutput, bool require_backward_grad_sync = false) {
     // Fc2
-    auto DGeluOut = fc2->backwardInput(scheduler, DOutput);
-    fc2->backwardParameter(scheduler, DOutput);
+    auto DGeluOut = fc2->backward_input(scheduler, DOutput);
+    fc2->backward_parameter(scheduler, DOutput);
     if (require_backward_grad_sync) {
       allreduce_bucket.push_back(scheduler, comm,
                                  fc2->state()->forward.grad_weight);
@@ -419,8 +420,8 @@ struct MLP : cs::module::Module {
     // GeLU
     auto DFc1Out = cs::compute::GeLU::backward(scheduler, gelu_state, DGeluOut);
     // Fc1
-    auto DInput = fc1->backwardInput(scheduler, DFc1Out);
-    fc1->backwardParameter(scheduler, DFc1Out);
+    auto DInput = fc1->backward_input(scheduler, DFc1Out);
+    fc1->backward_parameter(scheduler, DFc1Out);
     if (require_backward_grad_sync) {
       allreduce_bucket.push_back(scheduler, comm,
                                  fc1->state()->forward.grad_weight);
@@ -556,8 +557,8 @@ struct GPT2 : cs::module::Module {
                 const cs::communication::Comm &comm,
                 const cs::communication::AllReduceBucket &allreduce_bucket,
                 cs::Tensor &DOutput, bool require_backward_grad_sync = false) {
-    auto DLNfOut = lm_head->backwardInput(scheduler, DOutput);
-    lm_head->backwardParameter(scheduler, DOutput);
+    auto DLNfOut = lm_head->backward_input(scheduler, DOutput);
+    lm_head->backward_parameter(scheduler, DOutput);
     if (require_backward_grad_sync) {
       allreduce_bucket.push_back(scheduler, comm,
                                  lm_head->state()->forward.grad_weight);
@@ -599,9 +600,9 @@ void train() {
   cs::Tensor loss;
   cs::Tensor output, grad_output;
   const cs::communication::Comm comm =
-      cs::communication::getCommWorld(cs::communication::NCCL);
-  cs::DynamicScheduler scheduler{(int)comm.getRank()};
-  bool master_process = (int)comm.getRank() == 0;
+      cs::communication::get_comm_world(cs::communication::kNCCL);
+  cs::DynamicScheduler scheduler{(int)comm.get_rank()};
+  bool master_process = (int)comm.get_rank() == 0;
   std::chrono::time_point<std::chrono::high_resolution_clock> time_start,
       time_stop;
   std::chrono::duration<double> duration;
@@ -627,7 +628,7 @@ void train() {
 
   bool require_backward_grad_sync = true;
   cs::communication::AllReduceBucket allreduce_bucket(trainConfig.bucket_size,
-                                                      cs::communication::SUM);
+                                                      cs::communication::kSUM);
 
   cs::optimizer::AdamW::init(scheduler, model,
                              cs::optimizer::AdamW::Options{}
@@ -639,7 +640,7 @@ void train() {
   std::unordered_map<std::string, double> training_args =
       getTrainArgs(dataset.size(), modelConfig.block_size,
                    trainConfig.total_token_batch_size, modelConfig.batch_size,
-                   comm.getSize(), trainConfig.max_steps, trainConfig.epoch);
+                   comm.get_size(), trainConfig.max_steps, trainConfig.epoch);
   double epochs = training_args["epochs"];
   double max_steps = training_args["max_steps"];
   double grad_accum_steps = training_args["grad_accum_steps"];
@@ -660,7 +661,7 @@ void train() {
   ProgressBar progressBar(max_steps);
   for (int step = 0; step < max_steps; ++step) {
     time_start = std::chrono::high_resolution_clock::now();
-    progressBar.display(step, "Training: ", comm.getRank());
+    progressBar.display(step, "Training: ", comm.get_rank());
 
     // TODO: Add validation
     if ((step + 1) % trainConfig.val_every_steps == 0 && master_process) {
@@ -714,8 +715,8 @@ void train() {
     }
 
     // Check
-    cs::communication::AllReduce::runInplace(scheduler, comm, {loss},
-                                             cs::communication::AVG);
+    cs::communication::AllReduce::run_inplace(scheduler, comm, {loss},
+                                              cs::communication::kAVG);
     time_stop = std::chrono::high_resolution_clock::now();
     duration = std::chrono::duration_cast<std::chrono::microseconds>(
         time_stop - time_start);

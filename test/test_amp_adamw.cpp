@@ -82,10 +82,10 @@ void TestAmpAdamW::TestModuleRoutine(const int size) {
   auto dx = fc->backward(scheduler, yGrad);
   dx.wait();
   fc->state()->forward.grad_weight.wait();
-  auto xRef = cs::memory::toTorch(scheduler, x);
+  auto xRef = cs::memory::to_torch(scheduler, x);
   x.wait();
   xRef.requires_grad_(true);
-  auto wRef = cs::memory::toTorch(scheduler, fc->state()->forward.weight);
+  auto wRef = cs::memory::to_torch(scheduler, fc->state()->forward.weight);
   fc->state()->forward.weight.wait();
   wRef.requires_grad_(true);
   auto fcTorch = torch::nn::Linear{torch::nn::LinearOptions{k, n}.bias(false)};
@@ -98,7 +98,7 @@ void TestAmpAdamW::TestModuleRoutine(const int size) {
                                      .eps(eps)
                                      .weight_decay(weight_decay)};
   auto yRef = fcTorch->forward(xRef);
-  auto yGradRef = cs::memory::toTorch(scheduler, yGrad);
+  auto yGradRef = cs::memory::to_torch(scheduler, yGrad);
   yGrad.wait();
   optimTorch.zero_grad();
   yRef.backward(yGradRef);
@@ -109,9 +109,9 @@ void TestAmpAdamW::TestModuleRoutine(const int size) {
                               fcTorch->weight.grad()));
 
   // optimTorch.step();
-  auto wFp32 = cs::memory::toTorch(
+  auto wFp32 = cs::memory::to_torch(
       scheduler, std::dynamic_pointer_cast<cs::module::AmpState>(fc->state())
-                     ->parametersHighPrecision()["weight"]);
+                     ->parameters_high_precision()["weight"]);
   auto m_torch = torch::zeros_like(wFp32);
   auto v_torch = torch::zeros_like(wFp32);
 

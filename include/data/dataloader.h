@@ -28,7 +28,7 @@ struct DataLoader {
 
   [[nodiscard]] const std::shared_ptr<Impl> &impl() const;
 
-  CS_API [[nodiscard]] int64_t iterationsPerEpoch() const;
+  CS_API [[nodiscard]] int64_t iterations_per_epoch() const;
 
  protected:
   std::shared_ptr<Impl> impl_;

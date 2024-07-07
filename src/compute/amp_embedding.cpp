@@ -31,17 +31,17 @@ AmpEmbedding::State::State(const Forward& forward,
                            const ForwardHighPrecision& forwardHighPrecision,
                            const Backward& backward, const Args& args)
     : Embedding::State{forward, backward, args},
-      forwardHighPrecision{forwardHighPrecision} {}
+      forward_high_precision{forwardHighPrecision} {}
 
-OrderedDict<std::string, Tensor> AmpEmbedding::State::parametersHighPrecision()
-    const {
+OrderedDict<std::string, Tensor>
+AmpEmbedding::State::parameters_high_precision() const {
   OrderedDict<std::string, Tensor> dict;
-  dict.insert("weight", forwardHighPrecision.weight);
+  dict.insert("weight", forward_high_precision.weight);
   return dict;
 }
 
 OrderedDict<std::string, Tensor> AmpEmbedding::State::parameters() const {
-  return parametersHighPrecision();
+  return parameters_high_precision();
 }
 
 std::shared_ptr<AmpEmbedding::State> AmpEmbedding::init(
@@ -51,7 +51,7 @@ std::shared_ptr<AmpEmbedding::State> AmpEmbedding::init(
 
     explicit Impl(std::vector<Tensor> output /* weight */,
                   const Options& options)
-        : Task::Impl{std::move(output), {}, compute}, options{options} {}
+        : Task::Impl{std::move(output), {}, kCompute}, options{options} {}
     void operator()() const override {
       const auto weight =
           at::normal(0, 1, {options.num_embeddings(), options.embedding_dim()},

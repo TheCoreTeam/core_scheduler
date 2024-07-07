@@ -35,10 +35,10 @@ struct CS_API AdamW {
     struct Tensors {
       Tensor m;
       Tensor v;
-      Tensor vMax{};
+      Tensor v_max{};
     } tensors;
     struct Options {
-      const double lr = 1e-3;
+      mutable double lr = 1e-3;
       const double beta1 = 0.9;
       const double beta2 = 0.999;
       const double eps = 1e-8;
@@ -48,6 +48,10 @@ struct CS_API AdamW {
     } options;
 
     State(const Tensors &tensors, const Options &options);
+
+    void set_lr(double lr) const override;
+
+    double get_lr() const override;
   };
 
   struct Options {

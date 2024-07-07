@@ -17,7 +17,7 @@
 #include "module/amp_state.h"
 
 namespace cs::module {
-OrderedDict<std::string, Tensor> AmpState::parametersHighPrecision() const {
+OrderedDict<std::string, Tensor> AmpState::parameters_high_precision() const {
   return OrderedDict<std::string, Tensor>{};
 }
 }  // namespace cs::module

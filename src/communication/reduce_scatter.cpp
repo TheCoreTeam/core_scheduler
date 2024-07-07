@@ -28,7 +28,7 @@ namespace cs::communication {
 namespace {
 constexpr auto toC10dRedOp(const Operation operation) {
   switch (operation) {
-    case SUM:
+    case kSUM:
       return c10d::ReduceOp::SUM;
     default:
       CS_ASSERT_TRUE(false, "unsupported operation for NCCL all reduce");
@@ -49,7 +49,7 @@ void ReduceScatter::run(
                   std::vector<ReadOnlyTensor> input /* tensors */,
                   const std::vector<std::vector<ReadOnlyTensor>> &actualSend,
                   Comm comm, const Operation operation)
-        : Task::Impl{std::move(output), std::move(input), nccl},
+        : Task::Impl{std::move(output), std::move(input), kNccl},
           actualSend{actualSend},
           comm{std::move(comm)},
           operation{operation} {}

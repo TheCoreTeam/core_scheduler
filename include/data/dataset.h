@@ -38,7 +38,5 @@ struct CS_API LlmDataset : Dataset {
   [[nodiscard]] std::int64_t size() const;
 
   [[nodiscard]] const std::vector<std::string> &files() const;
-
-  [[nodiscard]] const std::vector<int64_t> &fileOffsets() const;
 };
 }  // namespace cs::data

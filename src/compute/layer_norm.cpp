@@ -77,7 +77,7 @@ std::shared_ptr<LayerNorm::State> LayerNorm::init(const Scheduler& scheduler,
 
       explicit Impl(std::vector<Tensor> output /* weight, bias */,
                     const Options& options, const TensorOptions tensorOptions)
-          : Task::Impl{std::move(output), {}, compute},
+          : Task::Impl{std::move(output), {}, kCompute},
             options{options},
             tensorOptions{tensorOptions} {}
       void operator()() const override {
@@ -106,7 +106,7 @@ std::shared_ptr<LayerNorm::State> LayerNorm::init(const Scheduler& scheduler,
 
       explicit Impl(std::vector<Tensor> output /* weight */,
                     const Options& options, const TensorOptions tensorOptions)
-          : Task::Impl{std::move(output), {}, compute},
+          : Task::Impl{std::move(output), {}, kCompute},
             options{options},
             tensorOptions{tensorOptions} {}
       void operator()() const override {
@@ -142,7 +142,7 @@ Tensor LayerNorm::forward(const Scheduler& scheduler,
       explicit Impl(std::vector<Tensor> output /* output, mean, rstd */,
                     std::vector<ReadOnlyTensor> input /* input, weight, bias */,
                     const State::Args& args)
-          : Task::Impl{std::move(output), std::move(input), compute},
+          : Task::Impl{std::move(output), std::move(input), kCompute},
             args{args} {}
       void operator()() const override {
         std::make_tuple(std::ref(output()[0].impl()->tensor()),
@@ -169,7 +169,7 @@ Tensor LayerNorm::forward(const Scheduler& scheduler,
       explicit Impl(std::vector<Tensor> output /* output, mean, rstd */,
                     std::vector<ReadOnlyTensor> input /* input, weight */,
                     const State::Args& args)
-          : Task::Impl{std::move(output), std::move(input), compute},
+          : Task::Impl{std::move(output), std::move(input), kCompute},
             args{args} {}
       void operator()() const override {
         std::make_tuple(std::ref(output()[0].impl()->tensor()),
@@ -209,7 +209,7 @@ Tensor LayerNorm::backward(const Scheduler& scheduler,
           std::vector<ReadOnlyTensor>
               input /* grad_output, input, mean, rstd, weight, bias */,
           const State::Args& args)
-          : Task::Impl{std::move(output), std::move(input), compute},
+          : Task::Impl{std::move(output), std::move(input), kCompute},
             args{args} {}
       void operator()() const override {
         auto [dx, dw, db] = at::native_layer_norm_backward(
@@ -250,7 +250,7 @@ Tensor LayerNorm::backward(const Scheduler& scheduler,
                     std::vector<ReadOnlyTensor>
                         input /* grad_output, input, mean, rstd, weight */,
                     const State::Args& args)
-          : Task::Impl{std::move(output), std::move(input), compute},
+          : Task::Impl{std::move(output), std::move(input), kCompute},
             args{args} {}
       void operator()() const override {
         auto [dx, dw, db] = at::native_layer_norm_backward(

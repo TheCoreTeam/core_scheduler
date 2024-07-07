@@ -49,10 +49,12 @@ struct TypeToTorch<double> {
 class AllReduceNcclTestFixture : public ::testing::Test {
  protected:
   cs::communication::Comm comm{
-      cs::communication::getCommWorld(cs::communication::NCCL)};
-  cs::DynamicScheduler scheduler{static_cast<int>(comm.getRank())};
+      cs::communication::get_comm_world(cs::communication::kNCCL)};
+  cs::DynamicScheduler scheduler{static_cast<int>(comm.get_rank())};
 
-  AllReduceNcclTestFixture() { CHECK_CUDART(cudaSetDevice(comm.getRank())); }
+  AllReduceNcclTestFixture() {
+    CS_CHECK_CUDART(cudaSetDevice(comm.get_rank()));
+  }
 
   template <typename T>
   void TestAllReduceT(int m);
@@ -60,23 +62,23 @@ class AllReduceNcclTestFixture : public ::testing::Test {
 
 template <typename T>
 void AllReduceNcclTestFixture::TestAllReduceT(const int m) {
-  const at::Device device(at::kCUDA, comm.getRank());
+  const at::Device device(at::kCUDA, comm.get_rank());
   const at::ScalarType dtype = TypeToTorch<T>::type;
   const auto option = at::TensorOptions().dtype(dtype).device(device);
-  at::manual_seed(comm.getRank() + 1);
+  at::manual_seed(comm.get_rank() + 1);
   auto x = cs::compute::Utils::rand(scheduler, {m}, option);
   auto y = cs::compute::Utils::rand(scheduler, {m}, option);
-  cs::communication::AllReduce::runInplace(scheduler, comm, {x, y},
-                                           cs::communication::SUM);
+  cs::communication::AllReduce::run_inplace(scheduler, comm, {x, y},
+                                            cs::communication::kSUM);
 
-  auto x_torch = cs::memory::toTorch(scheduler, x);
-  auto y_torch = cs::memory::toTorch(scheduler, y);
+  auto x_torch = cs::memory::to_torch(scheduler, x);
+  auto y_torch = cs::memory::to_torch(scheduler, y);
   x.wait();
   y.wait();
 
   auto accumulator_x = torch::zeros_like(x_torch);
   auto accumulator_y = torch::zeros_like(y_torch);
-  for (int i = 0; i < comm.getSize(); ++i) {
+  for (int i = 0; i < comm.get_size(); ++i) {
     at::manual_seed(i + 1);
     accumulator_x += torch::rand({m}, option);
     accumulator_y += torch::rand({m}, option);

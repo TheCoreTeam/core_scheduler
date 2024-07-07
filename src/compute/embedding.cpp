@@ -53,7 +53,7 @@ std::shared_ptr<Embedding::State> Embedding::init(const Scheduler &scheduler,
 
     explicit Impl(std::vector<Tensor> output /* weight */,
                   const Options &options)
-        : Task::Impl{std::move(output), {}, compute}, options{options} {}
+        : Task::Impl{std::move(output), {}, kCompute}, options{options} {}
     void operator()() const override {
       const auto weight_ =
           at::normal(0, 1, {options.num_embeddings(), options.embedding_dim()},
@@ -103,7 +103,7 @@ Tensor Embedding::forward(const Scheduler &scheduler,
     explicit Impl(std::vector<Tensor> output /* output */,
                   std::vector<ReadOnlyTensor> input /* weight, indices */,
                   const State::Args &args)
-        : Task::Impl{std::move(output), std::move(input), compute},
+        : Task::Impl{std::move(output), std::move(input), kCompute},
           args{args} {}
     void operator()() const override {
       output()[0].impl()->tensor() = torch::embedding(
@@ -133,7 +133,7 @@ void Embedding::backward(const Scheduler &scheduler,
     explicit Impl(std::vector<Tensor> output /* grad_weight */,
                   std::vector<ReadOnlyTensor> input /* grad_output, indices */,
                   const State::Args &args)
-        : Task::Impl{std::move(output), std::move(input), compute},
+        : Task::Impl{std::move(output), std::move(input), kCompute},
           args{args} {}
     void operator()() const override {
       if (output()[0].impl()->tensor().defined()) {

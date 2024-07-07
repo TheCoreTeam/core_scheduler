@@ -72,7 +72,7 @@ std::shared_ptr<Linear::State> Linear::init(const Scheduler &scheduler,
       explicit Impl(std::vector<Tensor> output /* weight, bias */,
                     const TensorOptions options, const int64_t in_futures,
                     const int64_t out_futures)
-          : Task::Impl{std::move(output), {}, compute},
+          : Task::Impl{std::move(output), {}, kCompute},
             options{options},
             in_futures{in_futures},
             out_futures{out_futures} {}
@@ -112,7 +112,7 @@ std::shared_ptr<Linear::State> Linear::init(const Scheduler &scheduler,
       explicit Impl(std::vector<Tensor> output /* weight, bias */,
                     const TensorOptions options, const int64_t in_futures,
                     const int64_t out_futures)
-          : Task::Impl{std::move(output), {}, compute},
+          : Task::Impl{std::move(output), {}, kCompute},
             options{options},
             in_futures{in_futures},
             out_futures{out_futures} {}
@@ -146,7 +146,7 @@ Tensor Linear::forward(const Scheduler &scheduler,
     struct Impl : Task::Impl {
       explicit Impl(std::vector<Tensor> output /* output */,
                     std::vector<ReadOnlyTensor> input /* input, weight, bias */)
-          : Task::Impl{std::move(output), std::move(input), compute} {}
+          : Task::Impl{std::move(output), std::move(input), kCompute} {}
       void operator()() const override {
         output()[0].impl()->tensor() =
             at::linear(input()[0].impl()->tensor(), input()[1].impl()->tensor(),
@@ -166,7 +166,7 @@ Tensor Linear::forward(const Scheduler &scheduler,
     struct Impl : Task::Impl {
       explicit Impl(std::vector<Tensor> output /* output */,
                     std::vector<ReadOnlyTensor> input /* input, weight */)
-          : Task::Impl{std::move(output), std::move(input), compute} {}
+          : Task::Impl{std::move(output), std::move(input), kCompute} {}
       void operator()() const override {
         output()[0].impl()->tensor() = at::linear(input()[0].impl()->tensor(),
                                                   input()[1].impl()->tensor());
@@ -184,19 +184,19 @@ Tensor Linear::forward(const Scheduler &scheduler,
   }
 }
 
-Tensor Linear::backwardInput(const Scheduler &scheduler,
-                             const std::shared_ptr<State> &state,
-                             const ReadOnlyTensor &grad_output) {
+Tensor Linear::backward_input(const Scheduler &scheduler,
+                              const std::shared_ptr<State> &state,
+                              const ReadOnlyTensor &grad_output) {
   struct Impl : Task::Impl {
     explicit Impl(std::vector<Tensor> output /* grad_input */,
                   std::vector<ReadOnlyTensor> input /* grad_output, weight */)
-        : Task::Impl{std::move(output), std::move(input), compute} {}
+        : Task::Impl{std::move(output), std::move(input), kCompute} {}
     void operator()() const override {
       output()[0].impl()->tensor() =
           at::matmul(input()[0].impl()->tensor(), input()[1].impl()->tensor());
     }
     [[nodiscard]] const char *name() const override {
-      return "cs::compute::Linear::backwardInput";
+      return "cs::compute::Linear::backward_input";
     }
   };
 
@@ -206,13 +206,13 @@ Tensor Linear::backwardInput(const Scheduler &scheduler,
   return grad_input;
 }
 
-void Linear::backwardParameter(const Scheduler &scheduler,
-                               const std::shared_ptr<State> &state,
-                               const ReadOnlyTensor &grad_output) {
+void Linear::backward_parameter(const Scheduler &scheduler,
+                                const std::shared_ptr<State> &state,
+                                const ReadOnlyTensor &grad_output) {
   struct Impl : Task::Impl {
     explicit Impl(std::vector<Tensor> output /* grad_weight */,
                   std::vector<ReadOnlyTensor> input /* grad_output, input */)
-        : Task::Impl{std::move(output), std::move(input), compute} {}
+        : Task::Impl{std::move(output), std::move(input), kCompute} {}
     void operator()() const override {
       if (output()[0].impl()->tensor().defined()) {
         const auto reshapedGradOutput = input()[0].impl()->tensor().view(
@@ -247,7 +247,7 @@ void Linear::backwardParameter(const Scheduler &scheduler,
     struct Impl : Task::Impl {
       explicit Impl(std::vector<Tensor> output /* grad_bias */,
                     std::vector<ReadOnlyTensor> input /* grad_output */)
-          : Task::Impl{std::move(output), std::move(input), compute} {}
+          : Task::Impl{std::move(output), std::move(input), kCompute} {}
       void operator()() const override {
         if (output()[0].impl()->tensor().defined()) {
           const auto reshapedGradOutput = input()[0].impl()->tensor().view(

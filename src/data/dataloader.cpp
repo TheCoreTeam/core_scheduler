@@ -34,6 +34,7 @@
 
 #include "data/dataloader_impl.h"
 #include "data/dataset.h"
+#include "data/dataset_impl.h"
 #include "logger.h"
 #include "tensor_impl.h"
 #include "threading/scheduler_impl.h"
@@ -48,10 +49,10 @@ inline DataLoader::Impl::Impl(const int64_t batchSize, const int64_t numWorkers,
                               const bool shuffle, const int64_t rank,
                               const int64_t worldSize)
     : batchSize{batchSize},
-      numWorkers{numWorkers},
+      num_workers{numWorkers},
       shuffle{shuffle},
       rank{rank},
-      worldSize{worldSize} {}
+      world_size{worldSize} {}
 
 struct HostBuffer {
   void *ptr{nullptr};
@@ -72,7 +73,7 @@ struct LlmDataLoaderImpl final : DataLoader::Impl {
 
   ~LlmDataLoaderImpl() override;
 
-  [[nodiscard]] int64_t iterationsPerEpoch() const override;
+  [[nodiscard]] int64_t iterations_per_epoch() const override;
 
   const LlmDataset dataset_;
   std::vector<std::shared_ptr<std::barrier<>>> startBarrier_{};
@@ -94,18 +95,18 @@ LlmDataLoaderImpl::~LlmDataLoaderImpl() {
     (void)b->arrive();
   }
 }
-int64_t LlmDataLoaderImpl::iterationsPerEpoch() const {
-  return dataset_.size() / (batchSize * worldSize);
+int64_t LlmDataLoaderImpl::iterations_per_epoch() const {
+  return dataset_.size() / (batchSize * world_size);
 }
 
-HostBuffer::~HostBuffer() { CHECK_CUDART(cudaFreeHost(ptr)); }
+HostBuffer::~HostBuffer() { CS_CHECK_CUDART(cudaFreeHost(ptr)); }
 
 const std::shared_ptr<DataLoader::Impl> &DataLoader::impl() const {
   return impl_;
 }
 
-int64_t DataLoader::iterationsPerEpoch() const {
-  return impl()->iterationsPerEpoch();
+int64_t DataLoader::iterations_per_epoch() const {
+  return impl()->iterations_per_epoch();
 }
 
 void threadLoaderTask(const std::span<const std::string> files,
@@ -166,8 +167,8 @@ void threadLoaderTask(const std::span<const std::string> files,
     buffer[i].options = buffer[i].options.dtype(at::kLong);
     const auto size = sizeof(std::int64_t) * rows * ld;
     if (buffer[i].size < size) {
-      CHECK_CUDART(cudaFreeHost(buffer[i].ptr));
-      CHECK_CUDART(cudaMallocHost(&buffer[i].ptr, size));
+      CS_CHECK_CUDART(cudaFreeHost(buffer[i].ptr));
+      CS_CHECK_CUDART(cudaMallocHost(&buffer[i].ptr, size));
       buffer[i].size = size;
       buffer[i].validDataSize = size;
     }
@@ -230,7 +231,7 @@ std::unordered_map<std::string, Tensor> LlmDataLoader::load(
   struct Impl : Task::Impl {
     explicit Impl(std::vector<Tensor> output /* x, y */, const Event &event,
                   const std::span<HostBuffer> buffer)
-        : Task::Impl{std::move(output), {}, loader},
+        : Task::Impl{std::move(output), {}, kLoader},
           event{event},
           buffer{buffer} {}
     const Event event;
@@ -248,7 +249,7 @@ std::unordered_map<std::string, Tensor> LlmDataLoader::load(
             at::ScalarType::Long, output()[i].impl()->tensor().scalar_type(),
             "memcpy", [&] {
               using T = scalar_t;
-              CHECK_CUDART(cudaMemcpyAsync(
+              CS_CHECK_CUDART(cudaMemcpyAsync(
                   output()[i].impl()->tensor().data_ptr(), buffer[i].ptr,
                   sizeof(T) * output()[i].impl()->tensor().numel(),
                   cudaMemcpyHostToDevice, stream.stream()));
@@ -297,7 +298,7 @@ LlmDataLoader::LlmDataLoader(const LlmDataset &dataset, int64_t batchSize,
   impl->buffers_.reserve(numWorkers);
   const auto batchEachProcess = impl->dataset_.size() / worldSize;
   const auto batchOffsetOfThisProcess = batchEachProcess * rank;
-  auto &fileOffsets = impl->dataset_.fileOffsets();
+  auto &fileOffsets = impl->dataset_.impl()->file_offsets();
   size_t startFileIdxOfThisProcess;
   for (startFileIdxOfThisProcess = 0;
        startFileIdxOfThisProcess < fileOffsets.size();
@@ -355,8 +356,8 @@ LlmDataLoader::LlmDataLoader(const LlmDataset &dataset,
                              const communication::Comm &comm, int64_t batchSize,
                              int64_t numWorkers, bool shuffle) {
   CS_ASSERT_TRUE(shuffle == false, "We do not support shuffle now");
-  auto rank = comm.getRank();
-  auto worldSize = comm.getSize();
+  auto rank = comm.get_rank();
+  auto worldSize = comm.get_size();
   const auto impl = std::make_shared<LlmDataLoaderImpl>(
       dataset, batchSize, numWorkers, shuffle, rank, worldSize);
   impl_ = impl;
@@ -368,7 +369,7 @@ LlmDataLoader::LlmDataLoader(const LlmDataset &dataset,
   impl->buffers_.reserve(numWorkers);
   const auto batchEachProcess = impl->dataset_.size() / worldSize;
   const auto batchOffsetOfThisProcess = batchEachProcess * rank;
-  auto &fileOffsets = impl->dataset_.fileOffsets();
+  auto &fileOffsets = impl->dataset_.impl()->file_offsets();
   size_t startFileIdxOfThisProcess;
   for (startFileIdxOfThisProcess = 0;
        startFileIdxOfThisProcess < fileOffsets.size();
