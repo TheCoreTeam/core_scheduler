@@ -39,7 +39,7 @@ void AmpAdamW::init(const Scheduler& scheduler, const module::Module& module,
   for (auto& kvState : module.named_states()) {
     for (auto& kvIncrement : kvState.value()->increments()) {
       auto state = init(scheduler, kvIncrement->parameter, options);
-      kvIncrement->optimizerState = state;
+      kvIncrement->optimizer_state = state;
     }
   }
 }
@@ -51,14 +51,14 @@ void AmpAdamW::step(const Scheduler& scheduler, const module::Module& module) {
     auto ampState =
         std::dynamic_pointer_cast<module::AmpState>(kvState.value());
     CS_ASSERT_TRUE(ampState != nullptr, "The module is not an AMP module");
-    auto parametersHighPrecision = ampState->parametersHighPrecision();
+    auto parameters_high_precision = ampState->parameters_high_precision();
     for (auto& kvIncrement : increments) {
-      CS_ASSERT_TRUE(parametersHighPrecision.contains(kvIncrement.key()),
+      CS_ASSERT_TRUE(parameters_high_precision.contains(kvIncrement.key()),
                      "Internal error, key is not found, mostly because your "
-                     "parametersHighPrecision implementation is not corrent");
+                     "parameters_high_precision implementation is not corrent");
       step(scheduler,
-           std::dynamic_pointer_cast<State>(kvIncrement->optimizerState),
-           kvIncrement->parameter, parametersHighPrecision[kvIncrement.key()],
+           std::dynamic_pointer_cast<State>(kvIncrement->optimizer_state),
+           kvIncrement->parameter, parameters_high_precision[kvIncrement.key()],
            kvIncrement->gradient);
       kvIncrement->gradient = Tensor{};
     }
@@ -74,7 +74,7 @@ std::shared_ptr<AmpAdamW::State> AmpAdamW::init(const Scheduler& scheduler,
     struct Impl : Task::Impl {
       explicit Impl(std::vector<Tensor> output /* m, v, vMax */,
                     std::vector<ReadOnlyTensor> input /* parameter */)
-          : Task::Impl{std::move(output), std::move(input), compute} {}
+          : Task::Impl{std::move(output), std::move(input), kCompute} {}
       void operator()() const override {
         output()[0].impl()->tensor() =
             at::zeros(input()[0].impl()->tensor().sizes(),
@@ -105,7 +105,7 @@ std::shared_ptr<AmpAdamW::State> AmpAdamW::init(const Scheduler& scheduler,
     struct Impl : Task::Impl {
       explicit Impl(std::vector<Tensor> output /* m, v */,
                     std::vector<ReadOnlyTensor> input /* parameter */)
-          : Task::Impl{std::move(output), std::move(input), compute} {}
+          : Task::Impl{std::move(output), std::move(input), kCompute} {}
       void operator()() const override {
         output()[0].impl()->tensor() =
             at::zeros(input()[0].impl()->tensor().sizes(),
@@ -142,7 +142,7 @@ void AmpAdamW::step(const Scheduler& scheduler,
           std::vector<Tensor> output /* w, wFp32, m, v, vMax */,
           std::vector<ReadOnlyTensor> input /* w, wFp32, m, v, vMax, dw */,
           const State::Options& options)
-          : Task::Impl{std::move(output), std::move(input), compute},
+          : Task::Impl{std::move(output), std::move(input), kCompute},
             options{options} {}
       void operator()() const override {
         const auto stream = c10::cuda::getCurrentCUDAStream();
@@ -161,7 +161,7 @@ void AmpAdamW::step(const Scheduler& scheduler,
 
     const auto& m = state->tensors.m;
     const auto& v = state->tensors.v;
-    const auto& vMax = state->tensors.vMax;
+    const auto& vMax = state->tensors.v_max;
     scheduler.impl()->submit(Task{std::make_shared<Impl>(Impl{
         {w, wFp32, m, v, vMax}, {w, wFp32, m, v, vMax, dw}, state->options})});
   } else {
@@ -171,7 +171,7 @@ void AmpAdamW::step(const Scheduler& scheduler,
       explicit Impl(std::vector<Tensor> output /* w, wFp32, m, v */,
                     std::vector<ReadOnlyTensor> input /* w, wFp32, m, v, dw */,
                     const State::Options& options)
-          : Task::Impl{std::move(output), std::move(input), compute},
+          : Task::Impl{std::move(output), std::move(input), kCompute},
             options{options} {}
       void operator()() const override {
         const auto stream = c10::cuda::getCurrentCUDAStream();

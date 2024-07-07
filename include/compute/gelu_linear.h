@@ -33,7 +33,7 @@ struct CS_API GeluLinear {
     } forward;
     struct Backward {
       ReadOnlyTensor input;
-      int8_t inputSetCount = 0;
+      int8_t input_count = 0;
     } backward;
     struct Args {
       const bool bias;
@@ -63,11 +63,11 @@ struct CS_API GeluLinear {
                         const std::shared_ptr<State> &state,
                         const ReadOnlyTensor &input);
 
-  static Tensor backwardInput(const Scheduler &scheduler,
+  static Tensor backward_input(const Scheduler &scheduler,
                               const std::shared_ptr<State> &state,
                               const ReadOnlyTensor &grad_output);
 
-  static void backwardParameter(const Scheduler &scheduler,
+  static void backward_parameter(const Scheduler &scheduler,
                                 const std::shared_ptr<State> &state,
                                 const ReadOnlyTensor &grad_output);
 };

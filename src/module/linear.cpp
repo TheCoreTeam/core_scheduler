@@ -33,19 +33,19 @@ Tensor LinearImpl::forward(const Scheduler& scheduler,
 Tensor LinearImpl::backward(const Scheduler& scheduler,
                             const ReadOnlyTensor& grad_output) const {
   auto grad_input =
-      compute::Linear::backwardInput(scheduler, state(), grad_output);
-  compute::Linear::backwardParameter(scheduler, state(), grad_output);
+      compute::Linear::backward_input(scheduler, state(), grad_output);
+  compute::Linear::backward_parameter(scheduler, state(), grad_output);
   return grad_input;
 }
 
-void LinearImpl::backwardParameter(const Scheduler& scheduler,
-                                   const ReadOnlyTensor& grad_output) const {
-  compute::Linear::backwardParameter(scheduler, state(), grad_output);
+void LinearImpl::backward_parameter(const Scheduler& scheduler,
+                                    const ReadOnlyTensor& grad_output) const {
+  compute::Linear::backward_parameter(scheduler, state(), grad_output);
 }
 
-Tensor LinearImpl::backwardInput(const Scheduler& scheduler,
-                                 const ReadOnlyTensor& grad_output) const {
-  return compute::Linear::backwardInput(scheduler, state(), grad_output);
+Tensor LinearImpl::backward_input(const Scheduler& scheduler,
+                                  const ReadOnlyTensor& grad_output) const {
+  return compute::Linear::backward_input(scheduler, state(), grad_output);
 }
 
 std::shared_ptr<compute::Linear::State> LinearImpl::state() const {

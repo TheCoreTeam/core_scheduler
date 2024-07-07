@@ -23,11 +23,11 @@
 #include "threading/task_impl.h"
 
 namespace cs::memory {
-at::Tensor toTorch(const Scheduler &scheduler, const ReadOnlyTensor &src) {
+at::Tensor to_torch(const Scheduler &scheduler, const ReadOnlyTensor &src) {
   struct Impl : Task::Impl {
     explicit Impl(std::vector<Tensor> output /* tensor */,
                   std::vector<ReadOnlyTensor> input /* input */)
-        : Task::Impl{std::move(output), std::move(input), compute} {}
+        : Task::Impl{std::move(output), std::move(input), kCompute} {}
     void operator()() const override {
       c10::cuda::getCurrentCUDAStream().synchronize();
       auto &dst = output()[0].impl()->tensor();
@@ -40,7 +40,7 @@ at::Tensor toTorch(const Scheduler &scheduler, const ReadOnlyTensor &src) {
       c10::cuda::getCurrentCUDAStream().synchronize();
     }
     [[nodiscard]] const char *name() const override {
-      return "cs::memory::toTorch";
+      return "cs::memory::to_torch";
     }
   };
   Tensor dst_;

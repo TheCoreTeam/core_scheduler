@@ -70,13 +70,13 @@ void TestCrossEntropyFixture::Test(const int size) {
   auto state = cs::compute::CrossEntropy::init(scheduler);
   auto loss = cs::compute::CrossEntropy::forward(scheduler, state, x, target);
   auto dx = cs::compute::CrossEntropy::backward(scheduler, state);
-  auto loss_ref_torch = cs::memory::toTorch(scheduler, loss);
+  auto loss_ref_torch = cs::memory::to_torch(scheduler, loss);
   loss.wait();
-  auto x_torch = cs::memory::toTorch(scheduler, x);
+  auto x_torch = cs::memory::to_torch(scheduler, x);
   x.wait();
-  auto dx_torch = cs::memory::toTorch(scheduler, dx);
+  auto dx_torch = cs::memory::to_torch(scheduler, dx);
   dx.wait();
-  auto target_torch = cs::memory::toTorch(scheduler, target);
+  auto target_torch = cs::memory::to_torch(scheduler, target);
   target.wait();
   x_torch.set_requires_grad(true);
   const auto loss_torch = at::cross_entropy_loss(x_torch, target_torch);

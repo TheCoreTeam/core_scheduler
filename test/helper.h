@@ -39,13 +39,13 @@ namespace cs {
     }                                                                         \
   } while (false)
 
-#define CHECK_CUDART(statement)                                      \
+#define CS_CHECK_CUDART(statement)                                      \
   do {                                                               \
     auto code = (statement);                                         \
     CS_ASSERT_TRUE((code) == cudaSuccess, cudaGetErrorString(code)); \
   } while (false)
 
-#define CHECK_CUBLAS(statement)                                             \
+#define CS_CHECK_CUBLAS(statement)                                             \
   do {                                                                      \
     auto code = (statement);                                                \
     CS_ASSERT_TRUE((code) == CUBLAS_STATUS_SUCCESS,                         \
@@ -53,7 +53,7 @@ namespace cs {
                                static_cast<int>(code)));                    \
   } while (false)
 
-#define CHECK_MPI(statement)                                                \
+#define CS_CHECK_MPI(statement)                                                \
   do {                                                                      \
     auto code = (statement);                                                \
     CS_ASSERT_TRUE((code) == MPI_SUCCESS,                                   \
@@ -61,7 +61,7 @@ namespace cs {
                                static_cast<int>(code)));                    \
   } while (false)
 
-#define CHECK_NCCL(statement)                                               \
+#define CS_CHECK_NCCL(statement)                                               \
   do {                                                                      \
     auto code = (statement);                                                \
     CS_ASSERT_TRUE((code) == ncclSuccess,                                   \
@@ -69,7 +69,7 @@ namespace cs {
                                static_cast<int>(code)));                    \
   } while (false)
 
-#define CHECK_CUDNN(statement)                                              \
+#define CS_CHECK_CUDNN(statement)                                              \
   do {                                                                      \
     auto code = (statement);                                                \
     CS_ASSERT_TRUE((code) == CUDNN_STATUS_SUCCESS,                          \
@@ -77,7 +77,7 @@ namespace cs {
                                static_cast<int>(code)));                    \
   } while (false)
 
-#define CHECK_CUDNN_FE(statement)                                           \
+#define CS_CHECK_CUDNN_FE(statement)                                           \
   do {                                                                      \
     auto code = (statement);                                                \
     CS_ASSERT_TRUE((code).is_good(),                                        \

@@ -27,13 +27,17 @@ using OrderedDict = torch::OrderedDict<Key, Value>;
 namespace cs::module {
 struct OptimizerState {
   virtual ~OptimizerState() = default;
+
+  virtual void set_lr(double lr) const = 0;
+
+  virtual double get_lr() const = 0;
 };
 
 struct CS_API State {
   struct Increment {
     Tensor &parameter;
     Tensor &gradient;
-    std::shared_ptr<OptimizerState> &optimizerState;
+    std::shared_ptr<OptimizerState> &optimizer_state;
   };
 
   virtual ~State() = default;

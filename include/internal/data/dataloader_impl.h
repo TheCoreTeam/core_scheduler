@@ -23,12 +23,12 @@ struct DataLoader::Impl {
        int64_t worldSize);
 
   const int64_t batchSize;
-  const int64_t numWorkers;
+  const int64_t num_workers;
   const bool shuffle;
   const int64_t rank;
-  const int64_t worldSize;
+  const int64_t world_size;
 
-  [[nodiscard]] virtual int64_t iterationsPerEpoch() const = 0;
+  [[nodiscard]] virtual int64_t iterations_per_epoch() const = 0;
 
   virtual ~Impl() = default;
 };

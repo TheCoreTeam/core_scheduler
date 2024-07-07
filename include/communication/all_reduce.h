@@ -28,7 +28,7 @@ struct AllReduceBucket : Bucket {
 };
 
 struct AllReduce {
-  CS_API static void runInplace(const Scheduler& scheduler, const Comm& comm,
+  CS_API static void run_inplace(const Scheduler& scheduler, const Comm& comm,
                                 const std::vector<Tensor>& tensors,
                                 Operation operation);
 };

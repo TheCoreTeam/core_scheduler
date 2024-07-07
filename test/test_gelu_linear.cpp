@@ -76,28 +76,28 @@ void TestModuleT(cs::Scheduler& scheduler, bool with_bias = true) {
   auto dx = fc->backward(scheduler, yGrad);
   dx.wait();
   fc->state()->forward.grad_weight.wait();
-  auto xRef = cs::memory::toTorch(scheduler, x);
+  auto xRef = cs::memory::to_torch(scheduler, x);
   x.wait();
   xRef.requires_grad_(true);
-  auto wRef = cs::memory::toTorch(scheduler, fc->state()->forward.weight);
+  auto wRef = cs::memory::to_torch(scheduler, fc->state()->forward.weight);
   fc->state()->forward.weight.wait();
   wRef.requires_grad_(true);
 
   at::Tensor yRef;
   at::Tensor biasRef;
   if (with_bias) {
-    biasRef = cs::memory::toTorch(scheduler, fc->state()->forward.bias);
+    biasRef = cs::memory::to_torch(scheduler, fc->state()->forward.bias);
     fc->state()->forward.bias.wait();
     biasRef.requires_grad_(true);
     yRef = torch::linear(at::gelu(xRef), wRef, biasRef);
   } else {
     yRef = torch::linear(at::gelu(xRef), wRef);
   }
-  auto yGradRef = cs::memory::toTorch(scheduler, yGrad);
+  auto yGradRef = cs::memory::to_torch(scheduler, yGrad);
   yGrad.wait();
   yRef.backward(yGradRef);
 
-  auto y_torch = cs::memory::toTorch(scheduler, y);
+  auto y_torch = cs::memory::to_torch(scheduler, y);
   y.wait();
   auto close = torch::allclose(y_torch, yRef, 1e-4, 1e-2);
   ASSERT_TRUE(close);

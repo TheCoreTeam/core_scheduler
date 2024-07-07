@@ -32,16 +32,16 @@ const std::shared_ptr<Dataset::Impl> &Dataset::impl() const { return impl_; }
 
 LlmDatasetImpl::LlmDatasetImpl(std::vector<std::string> files,
                                std::vector<int64_t> rowOffset)
-    : files_{std::move(files)}, fileOffsets_{std::move(rowOffset)} {}
+    : files_{std::move(files)}, file_offsets_{std::move(rowOffset)} {}
 
 std::int64_t LlmDatasetImpl::size() const {
-  return fileOffsets_[fileOffsets_.size() - 1];
+  return file_offsets_[file_offsets_.size() - 1];
 }
 
 const std::vector<std::string> &LlmDatasetImpl::files() const { return files_; }
 
-const std::vector<int64_t> &LlmDatasetImpl::fileOffsets() const {
-  return fileOffsets_;
+const std::vector<int64_t> &LlmDatasetImpl::file_offsets() const {
+  return file_offsets_;
 }
 
 namespace {
@@ -111,9 +111,5 @@ std::int64_t LlmDataset::size() const {
 
 const std::vector<std::string> &LlmDataset::files() const {
   return std::dynamic_pointer_cast<LlmDatasetImpl>(impl_)->files();
-}
-
-const std::vector<int64_t> &LlmDataset::fileOffsets() const {
-  return std::dynamic_pointer_cast<LlmDatasetImpl>(impl_)->fileOffsets();
 }
 }  // namespace cs::data

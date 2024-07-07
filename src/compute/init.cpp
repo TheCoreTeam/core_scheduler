@@ -34,13 +34,13 @@ void kaiming_normal_(const Scheduler &scheduler, const Tensor &tensor,
     explicit Impl(const Tensor &tensor /* tensor */, const double a,
                   const torch::nn::init::FanModeType &m,
                   const torch::nn::init::NonlinearityType &nonlineari)
-        : Task::Impl{{tensor}, {tensor}, compute},
+        : Task::Impl{{tensor}, {tensor}, kCompute},
           a{a},
           m{m},
           nonlineari{nonlineari} {}
     void operator()() const override {
-      torch::nn::init::kaiming_normal_(output()[0].impl()->tensor().normal_(),
-                                       a, m, nonlineari);
+      torch::nn::init::kaiming_normal_(output()[0].impl()->tensor(), a, m,
+                                       nonlineari);
     }
     [[nodiscard]] const char *name() const override {
       return "cs::compute::Init::kaiming_normal_";
@@ -62,13 +62,13 @@ void kaiming_uniform_(const Scheduler &scheduler, const Tensor &tensor,
     explicit Impl(const Tensor &tensor /* tensor */, const double a,
                   const torch::nn::init::FanModeType &m,
                   const torch::nn::init::NonlinearityType &nonlineari)
-        : Task::Impl{{tensor}, {tensor}, compute},
+        : Task::Impl{{tensor}, {tensor}, kCompute},
           a{a},
           m{m},
           nonlineari{nonlineari} {}
     void operator()() const override {
-      torch::nn::init::kaiming_uniform_(output()[0].impl()->tensor().normal_(),
-                                        a, m, nonlineari);
+      torch::nn::init::kaiming_uniform_(output()[0].impl()->tensor(), a, m,
+                                        nonlineari);
     }
     [[nodiscard]] const char *name() const override {
       return "cs::compute::Init::kaiming_uniform_";

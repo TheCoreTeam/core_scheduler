@@ -83,13 +83,13 @@ void TestEmbedding::TestRoutine(const double tol_forward,
   output.wait();
   auto grad_output = cs::compute::Utils::randn_like(scheduler, output);
   cs::compute::Embedding::backward(scheduler, state, grad_output);
-  auto input_torch = cs::memory::toTorch(scheduler, input);
+  auto input_torch = cs::memory::to_torch(scheduler, input);
   input.wait();
-  auto weight_torch = cs::memory::toTorch(scheduler, state->forward.weight);
+  auto weight_torch = cs::memory::to_torch(scheduler, state->forward.weight);
   state->forward.weight.wait();
   weight_torch.requires_grad_(true);
   const auto output_torch = at::embedding(weight_torch, input_torch);
-  auto grad_output_torch = cs::memory::toTorch(scheduler, grad_output);
+  auto grad_output_torch = cs::memory::to_torch(scheduler, grad_output);
   grad_output.wait();
   output_torch.backward(grad_output_torch);
 

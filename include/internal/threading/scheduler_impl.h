@@ -29,6 +29,6 @@ struct Scheduler::Impl {
   [[nodiscard]] int64_t deviceRank() const;
 
  private:
-  const int64_t deviceRank_;
+  const int64_t device_rank_;
 };
 }  // namespace cs

@@ -34,19 +34,19 @@ Tensor GeluLinearImpl::forward(const Scheduler& scheduler,
 Tensor GeluLinearImpl::backward(const Scheduler& scheduler,
                                 const ReadOnlyTensor& grad_output) const {
   auto grad_input =
-      compute::GeluLinear::backwardInput(scheduler, state(), grad_output);
-  compute::GeluLinear::backwardParameter(scheduler, state(), grad_output);
+      compute::GeluLinear::backward_input(scheduler, state(), grad_output);
+  compute::GeluLinear::backward_parameter(scheduler, state(), grad_output);
   return grad_input;
 }
 
-void GeluLinearImpl::backwardParameter(
+void GeluLinearImpl::backward_parameter(
     const Scheduler& scheduler, const ReadOnlyTensor& grad_output) const {
-  compute::GeluLinear::backwardParameter(scheduler, state(), grad_output);
+  compute::GeluLinear::backward_parameter(scheduler, state(), grad_output);
 }
 
-Tensor GeluLinearImpl::backwardInput(const Scheduler& scheduler,
-                                     const ReadOnlyTensor& grad_output) const {
-  return compute::GeluLinear::backwardInput(scheduler, state(), grad_output);
+Tensor GeluLinearImpl::backward_input(const Scheduler& scheduler,
+                                      const ReadOnlyTensor& grad_output) const {
+  return compute::GeluLinear::backward_input(scheduler, state(), grad_output);
 }
 
 std::shared_ptr<compute::GeluLinear::State> GeluLinearImpl::state() const {

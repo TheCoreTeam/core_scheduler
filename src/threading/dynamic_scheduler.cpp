@@ -326,7 +326,7 @@ Impl_::~Impl_() {
 
 void Impl_::submit(Task &&task) {
   int8_t streamIdx = -1;
-  if (task.impl()->type() == Task::Impl::nccl) {
+  if (task.impl()->type() == Task::Impl::kNccl) {
     streamIdx = threadCommIdx_;
   } else {
     [&]() mutable {

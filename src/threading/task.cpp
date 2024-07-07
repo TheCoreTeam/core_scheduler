@@ -33,7 +33,5 @@ const std::shared_ptr<Task::Impl>& Task::impl() const { return impl_; }
 
 void Task::reset() { impl_.reset(); }
 
-bool Task::valid() const { return impl_ != nullptr; }
-
 const char* Task::name() const { return impl_->name(); }
 }  // namespace cs

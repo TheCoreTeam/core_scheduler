@@ -42,7 +42,7 @@ bool cache_lookup_pre_built_forward_graph(
     return true;
   }
 
-  CHECK_CUDNN_FE(graph->build(handle, {cudnn_frontend::HeurMode_t::A}));
+  CS_CHECK_CUDNN_FE(graph->build(handle, {cudnn_frontend::HeurMode_t::A}));
 
   user_maintained_cache.emplace(cache_key, graph);
   return false;
@@ -64,7 +64,7 @@ bool cache_lookup_pre_built_backward_input_graph(
     return true;
   }
 
-  CHECK_CUDNN_FE(graph->build(handle, {cudnn_frontend::HeurMode_t::A}));
+  CS_CHECK_CUDNN_FE(graph->build(handle, {cudnn_frontend::HeurMode_t::A}));
 
   user_maintained_cache.emplace(cache_key, graph);
   return false;
@@ -86,7 +86,7 @@ bool cache_lookup_pre_built_backward_weight_graph(
     return true;
   }
 
-  CHECK_CUDNN_FE(graph->build(handle, {cudnn_frontend::HeurMode_t::A}));
+  CS_CHECK_CUDNN_FE(graph->build(handle, {cudnn_frontend::HeurMode_t::A}));
 
   user_maintained_cache.emplace(cache_key, graph);
   return false;
@@ -355,7 +355,7 @@ std::shared_ptr<GeluLinear::State> GeluLinear::init(const Scheduler &scheduler,
       explicit Impl(std::vector<Tensor> output /* weight, bias */,
                     const TensorOptions options, const int64_t in_futures,
                     const int64_t out_futures)
-          : Task::Impl{std::move(output), {}, compute},
+          : Task::Impl{std::move(output), {}, kCompute},
             options{options},
             in_futures{in_futures},
             out_futures{out_futures} {}
@@ -395,7 +395,7 @@ std::shared_ptr<GeluLinear::State> GeluLinear::init(const Scheduler &scheduler,
       explicit Impl(std::vector<Tensor> output /* weight, bias */,
                     const TensorOptions options, const int64_t in_futures,
                     const int64_t out_futures)
-          : Task::Impl{std::move(output), {}, compute},
+          : Task::Impl{std::move(output), {}, kCompute},
             options{options},
             in_futures{in_futures},
             out_futures{out_futures} {}
@@ -430,7 +430,7 @@ Tensor GeluLinear::forward(const Scheduler &scheduler,
     explicit Impl(std::vector<Tensor> output /* output */,
                   std::vector<ReadOnlyTensor> input /* input, weight, bias */,
                   const State::Args &args)
-        : Task::Impl{std::move(output), std::move(input), compute},
+        : Task::Impl{std::move(output), std::move(input), kCompute},
           args{args} {}
     void operator()() const override {
       const auto &x = input()[0].impl()->tensor();
@@ -467,8 +467,8 @@ Tensor GeluLinear::forward(const Scheduler &scheduler,
 
       output()[0].impl()->tensor() = result;
 
-      CHECK_CUDNN_FE(graph->execute(getCurrentCuDnnHandle(), variant_pack,
-                                    workspace.data_ptr()));
+      CS_CHECK_CUDNN_FE(graph->execute(getCurrentCuDnnHandle(), variant_pack,
+                                       workspace.data_ptr()));
       intermediate().emplace_back(std::move(workspace));
     }
     [[nodiscard]] const char *name() const override {
@@ -486,14 +486,14 @@ Tensor GeluLinear::forward(const Scheduler &scheduler,
   return output;
 }
 
-Tensor GeluLinear::backwardInput(const Scheduler &scheduler,
-                                 const std::shared_ptr<State> &state,
-                                 const ReadOnlyTensor &grad_output) {
+Tensor GeluLinear::backward_input(const Scheduler &scheduler,
+                                  const std::shared_ptr<State> &state,
+                                  const ReadOnlyTensor &grad_output) {
   struct Impl : Task::Impl {
     explicit Impl(
         std::vector<Tensor> output /* grad_input */,
         std::vector<ReadOnlyTensor> input /* grad_output, weight, input */)
-        : Task::Impl{std::move(output), std::move(input), compute} {}
+        : Task::Impl{std::move(output), std::move(input), kCompute} {}
     void operator()() const override {
       auto grad_output = input()[0].impl()->tensor();
       const auto &w = input()[1].impl()->tensor();
@@ -527,12 +527,12 @@ Tensor GeluLinear::backwardInput(const Scheduler &scheduler,
 
       output()[0].impl()->tensor() = result;
 
-      CHECK_CUDNN_FE(graph->execute(getCurrentCuDnnHandle(), variant_pack,
-                                    workspace.data_ptr()));
+      CS_CHECK_CUDNN_FE(graph->execute(getCurrentCuDnnHandle(), variant_pack,
+                                       workspace.data_ptr()));
       intermediate().emplace_back(std::move(workspace));
     }
     [[nodiscard]] const char *name() const override {
-      return "cs::compute::GeluLinear::backwardInput";
+      return "cs::compute::GeluLinear::backward_input";
     }
   };
 
@@ -540,21 +540,21 @@ Tensor GeluLinear::backwardInput(const Scheduler &scheduler,
   scheduler.impl()->submit(Task{std::make_shared<Impl>(
       Impl{{grad_input},
            {grad_output, state->forward.weight, state->backward.input}})});
-  ++state->backward.inputSetCount;
-  if (state->backward.inputSetCount == 2) {
+  ++state->backward.input_count;
+  if (state->backward.input_count == 2) {
     state->backward.input.reset();
-    state->backward.inputSetCount = 0;
+    state->backward.input_count = 0;
   }
   return grad_input;
 }
 
-void GeluLinear::backwardParameter(const Scheduler &scheduler,
-                                   const std::shared_ptr<State> &state,
-                                   const ReadOnlyTensor &grad_output) {
+void GeluLinear::backward_parameter(const Scheduler &scheduler,
+                                    const std::shared_ptr<State> &state,
+                                    const ReadOnlyTensor &grad_output) {
   struct Impl : Task::Impl {
     explicit Impl(std::vector<Tensor> output /* grad_weight */,
                   std::vector<ReadOnlyTensor> input /* grad_output, input */)
-        : Task::Impl{std::move(output), std::move(input), compute} {}
+        : Task::Impl{std::move(output), std::move(input), kCompute} {}
     void operator()() const override {
       const auto &grad_output = input()[0].impl()->tensor();
       const auto &x = input()[1].impl()->tensor();
@@ -583,8 +583,8 @@ void GeluLinear::backwardParameter(const Scheduler &scheduler,
 
         output()[0].impl()->tensor() = result;
 
-        CHECK_CUDNN_FE(graph->execute(getCurrentCuDnnHandle(), variant_pack,
-                                      workspace.data_ptr()));
+        CS_CHECK_CUDNN_FE(graph->execute(getCurrentCuDnnHandle(), variant_pack,
+                                         workspace.data_ptr()));
         intermediate().emplace_back(std::move(workspace));
       } else {
         auto graph =
@@ -605,8 +605,8 @@ void GeluLinear::backwardParameter(const Scheduler &scheduler,
 
         output()[0].impl()->tensor() = result;
 
-        CHECK_CUDNN_FE(graph->execute(getCurrentCuDnnHandle(), variant_pack,
-                                      workspace.data_ptr()));
+        CS_CHECK_CUDNN_FE(graph->execute(getCurrentCuDnnHandle(), variant_pack,
+                                         workspace.data_ptr()));
         intermediate().emplace_back(std::move(workspace));
       }
     }
@@ -621,7 +621,7 @@ void GeluLinear::backwardParameter(const Scheduler &scheduler,
     struct Impl : Task::Impl {
       explicit Impl(std::vector<Tensor> output /* grad_bias */,
                     std::vector<ReadOnlyTensor> input /* grad_output */)
-          : Task::Impl{std::move(output), std::move(input), compute} {}
+          : Task::Impl{std::move(output), std::move(input), kCompute} {}
       void operator()() const override {
         const auto &grad_output = input()[0].impl()->tensor();
 
@@ -642,10 +642,10 @@ void GeluLinear::backwardParameter(const Scheduler &scheduler,
     scheduler.impl()->submit(Task{std::make_shared<Impl>(
         Impl{{state->forward.grad_bias}, {grad_output}})});
   }
-  ++state->backward.inputSetCount;
-  if (state->backward.inputSetCount == 2) {
+  ++state->backward.input_count;
+  if (state->backward.input_count == 2) {
     state->backward.input.reset();
-    state->backward.inputSetCount = 0;
+    state->backward.input_count = 0;
   }
 }
 }  // namespace cs::compute

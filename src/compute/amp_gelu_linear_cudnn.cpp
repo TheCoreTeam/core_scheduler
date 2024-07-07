@@ -29,20 +29,20 @@ AmpGeluLinear::State::State(const Forward& forward,
                             const ForwardHighPrecision& forwardHighPrecision,
                             const Backward& backward, const Args& args)
     : GeluLinear::State{forward, backward, args},
-      forwardHighPrecision{forwardHighPrecision} {}
+      forward_high_precision{forwardHighPrecision} {}
 
-OrderedDict<std::string, Tensor> AmpGeluLinear::State::parametersHighPrecision()
-    const {
+OrderedDict<std::string, Tensor>
+AmpGeluLinear::State::parameters_high_precision() const {
   OrderedDict<std::string, Tensor> dict;
-  dict.insert("weight", forwardHighPrecision.weight);
+  dict.insert("weight", forward_high_precision.weight);
   if (args.bias) {
-    dict.insert("bias", forwardHighPrecision.bias);
+    dict.insert("bias", forward_high_precision.bias);
   }
   return dict;
 }
 
 OrderedDict<std::string, Tensor> AmpGeluLinear::State::parameters() const {
-  return parametersHighPrecision();
+  return parameters_high_precision();
 }
 
 std::shared_ptr<AmpGeluLinear::State> AmpGeluLinear::init(
@@ -65,7 +65,7 @@ std::shared_ptr<AmpGeluLinear::State> AmpGeluLinear::init(
           std::vector<Tensor> output /* weight, bias, weightFp32, biasFp32 */,
           const TensorOptions options, const int64_t in_futures,
           const int64_t out_futures)
-          : Task::Impl{std::move(output), {}, compute},
+          : Task::Impl{std::move(output), {}, kCompute},
             options{options},
             in_futures{in_futures},
             out_futures{out_futures} {}
@@ -113,7 +113,7 @@ std::shared_ptr<AmpGeluLinear::State> AmpGeluLinear::init(
       explicit Impl(std::vector<Tensor> output /* weight, weightFp32 */,
                     const TensorOptions options, const int64_t in_futures,
                     const int64_t out_futures)
-          : Task::Impl{std::move(output), {}, compute},
+          : Task::Impl{std::move(output), {}, kCompute},
             options{options},
             in_futures{in_futures},
             out_futures{out_futures} {}

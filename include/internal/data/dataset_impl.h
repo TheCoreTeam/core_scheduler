@@ -20,19 +20,25 @@
 namespace cs::data {
 struct Dataset::Impl {
   virtual ~Impl() = default;
+
+  [[nodiscard]] virtual std::int64_t size() const = 0;
+
+  [[nodiscard]] virtual const std::vector<std::string> &files() const = 0;
+
+  [[nodiscard]] virtual const std::vector<int64_t> &file_offsets() const = 0;
 };
 
 struct LlmDatasetImpl final : Dataset::Impl {
   const std::vector<std::string> files_;
-  const std::vector<int64_t> fileOffsets_;
+  const std::vector<int64_t> file_offsets_;
 
   LlmDatasetImpl(std::vector<std::string> files,
                  std::vector<int64_t> rowOffset);
 
-  [[nodiscard]] std::int64_t size() const;
+  [[nodiscard]] std::int64_t size() const override;
 
-  [[nodiscard]] const std::vector<std::string> &files() const;
+  [[nodiscard]] const std::vector<std::string> &files() const override;
 
-  [[nodiscard]] const std::vector<int64_t> &fileOffsets() const;
+  [[nodiscard]] const std::vector<int64_t> &file_offsets() const override;
 };
 }  // namespace cs::data

@@ -27,7 +27,7 @@
 #include "threading/task_impl.h"
 
 namespace cs {
-at::Generator &getCUDAGenerator();
+at::Generator &get_cuda_generator();
 }
 
 namespace {
@@ -45,7 +45,7 @@ bool cache_lookup_pre_built_graph(
     return true;
   }
 
-  CHECK_CUDNN_FE(graph->build(handle, {cudnn_frontend::HeurMode_t::A}));
+  CS_CHECK_CUDNN_FE(graph->build(handle, {cudnn_frontend::HeurMode_t::A}));
 
   user_maintained_cache.emplace(cache_key, graph);
   return false;
@@ -347,7 +347,7 @@ Tensor ScaledDotProductCuDnn::forward(const Scheduler &scheduler,
                   ,
                   std::vector<ReadOnlyTensor> input /* query, key, value */,
                   const State::Args &args)
-        : Task::Impl{std::move(output), std::move(input), compute},
+        : Task::Impl{std::move(output), std::move(input), kCompute},
           args{args} {}
     void operator()() const override {
       const auto &query = input()[0].impl()->tensor();
@@ -389,7 +389,7 @@ Tensor ScaledDotProductCuDnn::forward(const Scheduler &scheduler,
                          void *>
           variant_pack;
       if (args.dropout_p != 0.0f) {
-        auto &generator = getCUDAGenerator();
+        auto &generator = get_cuda_generator();
         args.rng->seed = generator.current_seed();
         args.rng->offset = generator.get_offset();
         generator.set_offset(args.rng->offset + b * h_q * s_q);
@@ -412,8 +412,8 @@ Tensor ScaledDotProductCuDnn::forward(const Scheduler &scheduler,
       output()[0].impl()->tensor() = result;
       output()[1].impl()->tensor() = stats;
 
-      CHECK_CUDNN_FE(graph->execute(getCurrentCuDnnHandle(), variant_pack,
-                                    workspace.data_ptr()));
+      CS_CHECK_CUDNN_FE(graph->execute(getCurrentCuDnnHandle(), variant_pack,
+                                       workspace.data_ptr()));
       intermediate().emplace_back(std::move(workspace));
     }
     [[nodiscard]] const char *name() const override {
@@ -445,7 +445,7 @@ std::array<Tensor, 3> ScaledDotProductCuDnn::backward(
                                              value[3], out[4], stats[5] */
         ,
         const State::Args &args)
-        : Task::Impl{std::move(output), std::move(input), compute},
+        : Task::Impl{std::move(output), std::move(input), kCompute},
           args{args} {}
     void operator()() const override {
       const auto &grad_out = input()[0].impl()->tensor();
@@ -524,8 +524,8 @@ std::array<Tensor, 3> ScaledDotProductCuDnn::backward(
       output()[1].impl()->tensor() = grad_key;
       output()[2].impl()->tensor() = grad_value;
 
-      CHECK_CUDNN_FE(graph->execute(getCurrentCuDnnHandle(), variant_pack,
-                                    workspace.data_ptr()));
+      CS_CHECK_CUDNN_FE(graph->execute(getCurrentCuDnnHandle(), variant_pack,
+                                       workspace.data_ptr()));
       intermediate().emplace_back(std::move(workspace));
     }
     [[nodiscard]] const char *name() const override {

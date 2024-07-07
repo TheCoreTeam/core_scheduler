@@ -25,7 +25,7 @@ struct Scheduler {
 
   [[nodiscard]] const std::shared_ptr<Impl> &impl() const;
 
-  CS_API [[nodiscard]] int64_t deviceRank() const;
+  CS_API [[nodiscard]] int64_t get_device_rank() const;
 
  protected:
   std::shared_ptr<Impl> impl_;

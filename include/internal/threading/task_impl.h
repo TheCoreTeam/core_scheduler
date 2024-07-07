@@ -22,10 +22,10 @@
 namespace cs {
 struct Task::Impl {
   enum Type {
-    compute,
-    loader,
-    memcpy,
-    nccl,
+    kCompute,
+    kLoader,
+    kMemcpy,
+    kNccl,
   };
 
   virtual ~Impl() = default;

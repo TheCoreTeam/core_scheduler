@@ -38,8 +38,6 @@ struct Task {
 
   CS_API void reset();
 
-  CS_API [[nodiscard]] bool valid() const;
-
  private:
   std::shared_ptr<Impl> impl_;
 };

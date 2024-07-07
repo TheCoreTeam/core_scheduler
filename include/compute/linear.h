@@ -62,11 +62,11 @@ struct CS_API Linear {
                         const std::shared_ptr<State> &state,
                         const ReadOnlyTensor &input);
 
-  static Tensor backwardInput(const Scheduler &scheduler,
+  static Tensor backward_input(const Scheduler &scheduler,
                               const std::shared_ptr<State> &state,
                               const ReadOnlyTensor &grad_output);
 
-  static void backwardParameter(const Scheduler &scheduler,
+  static void backward_parameter(const Scheduler &scheduler,
                                 const std::shared_ptr<State> &state,
                                 const ReadOnlyTensor &grad_output);
 };
