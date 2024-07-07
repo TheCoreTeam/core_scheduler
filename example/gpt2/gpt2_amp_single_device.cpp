@@ -19,6 +19,7 @@
 #include <torch/nn/init.h>
 #include <torch/torch.h>
 
+#include <cassert>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
@@ -32,6 +33,7 @@
 #include "compute/cross_entropy.h"
 #include "compute/embedding.h"
 #include "compute/gelu.h"
+#include "compute/init.h"
 #include "compute/layer_norm.h"
 #include "compute/linear.h"
 #include "compute/scaled_dot_product_attention.h"
@@ -60,8 +62,8 @@ struct ModelConfig {
   const int64_t n_head = 12;       // 32
   const int64_t n_layer = 12;      // 22
   const bool use_bias = false;
-  const float dropout = 0.0;
-  const float epsilon = 1e-5;
+  const double dropout = 0.0;
+  const double epsilon = 1e-5;
   torch::Device device = torch::kCUDA;
   torch::Dtype dtype = torch::kBFloat16;
 };
@@ -97,9 +99,9 @@ struct DataConfig {
 
 // Helper function to calculate the training arguments
 std::unordered_map<std::string, double> getTrainArgs(
-    int num_samples, int tokens_per_sample, int global_token_batch_size,
-    int batch_size_per_dprank_per_step, int num_dprank, int max_steps = -1,
-    int max_epochs = -1) {
+    int64_t num_samples, int64_t tokens_per_sample,
+    int64_t global_token_batch_size, int64_t batch_size_per_dprank_per_step,
+    int64_t num_dprank, int64_t max_steps = -1, int64_t max_epochs = -1) {
   if (max_steps == -1 && max_epochs == -1) {
     throw std::invalid_argument(
         "At least one of max_steps or max_epochs must be provided.");
@@ -112,15 +114,17 @@ std::unordered_map<std::string, double> getTrainArgs(
         "batch_size_per_dprank_per_step * tokens_per_sample * num_dprank.");
   }
 
-  int tokens_per_dprank_per_step =
+  int64_t tokens_per_dprank_per_step =
       tokens_per_sample * batch_size_per_dprank_per_step;
-  int total_tokens_per_micro_step = tokens_per_dprank_per_step * num_dprank;
-  int grad_accum_steps = global_token_batch_size / total_tokens_per_micro_step;
-  int total_tokens_per_step = total_tokens_per_micro_step * grad_accum_steps;
-  int total_tokens_in_dataset = num_samples * tokens_per_sample;
+  int64_t total_tokens_per_micro_step = tokens_per_dprank_per_step * num_dprank;
+  int64_t grad_accum_steps =
+      global_token_batch_size / total_tokens_per_micro_step;
+  int64_t total_tokens_per_step =
+      total_tokens_per_micro_step * grad_accum_steps;
+  int64_t total_tokens_in_dataset = num_samples * tokens_per_sample;
 
   if (max_steps != -1 && max_epochs != -1) {
-    int calculated_max_steps =
+    int64_t calculated_max_steps =
         (max_epochs * total_tokens_in_dataset) / global_token_batch_size;
     double calculated_max_epochs = (max_steps * global_token_batch_size) /
                                    static_cast<double>(total_tokens_in_dataset);
@@ -135,7 +139,7 @@ std::unordered_map<std::string, double> getTrainArgs(
           ", provided max_steps: " + std::to_string(max_steps) +
           ". "
           "Calculated max_epochs from max_steps: " +
-          std::to_string(static_cast<int>(calculated_max_epochs)) +
+          std::to_string(static_cast<int64_t>(calculated_max_epochs)) +
           ", provided max_epochs: " + std::to_string(max_epochs) + ".");
     }
   } else if (max_steps == -1) {
@@ -229,6 +233,36 @@ struct ProgressBar {
   }
 };
 
+struct LRScheduler {
+  int warmup_steps;
+  double max_lr;
+  int max_steps;
+  double min_lr;
+
+  LRScheduler(int warmupSteps, double maxLr, int maxSteps, double minLr)
+      : warmup_steps(warmupSteps),
+        max_lr(maxLr),
+        max_steps(maxSteps),
+        min_lr(minLr) {}
+
+  double get_lr(int step) const {
+    // 1) Linear warmup for warmup_iters steps
+    if (step < warmup_steps) {
+      return max_lr * (step + 1) / warmup_steps;
+    }
+    // 2) If it > max_steps, return minimum learning rate
+    if (step > max_steps) {
+      return min_lr;
+    }
+    // 3) In between, use cosine decay down to minimum learning rate
+    double decay_ratio =
+        static_cast<double>(step - warmup_steps) / (max_steps - warmup_steps);
+    assert(0 <= decay_ratio && decay_ratio <= 1);
+    double coeff = 0.5 * (1.0 + cos(M_PI * decay_ratio));
+    return min_lr + coeff * (max_lr - min_lr);
+  }
+};
+
 struct Attn : cs::module::Module {
   cs::DynamicScheduler scheduler;
   const ModelConfig &config;
@@ -264,8 +298,8 @@ struct Attn : cs::module::Module {
   void _init_weights(cs::DynamicScheduler scheduler,
                      const ModelConfig &config) {
     // TODO: reinitialize the weights
-    // torch::nn::init::normal_(c_proj->state()->forward.weight, 0.0,
-    // 0.02/sqrt(2*config.n_layer));
+    cs::compute::Utils::normal_(scheduler, c_proj->state()->forward.weight, 0.0,
+                                0.02 / sqrt(2 * config.n_layer));
   }
 
   cs::Tensor forward(const cs::DynamicScheduler &scheduler, cs::Tensor &Input) {
@@ -370,8 +404,8 @@ struct MLP : cs::module::Module {
   void _init_weights(cs::DynamicScheduler scheduler,
                      const ModelConfig &config) {
     // TODO: reinitialize the weights
-    // torch::nn::init::normal_(fc2->state()->forward.weight, 0.0,
-    // 0.02/sqrt(2*config.n_layer));
+    cs::compute::Utils::normal_(scheduler, fc2->state()->forward.weight, 0.0,
+                                0.02 / sqrt(2 * config.n_layer));
   }
 
   cs::Tensor forward(const cs::DynamicScheduler &scheduler, cs::Tensor &Input) {
@@ -496,9 +530,12 @@ struct GPT2 : cs::module::Module {
   void _init_weights(cs::DynamicScheduler scheduler,
                      const ModelConfig &config) {
     // TODO: reinitialize the weights
-    // torch::nn::init::normal_(wte->state()->forward.weight, 0.0, 0.02);
-    // torch::nn::init::normal_(wpe->state()->forward.weight, 0.0, 0.02);
-    // torch::nn::init::normal_(lm_head->state()->forward.weight, 0.0, 0.02);
+    cs::compute::Utils::normal_(scheduler, wte->state()->forward.weight, 0.0,
+                                0.02);
+    cs::compute::Utils::normal_(scheduler, wpe->state()->forward.weight, 0.0,
+                                0.02);
+    cs::compute::Utils::normal_(scheduler, lm_head->state()->forward.weight,
+                                0.0, 0.02);
   }
 
   void forward(cs::DynamicScheduler scheduler, cs::Tensor &Output,
@@ -574,8 +611,11 @@ void train() {
                                  .beta2(trainConfig.beta2)
                                  .weight_decay(trainConfig.weight_decay));
 
+  LRScheduler lr_scheduler(trainConfig.warmup_steps, trainConfig.max_lr,
+                           trainConfig.max_steps, trainConfig.min_lr);
+
   std::unordered_map<std::string, double> training_args =
-      getTrainArgs(dataloader.iterationsPerEpoch(), modelConfig.block_size,
+      getTrainArgs(dataset.size(), modelConfig.block_size,
                    trainConfig.total_token_batch_size, modelConfig.batch_size,
                    1, trainConfig.max_steps, trainConfig.epoch);
   double epochs = training_args["epochs"];
@@ -640,6 +680,7 @@ void train() {
     // Optimizer step
     cs::optimizer::AdamW::step(scheduler, model);
     // TODO: Add lr scheduler step
+    lr_scheduler.get_lr(step);
 
     // Wait in steps
     if (trainConfig.wait_every_step != -1 &&
@@ -654,10 +695,11 @@ void train() {
         time_stop - time_start);
     if (trainConfig.check_every_steps != -1 &&
         (step + 1) % trainConfig.check_every_steps == 0 && master_process) {
-      printf(  // Noting: add \n to the beginning of the string
+      printf(  // Noting: add \n to the beginning of the string for single
+               // device
           "\nstep %5d | lr %.4e | grad norm: %.4f | dt: %.2fs | tok/sec: "
           "%.2f\n",
-          step + 1, trainConfig.max_lr, 1.0, duration.count(),
+          step + 1, lr_scheduler.get_lr(step), 1.0, duration.count(),
           total_tokens_per_step / (duration.count()));
       std::cout << "loss: " << loss << std::endl;
     }
