@@ -35,15 +35,19 @@ struct OptimizerState {
 
 struct CS_API State {
   struct Increment {
-    Tensor &parameter;
-    Tensor &gradient;
-    std::shared_ptr<OptimizerState> &optimizer_state;
+    Tensor parameter;
+    Tensor gradient;
   };
 
   virtual ~State() = default;
 
-  [[nodiscard]] virtual OrderedDict<std::string, Tensor> parameters() const;
+  [[nodiscard]] virtual OrderedDict<std::string, Tensor> parameters() const = 0;
 
-  [[nodiscard]] virtual OrderedDict<std::string, Increment> increments();
+  [[nodiscard]] virtual OrderedDict<std::string, Tensor> gradients() const = 0;
+
+  [[nodiscard]] virtual OrderedDict<std::string, Increment> increments()
+      const = 0;
+
+  virtual void zero_grad() = 0;
 };
 }  // namespace cs::module

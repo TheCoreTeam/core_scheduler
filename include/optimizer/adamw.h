@@ -64,31 +64,12 @@ struct CS_API AdamW {
     CS_ARG(long, t) = 0;
   };
 
-  static void init(const Scheduler &scheduler, const module::Module &module,
-                   const Options &options);
-
-  template <typename Module, typename = std::enable_if_t<
-                                 !std::is_base_of_v<module::Module, Module> &&
-                                 !std::is_base_of_v<ReadOnlyTensor, Module>>>
-  static void init(const Scheduler &scheduler, const Module &module,
-                   const Options &options) {
-    init(scheduler, *module, options);
-  }
-
-  static void step(const Scheduler &scheduler, const module::Module &module);
-
-  template <typename Module, typename = std::enable_if_t<
-                                 !std::is_base_of_v<module::Module, Module>>>
-  static void step(const Scheduler &scheduler, const Module &module) {
-    step(scheduler, *module);
-  }
-
   static std::shared_ptr<State> init(const Scheduler &scheduler,
                                      const ReadOnlyTensor &parameter,
                                      const Options &options);
 
   static void step(const Scheduler &scheduler,
-                   const std::shared_ptr<State> &state, Tensor &w,
-                   const ReadOnlyTensor &dw);
+                   const std::shared_ptr<module::OptimizerState> &state,
+                   const Tensor &w, const ReadOnlyTensor &dw);
 };
 }  // namespace cs::optimizer
