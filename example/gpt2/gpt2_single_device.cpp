@@ -95,9 +95,9 @@ struct DataConfig {
 
 // Helper function to calculate the training arguments
 std::unordered_map<std::string, double> getTrainArgs(
-    int num_samples, int tokens_per_sample, int global_token_batch_size,
-    int batch_size_per_dprank_per_step, int num_dprank, int max_steps = -1,
-    int max_epochs = -1) {
+    int64_t num_samples, int64_t tokens_per_sample, int64_t global_token_batch_size,
+    int64_t batch_size_per_dprank_per_step, int64_t num_dprank, int64_t max_steps = -1,
+    int64_t max_epochs = -1) {
   if (max_steps == -1 && max_epochs == -1) {
     throw std::invalid_argument(
         "At least one of max_steps or max_epochs must be provided.");
@@ -110,15 +110,15 @@ std::unordered_map<std::string, double> getTrainArgs(
         "batch_size_per_dprank_per_step * tokens_per_sample * num_dprank.");
   }
 
-  int tokens_per_dprank_per_step =
+  int64_t tokens_per_dprank_per_step =
       tokens_per_sample * batch_size_per_dprank_per_step;
-  int total_tokens_per_micro_step = tokens_per_dprank_per_step * num_dprank;
-  int grad_accum_steps = global_token_batch_size / total_tokens_per_micro_step;
-  int total_tokens_per_step = total_tokens_per_micro_step * grad_accum_steps;
-  int total_tokens_in_dataset = num_samples * tokens_per_sample;
+  int64_t total_tokens_per_micro_step = tokens_per_dprank_per_step * num_dprank;
+  int64_t grad_accum_steps = global_token_batch_size / total_tokens_per_micro_step;
+  int64_t total_tokens_per_step = total_tokens_per_micro_step * grad_accum_steps;
+  int64_t total_tokens_in_dataset = num_samples * tokens_per_sample;
 
   if (max_steps != -1 && max_epochs != -1) {
-    int calculated_max_steps =
+    int64_t calculated_max_steps =
         (max_epochs * total_tokens_in_dataset) / global_token_batch_size;
     double calculated_max_epochs = (max_steps * global_token_batch_size) /
                                    static_cast<double>(total_tokens_in_dataset);
@@ -133,7 +133,7 @@ std::unordered_map<std::string, double> getTrainArgs(
           ", provided max_steps: " + std::to_string(max_steps) +
           ". "
           "Calculated max_epochs from max_steps: " +
-          std::to_string(static_cast<int>(calculated_max_epochs)) +
+          std::to_string(static_cast<int64_t>(calculated_max_epochs)) +
           ", provided max_epochs: " + std::to_string(max_epochs) + ".");
     }
   } else if (max_steps == -1) {
@@ -257,7 +257,7 @@ struct Attn : cs::module::Module {
   cs::DynamicScheduler scheduler;
   const ModelConfig &config;
   cs::module::Linear c_attn{nullptr}, c_proj{nullptr};
-  std::shared_ptr<cs::compute::ScaledDotProductFlashAttention::State>
+  std::shared_ptr<cs::compute::ScaledDotProductCuDnn::State>
       attn_state;
 
   Attn(cs::DynamicScheduler scheduler, const ModelConfig &config)
@@ -271,9 +271,9 @@ struct Attn : cs::module::Module {
                                      .dtype(config.dtype)));
     // we don't need to register flash attention to module because it does not
     // have parameters.
-    attn_state = cs::compute::ScaledDotProductFlashAttention::init(
+    attn_state = cs::compute::ScaledDotProductCuDnn::init(
         scheduler,
-        cs::compute::ScaledDotProductFlashAttention::Options{}.is_causal(true));
+        cs::compute::ScaledDotProductCuDnn::Options{}.is_causal(true));
     c_proj = register_module(
         "c_proj", cs::module::Linear(
                       scheduler,
@@ -319,7 +319,7 @@ struct Attn : cs::module::Module {
           {config.batch_size, config.block_size, config.n_head,
            config.n_embd / config.n_head});
 
-      auto AttnOut = cs::compute::ScaledDotProductFlashAttention::forward(
+      auto AttnOut = cs::compute::ScaledDotProductCuDnn::forward(
           scheduler, attn_state, qview, kview, vview);
 
       AttnOutView = cs::compute::Utils::view(
@@ -345,7 +345,7 @@ struct Attn : cs::module::Module {
           {config.batch_size, config.block_size, config.n_head,
            config.n_embd / config.n_head});
 
-      auto [dq, dk, dv] = cs::compute::ScaledDotProductFlashAttention::backward(
+      auto [dq, dk, dv] = cs::compute::ScaledDotProductCuDnn::backward(
           scheduler, attn_state, DAttnOut);
 
       dq = cs::compute::Utils::view(
@@ -602,7 +602,7 @@ void train() {
                            trainConfig.max_steps, trainConfig.min_lr);
 
   std::unordered_map<std::string, double> training_args =
-      getTrainArgs(dataloader.iterationsPerEpoch(), modelConfig.block_size,
+      getTrainArgs(dataset.size(), modelConfig.block_size,
                    trainConfig.total_token_batch_size, modelConfig.batch_size,
                    1, trainConfig.max_steps, trainConfig.epoch);
   double epochs = training_args["epochs"];

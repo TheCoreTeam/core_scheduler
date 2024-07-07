@@ -102,9 +102,9 @@ struct DataConfig {
 
 // Helper function to calculate the training arguments
 std::unordered_map<std::string, double> getTrainArgs(
-    int num_samples, int tokens_per_sample, int global_token_batch_size,
-    int batch_size_per_dprank_per_step, int num_dprank, int max_steps = -1,
-    int max_epochs = -1) {
+    int64_t num_samples, int64_t tokens_per_sample, int64_t global_token_batch_size,
+    int64_t batch_size_per_dprank_per_step, int64_t num_dprank, int64_t max_steps = -1,
+    int64_t max_epochs = -1) {
   if (max_steps == -1 && max_epochs == -1) {
     throw std::invalid_argument(
         "At least one of max_steps or max_epochs must be provided.");
@@ -117,15 +117,15 @@ std::unordered_map<std::string, double> getTrainArgs(
         "batch_size_per_dprank_per_step * tokens_per_sample * num_dprank.");
   }
 
-  int tokens_per_dprank_per_step =
+  int64_t tokens_per_dprank_per_step =
       tokens_per_sample * batch_size_per_dprank_per_step;
-  int total_tokens_per_micro_step = tokens_per_dprank_per_step * num_dprank;
-  int grad_accum_steps = global_token_batch_size / total_tokens_per_micro_step;
-  int total_tokens_per_step = total_tokens_per_micro_step * grad_accum_steps;
-  int total_tokens_in_dataset = num_samples * tokens_per_sample;
+  int64_t total_tokens_per_micro_step = tokens_per_dprank_per_step * num_dprank;
+  int64_t grad_accum_steps = global_token_batch_size / total_tokens_per_micro_step;
+  int64_t total_tokens_per_step = total_tokens_per_micro_step * grad_accum_steps;
+  int64_t total_tokens_in_dataset = num_samples * tokens_per_sample;
 
   if (max_steps != -1 && max_epochs != -1) {
-    int calculated_max_steps =
+    int64_t calculated_max_steps =
         (max_epochs * total_tokens_in_dataset) / global_token_batch_size;
     double calculated_max_epochs = (max_steps * global_token_batch_size) /
                                    static_cast<double>(total_tokens_in_dataset);
@@ -140,7 +140,7 @@ std::unordered_map<std::string, double> getTrainArgs(
           ", provided max_steps: " + std::to_string(max_steps) +
           ". "
           "Calculated max_epochs from max_steps: " +
-          std::to_string(static_cast<int>(calculated_max_epochs)) +
+          std::to_string(static_cast<int64_t>(calculated_max_epochs)) +
           ", provided max_epochs: " + std::to_string(max_epochs) + ".");
     }
   } else if (max_steps == -1) {
@@ -638,7 +638,7 @@ void train() {
                            trainConfig.max_steps, trainConfig.min_lr);
 
   std::unordered_map<std::string, double> training_args =
-      getTrainArgs(dataloader.iterationsPerEpoch(), modelConfig.block_size,
+      getTrainArgs(dataset.size(), modelConfig.block_size,
                    trainConfig.total_token_batch_size, modelConfig.batch_size,
                    comm.getSize(), trainConfig.max_steps, trainConfig.epoch);
   double epochs = training_args["epochs"];
@@ -723,7 +723,7 @@ void train() {
           "step %5d | lr %.4e | grad norm: %.4f | dt: %.2fs | tok/sec: "
           "%.2f\n",
           step + 1, lr_scheduler.get_lr(step), 1.0, duration.count(),
-          total_tokens_per_step / (duration.count() / 1e6));
+          total_tokens_per_step / (duration.count()));
       std::cout << "loss: " << loss << std::endl;
     }
   }
