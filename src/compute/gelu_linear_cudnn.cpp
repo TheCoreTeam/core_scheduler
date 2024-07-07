@@ -611,7 +611,7 @@ void GeluLinear::backward_parameter(const Scheduler &scheduler,
       }
     }
     [[nodiscard]] const char *name() const override {
-      return "cs::compute::GeluLinear::backwardWeight";
+      return "cs::compute::GeluLinear::backward_weight";
     }
   };
 
@@ -635,7 +635,7 @@ void GeluLinear::backward_parameter(const Scheduler &scheduler,
         }
       }
       [[nodiscard]] const char *name() const override {
-        return "cs::compute::GeluLinear::backwardBias";
+        return "cs::compute::GeluLinear::backward_bias";
       }
     };
 

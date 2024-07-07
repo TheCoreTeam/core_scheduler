@@ -19,6 +19,7 @@
 #include <ATen/ops/sum.h>
 #include <cuda_fp16.h>
 #include <gtest/gtest.h>
+#include <torch/torch.h>
 
 #include "compute/utils.h"
 #include "memory/to_torch.h"
@@ -54,6 +55,9 @@ class TestUtilsFixture : public ::testing::Test {
 
   template <typename T>
   void TestSum(int size);
+
+  template <typename T>
+  void TestClipNorm(int size);
 };
 
 template <typename T>
@@ -97,3 +101,25 @@ void TestUtilsFixture::TestSum(const int size) {
 
 TEST_F(TestUtilsFixture, TestSumF32) { TestSum<float>(128); }
 TEST_F(TestUtilsFixture, TestSumF64) { TestSum<double>(128); }
+
+template <typename T>
+void TestUtilsFixture::TestClipNorm(const int size) {
+  at::manual_seed(1);
+  const at::Device device(at::kCUDA, 0);
+  const at::ScalarType dtype = TypeToTorch<T>::type;
+  const auto option = at::TensorOptions().dtype(dtype).device(device);
+  auto x = cs::compute::Utils::rand(scheduler, {size, size, size}, option);
+  auto y = cs::compute::Utils::rand(scheduler, {size, 2 * size, size}, option);
+  auto x_torch = cs::memory::to_torch(scheduler, x);
+  auto y_torch = cs::memory::to_torch(scheduler, y);
+  const_cast<at::Tensor &>(x_torch.grad()) = x_torch;
+  const_cast<at::Tensor &>(y_torch.grad()) = y_torch;
+  torch::nn::utils::clip_grad_norm_(std::vector{x_torch, y_torch}, 1., 2.);
+  auto total_norm =
+      cs::compute::Utils::clip_grad_norm_(scheduler, {x, y}, 1, 2);
+  ASSERT_TRUE(at::allclose(x_torch, x));
+  ASSERT_TRUE(at::allclose(y_torch, y));
+}
+
+TEST_F(TestUtilsFixture, TestClipNormF32) { TestClipNorm<float>(128); }
+TEST_F(TestUtilsFixture, TestClipNormF64) { TestClipNorm<double>(128); }
