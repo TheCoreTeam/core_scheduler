@@ -237,7 +237,7 @@ void Linear::backward_parameter(const Scheduler &scheduler,
       }
     }
     [[nodiscard]] const char *name() const override {
-      return "cs::compute::Linear::backwardWeight";
+      return "cs::compute::Linear::backward_weight";
     }
   };
 
@@ -263,7 +263,7 @@ void Linear::backward_parameter(const Scheduler &scheduler,
         }
       }
       [[nodiscard]] const char *name() const override {
-        return "cs::compute::Linear::backwardBias";
+        return "cs::compute::Linear::backward_bias";
       }
     };
 

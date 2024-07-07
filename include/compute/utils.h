@@ -97,4 +97,13 @@ CS_API void normal_(const Scheduler &scheduler, const Tensor &tensor,
                     double mean = 0, double std = 1);
 
 CS_API Tensor clone(const Scheduler &scheduler, const Tensor &tensor);
+
+CS_API Tensor linalg_vector_norm(
+    const Scheduler &scheduler, const ReadOnlyTensor &self, double ord = 2,
+    at::OptionalIntArrayRef dim = c10::nullopt, bool keepdim = false,
+    c10::optional<at::ScalarType> dtype = c10::nullopt);
+
+CS_API Tensor clip_grad_norm_(const Scheduler &scheduler,
+                              const std::vector<Tensor> &tensor,
+                              double max_norm, double norm_type);
 }  // namespace cs::compute::Utils
