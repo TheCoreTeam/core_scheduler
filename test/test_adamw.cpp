@@ -81,9 +81,9 @@ void TestAdamW::TestFunctionalRoutine(const int size) {
                                               .t(t));
   auto dx = cs::compute::Utils::rand(scheduler, {size}, option);
   cs::optimizer::AdamW::step(scheduler, state, x, dx);
-  auto x_torch = cs::memory::toTorch(scheduler, x);
+  auto x_torch = cs::memory::to_torch(scheduler, x);
   x.wait();
-  auto dx_torch = cs::memory::toTorch(scheduler, dx);
+  auto dx_torch = cs::memory::to_torch(scheduler, dx);
   dx.wait();
   torch::manual_seed(1);
   x_torch = torch::rand_like(x_torch);
@@ -132,10 +132,10 @@ void TestAdamW::TestModuleRoutine(const int size) {
   auto dx = fc->backward(scheduler, yGrad);
   dx.wait();
   fc->state()->forward.grad_weight.wait();
-  auto xRef = cs::memory::toTorch(scheduler, x);
+  auto xRef = cs::memory::to_torch(scheduler, x);
   x.wait();
   xRef.requires_grad_(true);
-  auto wRef = cs::memory::toTorch(scheduler, fc->state()->forward.weight);
+  auto wRef = cs::memory::to_torch(scheduler, fc->state()->forward.weight);
   fc->state()->forward.weight.wait();
   wRef.requires_grad_(true);
   auto fcTorch = torch::nn::Linear{torch::nn::LinearOptions{k, n}.bias(false)};
@@ -148,7 +148,7 @@ void TestAdamW::TestModuleRoutine(const int size) {
                                      .eps(eps)
                                      .weight_decay(weight_decay)};
   auto yRef = fcTorch->forward(xRef);
-  auto yGradRef = cs::memory::toTorch(scheduler, yGrad);
+  auto yGradRef = cs::memory::to_torch(scheduler, yGrad);
   yGrad.wait();
   optimTorch.zero_grad();
   yRef.backward(yGradRef);

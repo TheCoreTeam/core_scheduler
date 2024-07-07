@@ -23,6 +23,6 @@
 namespace cs::module {
 struct CS_API AmpState : virtual State {
   [[nodiscard]] virtual OrderedDict<std::string, Tensor>
-  parametersHighPrecision() const;
+  parameters_high_precision() const;
 };
 }  // namespace cs::module

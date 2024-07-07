@@ -30,10 +30,10 @@ struct CS_API LinearImpl : Module {
   Tensor backward(const Scheduler &scheduler,
                   const ReadOnlyTensor &grad_output) const;
 
-  void backwardParameter(const Scheduler &scheduler,
+  void backward_parameter(const Scheduler &scheduler,
                          const ReadOnlyTensor &grad_output) const;
 
-  Tensor backwardInput(const Scheduler &scheduler,
+  Tensor backward_input(const Scheduler &scheduler,
                        const ReadOnlyTensor &grad_output) const;
 
   std::shared_ptr<compute::Linear::State> state() const;

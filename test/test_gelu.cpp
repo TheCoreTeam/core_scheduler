@@ -71,9 +71,9 @@ void TestCSGelu::TestRoutine(const int T, const double tol_forward,
   auto tensorGradInput =
       cs::compute::GeLU::backward(scheduler, state, GradOutput_);
 
-  auto input = cs::memory::toTorch(scheduler, input2);
+  auto input = cs::memory::to_torch(scheduler, input2);
   input2.wait();
-  auto GradOutput = cs::memory::toTorch(scheduler, GradOutput_);
+  auto GradOutput = cs::memory::to_torch(scheduler, GradOutput_);
   GradOutput_.wait();
 
   auto input1 = input.detach().clone().set_requires_grad(true);

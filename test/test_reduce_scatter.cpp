@@ -48,11 +48,11 @@ struct TypeToTorch<double> {
 class ReduceScatterNCCLTestFixture : public ::testing::Test {
  protected:
   cs::communication::Comm comm{
-      cs::communication::getCommWorld(cs::communication::NCCL)};
-  cs::DynamicScheduler scheduler{static_cast<int>(comm.getRank())};
+      cs::communication::get_comm_world(cs::communication::kNCCL)};
+  cs::DynamicScheduler scheduler{static_cast<int>(comm.get_rank())};
 
   ReduceScatterNCCLTestFixture() {
-    CHECK_CUDART(cudaSetDevice(comm.getRank()));
+    CS_CHECK_CUDART(cudaSetDevice(comm.get_rank()));
   }
 
   template <typename T>
@@ -61,34 +61,34 @@ class ReduceScatterNCCLTestFixture : public ::testing::Test {
 
 template <typename T>
 void ReduceScatterNCCLTestFixture::TestlAllToAllT(const int blockSize) {
-  const at::Device device(at::kCUDA, comm.getRank());
+  const at::Device device(at::kCUDA, comm.get_rank());
   const at::ScalarType dtype = TypeToTorch<T>::type;
   const auto option = at::TensorOptions().dtype(dtype).device(device);
-  at::manual_seed(comm.getRank() + 1);
-  const int m = blockSize * comm.getSize();
+  at::manual_seed(comm.get_rank() + 1);
+  const int m = blockSize * comm.get_size();
   std::vector<cs::ReadOnlyTensor> vs;
-  vs.reserve(comm.getSize());
-  for (int i = 0; i < comm.getSize(); ++i) {
+  vs.reserve(comm.get_size());
+  for (int i = 0; i < comm.get_size(); ++i) {
     auto t = cs::compute::Utils::rand(scheduler, {blockSize}, option);
     vs.push_back(t);
   }
   auto r = cs::compute::Utils::empty(scheduler, {blockSize}, option);
   cs::communication::ReduceScatter::run(scheduler, comm, {r}, {vs},
-                                        cs::communication::SUM);
+                                        cs::communication::kSUM);
 
-  auto x_torch = cs::memory::toTorch(scheduler, r);
+  auto x_torch = cs::memory::to_torch(scheduler, r);
   r.wait();
 
   auto accumulator = torch::zeros({m}, option);
-  for (int i = 0; i < comm.getSize(); ++i) {
+  for (int i = 0; i < comm.get_size(); ++i) {
     at::manual_seed(i + 1);
-    for (int j = 0; j < comm.getSize(); ++j) {
+    for (int j = 0; j < comm.get_size(); ++j) {
       const auto full_random = torch::rand({blockSize}, option);
       accumulator.narrow(0, j * blockSize, blockSize) += full_random;
     }
   }
   ASSERT_TRUE(at::allclose(
-      accumulator.narrow(0, comm.getRank() * blockSize, blockSize), x_torch));
+      accumulator.narrow(0, comm.get_rank() * blockSize, blockSize), x_torch));
 }
 
 TEST_F(ReduceScatterNCCLTestFixture, TestForwardF32) {

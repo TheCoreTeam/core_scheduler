@@ -30,13 +30,13 @@ struct CS_API AmpGeluLinear {
     struct ForwardHighPrecision {
       Tensor weight{};
       Tensor bias{};
-    } forwardHighPrecision;
+    } forward_high_precision;
 
     State(const Forward &forward,
           const ForwardHighPrecision &forwardHighPrecision,
           const Backward &backward, const Args &args);
 
-    [[nodiscard]] OrderedDict<std::string, Tensor> parametersHighPrecision()
+    [[nodiscard]] OrderedDict<std::string, Tensor> parameters_high_precision()
         const override;
 
     [[nodiscard]] OrderedDict<std::string, Tensor> parameters() const override;

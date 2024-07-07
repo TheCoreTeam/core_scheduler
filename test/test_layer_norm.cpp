@@ -75,11 +75,11 @@ void TestLayerNormFixture::TestFunctional(const int size) {
   auto dy = cs::compute::Utils::rand_like(scheduler, y);
   auto dx = cs::compute::LayerNorm::backward(scheduler, state, dy);
 
-  auto x_torch = cs::memory::toTorch(scheduler, x);
+  auto x_torch = cs::memory::to_torch(scheduler, x);
   x.wait();
-  auto y_ref_torch = cs::memory::toTorch(scheduler, y);
+  auto y_ref_torch = cs::memory::to_torch(scheduler, y);
   y.wait();
-  auto dy_torch = cs::memory::toTorch(scheduler, dy);
+  auto dy_torch = cs::memory::to_torch(scheduler, dy);
   dy.wait();
   x_torch.set_requires_grad(true);
   torch::nn::LayerNorm ln{torch::nn::LayerNormOptions({3 * size})};
@@ -111,11 +111,11 @@ void TestLayerNormFixture::TestModule(const int size) {
   auto dy = cs::compute::Utils::rand_like(scheduler, y);
   auto dx = lnOurs->backward(scheduler, dy);
 
-  auto x_torch = cs::memory::toTorch(scheduler, x);
+  auto x_torch = cs::memory::to_torch(scheduler, x);
   x.wait();
-  auto y_ref_torch = cs::memory::toTorch(scheduler, y);
+  auto y_ref_torch = cs::memory::to_torch(scheduler, y);
   y.wait();
-  auto dy_torch = cs::memory::toTorch(scheduler, dy);
+  auto dy_torch = cs::memory::to_torch(scheduler, dy);
   dy.wait();
   x_torch.set_requires_grad(true);
   torch::nn::LayerNorm ln{torch::nn::LayerNormOptions({3 * size})};

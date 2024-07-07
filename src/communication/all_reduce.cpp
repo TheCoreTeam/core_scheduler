@@ -30,9 +30,9 @@ namespace cs::communication {
 namespace {
 constexpr auto toC10dRedOp(const Operation operation) {
   switch (operation) {
-    case SUM:
+    case kSUM:
       return c10d::ReduceOp::SUM;
-    case AVG:
+    case kAVG:
       return c10d::ReduceOp::AVG;
     default:
       CS_ASSERT_TRUE(false, "unsupported operation for NCCL all reduce");
@@ -53,7 +53,7 @@ struct AllReduceBucketImpl final : Bucket::Impl {
 };
 
 void AllReduceBucketImpl::apply(const Scheduler &scheduler, const Comm &comm) {
-  AllReduce::runInplace(scheduler, comm, buffer, operation);
+  AllReduce::run_inplace(scheduler, comm, buffer, operation);
   buffer.clear();
   currentByte = 0;
 }
@@ -69,15 +69,15 @@ void AllReduceBucket::push_back(const Scheduler &scheduler, const Comm &comm,
   impl->currentByte += tensor.impl()->tensor().nbytes();
   impl->buffer.push_back(std::move(tensor));
   if (impl->currentByte >= impl->byteThreshold) {
-    AllReduce::runInplace(scheduler, comm, impl->buffer, impl->operation);
+    AllReduce::run_inplace(scheduler, comm, impl->buffer, impl->operation);
     impl->buffer.clear();
     impl->currentByte = 0;
   }
 }
 
-void AllReduce::runInplace(const Scheduler &scheduler, const Comm &comm,
-                           const std::vector<Tensor> &tensors,
-                           const Operation operation) {
+void AllReduce::run_inplace(const Scheduler &scheduler, const Comm &comm,
+                            const std::vector<Tensor> &tensors,
+                            const Operation operation) {
   if (tensors.size() == 1) {
     struct Impl : Task::Impl {
       const Comm comm;
@@ -86,7 +86,7 @@ void AllReduce::runInplace(const Scheduler &scheduler, const Comm &comm,
       explicit Impl(std::vector<Tensor> output /* tensors */,
                     std::vector<ReadOnlyTensor> input /* tensors */, Comm comm,
                     const Operation operation)
-          : Task::Impl{std::move(output), std::move(input), nccl},
+          : Task::Impl{std::move(output), std::move(input), kNccl},
             comm{std::move(comm)},
             operation{operation} {}
       void operator()() const override {
@@ -106,7 +106,7 @@ void AllReduce::runInplace(const Scheduler &scheduler, const Comm &comm,
         }
       }
       [[nodiscard]] const char *name() const override {
-        return "cs::communication::AllReduce::runInplace";
+        return "cs::communication::AllReduce::run_inplace";
       }
     };
 
@@ -120,7 +120,7 @@ void AllReduce::runInplace(const Scheduler &scheduler, const Comm &comm,
       explicit Impl(std::vector<Tensor> output /* tensors */,
                     std::vector<ReadOnlyTensor> input /* tensors */, Comm comm,
                     const Operation operation)
-          : Task::Impl{std::move(output), std::move(input), nccl},
+          : Task::Impl{std::move(output), std::move(input), kNccl},
             comm{std::move(comm)},
             operation{operation} {}
       void operator()() const override {
@@ -156,7 +156,7 @@ void AllReduce::runInplace(const Scheduler &scheduler, const Comm &comm,
         }
       }
       [[nodiscard]] const char *name() const override {
-        return "cs::communication::AllReduce::runInplace";
+        return "cs::communication::AllReduce::run_inplace";
       }
     };
 

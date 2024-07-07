@@ -63,18 +63,18 @@ void TestBackwardT(cs::Scheduler &scheduler) {
           dtype));
   auto y = cs::compute::Linear::forward(scheduler, state, x);
   auto yGrad = cs::compute::Utils::randn_like(scheduler, y);
-  auto dx = cs::compute::Linear::backwardInput(scheduler, state, yGrad);
-  cs::compute::Linear::backwardParameter(scheduler, state, yGrad);
+  auto dx = cs::compute::Linear::backward_input(scheduler, state, yGrad);
+  cs::compute::Linear::backward_parameter(scheduler, state, yGrad);
   dx.wait();
   state->forward.grad_weight.wait();
-  auto xRef = cs::memory::toTorch(scheduler, x);
+  auto xRef = cs::memory::to_torch(scheduler, x);
   x.wait();
   xRef.requires_grad_(true);
-  auto wRef = cs::memory::toTorch(scheduler, state->forward.weight);
+  auto wRef = cs::memory::to_torch(scheduler, state->forward.weight);
   state->forward.weight.wait();
   wRef.requires_grad_(true);
   auto yRef = torch::linear(xRef, wRef);
-  auto yGradRef = cs::memory::toTorch(scheduler, yGrad);
+  auto yGradRef = cs::memory::to_torch(scheduler, yGrad);
   yGrad.wait();
   yRef.backward(yGradRef);
 
@@ -109,14 +109,14 @@ void TestModuleT(cs::Scheduler &scheduler) {
   auto dx = fc->backward(scheduler, yGrad);
   dx.wait();
   fc->state()->forward.grad_weight.wait();
-  auto xRef = cs::memory::toTorch(scheduler, x);
+  auto xRef = cs::memory::to_torch(scheduler, x);
   x.wait();
   xRef.requires_grad_(true);
-  auto wRef = cs::memory::toTorch(scheduler, fc->state()->forward.weight);
+  auto wRef = cs::memory::to_torch(scheduler, fc->state()->forward.weight);
   fc->state()->forward.weight.wait();
   wRef.requires_grad_(true);
   auto yRef = torch::linear(xRef, wRef);
-  auto yGradRef = cs::memory::toTorch(scheduler, yGrad);
+  auto yGradRef = cs::memory::to_torch(scheduler, yGrad);
   yGrad.wait();
   yRef.backward(yGradRef);
 

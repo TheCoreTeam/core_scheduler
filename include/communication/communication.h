@@ -29,9 +29,9 @@ struct Comm {
 
   [[nodiscard]] const std::shared_ptr<Impl> &impl() const;
 
-  CS_API [[nodiscard]] int64_t getRank() const;
+  CS_API [[nodiscard]] int64_t get_rank() const;
 
-  CS_API [[nodiscard]] int64_t getSize() const;
+  CS_API [[nodiscard]] int64_t get_size() const;
 
  private:
   std::shared_ptr<Impl> impl_;
@@ -48,13 +48,13 @@ struct Bucket {
   std::shared_ptr<Impl> impl_;
 };
 
-enum BackendType { MPI, NCCL, NVP2P };
+enum BackendType { kMPI, kNCCL, kNVP2P };
 
-enum Operation { SUM, AVG };
+enum Operation { kSUM, kAVG };
 
-CS_API Comm getComm(MPI_Comm group, BackendType backendType);
+CS_API Comm get_comm(MPI_Comm group, BackendType backendType);
 
-CS_API Comm getCommWorld(BackendType backendType);
+CS_API Comm get_comm_world(BackendType backendType);
 
-CS_API Comm getCommNode(BackendType backendType);
+CS_API Comm get_comm_node(BackendType backendType);
 }  // namespace cs::communication

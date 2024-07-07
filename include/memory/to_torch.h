@@ -19,6 +19,6 @@
 #include "threading/scheduler.h"
 
 namespace cs::memory {
-CS_API at::Tensor toTorch(const Scheduler &scheduler,
+CS_API at::Tensor to_torch(const Scheduler &scheduler,
                           const ReadOnlyTensor &src);
 }  // namespace cs::memory
