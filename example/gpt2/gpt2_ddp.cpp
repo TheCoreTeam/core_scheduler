@@ -18,10 +18,10 @@
 #include <mpi.h>
 #include <torch/torch.h>
 
+#include <cassert>
 #include <chrono>
 #include <cstdint>
 #include <cstdio>
-#include <cassert>
 #include <iostream>
 #include <memory>
 #include <string>
@@ -98,9 +98,9 @@ struct DataConfig {
 
 // Helper function to calculate the training arguments
 std::unordered_map<std::string, double> getTrainArgs(
-    int64_t num_samples, int64_t tokens_per_sample, int64_t global_token_batch_size,
-    int64_t batch_size_per_dprank_per_step, int64_t num_dprank, int64_t max_steps = -1,
-    int64_t max_epochs = -1) {
+    int64_t num_samples, int64_t tokens_per_sample,
+    int64_t global_token_batch_size, int64_t batch_size_per_dprank_per_step,
+    int64_t num_dprank, int64_t max_steps = -1, int64_t max_epochs = -1) {
   if (max_steps == -1 && max_epochs == -1) {
     throw std::invalid_argument(
         "At least one of max_steps or max_epochs must be provided.");
@@ -116,8 +116,10 @@ std::unordered_map<std::string, double> getTrainArgs(
   int64_t tokens_per_dprank_per_step =
       tokens_per_sample * batch_size_per_dprank_per_step;
   int64_t total_tokens_per_micro_step = tokens_per_dprank_per_step * num_dprank;
-  int64_t grad_accum_steps = global_token_batch_size / total_tokens_per_micro_step;
-  int64_t total_tokens_per_step = total_tokens_per_micro_step * grad_accum_steps;
+  int64_t grad_accum_steps =
+      global_token_batch_size / total_tokens_per_micro_step;
+  int64_t total_tokens_per_step =
+      total_tokens_per_micro_step * grad_accum_steps;
   int64_t total_tokens_in_dataset = num_samples * tokens_per_sample;
 
   if (max_steps != -1 && max_epochs != -1) {
@@ -231,29 +233,33 @@ struct ProgressBar {
 };
 
 struct LRScheduler {
-    int warmup_steps;
-    double max_lr;
-    int max_steps;
-    double min_lr;
+  int warmup_steps;
+  double max_lr;
+  int max_steps;
+  double min_lr;
 
-    LRScheduler(int warmupSteps, double maxLr, int maxSteps, double minLr)
-        : warmup_steps(warmupSteps), max_lr(maxLr), max_steps(maxSteps), min_lr(minLr) {}
+  LRScheduler(int warmupSteps, double maxLr, int maxSteps, double minLr)
+      : warmup_steps(warmupSteps),
+        max_lr(maxLr),
+        max_steps(maxSteps),
+        min_lr(minLr) {}
 
-    double get_lr(int step) const {
-        // 1) Linear warmup for warmup_iters steps
-        if (step < warmup_steps) {
-            return max_lr * (step + 1) / warmup_steps;
-        }
-        // 2) If it > max_steps, return minimum learning rate
-        if (step > max_steps) {
-            return min_lr;
-        }
-        // 3) In between, use cosine decay down to minimum learning rate
-        double decay_ratio = static_cast<double>(step - warmup_steps) / (max_steps - warmup_steps);
-        assert(0 <= decay_ratio && decay_ratio <= 1);
-        double coeff = 0.5 * (1.0 + cos(M_PI * decay_ratio));
-        return min_lr + coeff * (max_lr - min_lr);
+  double get_lr(int step) const {
+    // 1) Linear warmup for warmup_iters steps
+    if (step < warmup_steps) {
+      return max_lr * (step + 1) / warmup_steps;
     }
+    // 2) If it > max_steps, return minimum learning rate
+    if (step > max_steps) {
+      return min_lr;
+    }
+    // 3) In between, use cosine decay down to minimum learning rate
+    double decay_ratio =
+        static_cast<double>(step - warmup_steps) / (max_steps - warmup_steps);
+    assert(0 <= decay_ratio && decay_ratio <= 1);
+    double coeff = 0.5 * (1.0 + cos(M_PI * decay_ratio));
+    return min_lr + coeff * (max_lr - min_lr);
+  }
 };
 
 struct Attn : cs::module::Module {
