@@ -16,6 +16,7 @@
 
 #include "compute/utils.h"
 
+// #include <ATen/native/ForeachUtils.h>
 #include <torch/csrc/autograd/generated/variable_factories.h>
 
 #include "logger.h"
@@ -635,7 +636,7 @@ Tensor clone(const Scheduler &scheduler, const Tensor &tensor) {
 }
 
 Tensor linalg_vector_norm(const Scheduler &scheduler,
-                          const ReadOnlyTensor &self, const Scalar &ord,
+                          const ReadOnlyTensor &self, const double ord,
                           at::OptionalIntArrayRef dim, const bool keepdim,
                           const c10::optional<at::ScalarType> dtype) {
   Tensor result;
@@ -647,7 +648,7 @@ Tensor linalg_vector_norm(const Scheduler &scheduler,
       const c10::optional<at::ScalarType> dtype;
 
       explicit Impl(const Tensor &result, const ReadOnlyTensor &input,
-                    const Scalar &ord, const IntArray &dim, const bool keepdim,
+                    const double ord, const IntArray &dim, const bool keepdim,
                     const c10::optional<at::ScalarType> dtype)
           : Task::Impl{{result}, {input}, kCompute},
             ord{ord},
@@ -672,7 +673,7 @@ Tensor linalg_vector_norm(const Scheduler &scheduler,
       const c10::optional<at::ScalarType> dtype;
 
       explicit Impl(const Tensor &result, const ReadOnlyTensor &input,
-                    const Scalar &ord, const bool keepdim,
+                    const double ord, const bool keepdim,
                     const c10::optional<at::ScalarType> dtype)
           : Task::Impl{{result}, {input}, kCompute},
             ord{ord},
@@ -691,5 +692,52 @@ Tensor linalg_vector_norm(const Scheduler &scheduler,
         Task{std::make_shared<Impl>(Impl{result, self, ord, keepdim, dtype})});
   }
   return result;
+}
+
+Tensor clip_grad_norm_(const Scheduler &scheduler,
+                       const std::vector<Tensor> &tensor, const double max_norm,
+                       const double norm_type) {
+  struct Impl : Task::Impl {
+    const double max_norm;
+    const double norm_type;
+
+    explicit Impl(const Tensor &total_norm, const std::vector<Tensor> &result,
+                  const double max_norm, const double norm_type)
+        : Task::Impl{[&] {
+                       std::vector output{result};
+                       output.push_back(total_norm);
+                       return output;
+                     }(),
+                     {result.begin(), result.end()},
+                     kCompute},
+          max_norm{max_norm},
+          norm_type{norm_type} {}
+    void operator()() const override {
+      if (output().empty()) {
+        return;
+      }
+      std::vector<at::Tensor> tensors;
+      for (auto &t : input()) {
+        tensors.push_back(t.impl()->tensor().view(-1));
+      }
+      const auto total_norm =
+          at::linalg_vector_norm(at::hstack(tensors), norm_type);
+      const auto clip_coef =
+          at::empty_like(total_norm, at::MemoryFormat::Preserve)
+              .fill_(max_norm)
+              .div_(total_norm.add(1e-6));
+      const auto clip_coef_clamped = at::clamp(clip_coef, c10::nullopt, 1.0);
+      at::_foreach_mul_(tensors, clip_coef_clamped);
+      output()[output().size() - 1].impl()->tensor() = total_norm;
+    }
+    [[nodiscard]] const char *name() const override {
+      return "cs::compute::Utils::clip_grad_norm_";
+    }
+  };
+
+  Tensor total_norm;
+  scheduler.impl()->submit(Task{
+      std::make_shared<Impl>(Impl{total_norm, tensor, max_norm, norm_type})});
+  return total_norm;
 }
 }  // namespace cs::compute::Utils
