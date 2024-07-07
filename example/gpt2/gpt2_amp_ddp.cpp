@@ -627,7 +627,6 @@ void train() {
   model = std::make_unique<GPT2>(scheduler, modelConfig);
   auto loss_state = cs::compute::CrossEntropy::init(scheduler);
 
-  bool require_backward_grad_sync = true;
   cs::communication::AllReduceBucket allreduce_bucket(trainConfig.bucket_size,
                                                       cs::communication::kSUM);
 
@@ -690,7 +689,7 @@ void train() {
       // Backward
       grad_output = cs::compute::CrossEntropy::backward(scheduler, loss_state);
       model->backward(scheduler, comm, allreduce_bucket, grad_output,
-                      require_backward_grad_sync);
+                      micro_step == grad_accum_steps - 1);
 
       // Wait in micro steps
       auto wait_step = step * (int)grad_accum_steps + micro_step;
@@ -705,9 +704,8 @@ void train() {
 
     // Optimizer step
     opt->step(scheduler);
+    opt->set_lr(lr_scheduler.get_lr(step));
     opt->zero_grad(scheduler);
-    // TODO: Add lr scheduler step
-    lr_scheduler.get_lr(step);
 
     // Wait in steps
     if (trainConfig.wait_every_step != -1 &&
@@ -727,7 +725,7 @@ void train() {
       printf(
           "step %5d | lr %.4e | grad norm: %.4f | dt: %.2fs | tok/sec: "
           "%.2f\n",
-          step + 1, lr_scheduler.get_lr(step), 1.0, duration.count(),
+          step + 1, opt->get_lr(), 1.0, duration.count(),
           total_tokens_per_step / (duration.count()));
       std::cout << "loss: " << loss << std::endl;
     }
