@@ -21,6 +21,7 @@
 
 #include "compute/utils.h"
 #include "memory/to_torch.h"
+#include "module/amp_adamw.h"
 #include "module/amp_linear.h"
 #include "optimizer/amp_adamw.h"
 #include "tensor.h"
@@ -124,15 +125,15 @@ void TestAmpAdamW::TestModuleRoutine(const int size) {
   auto v_hat = v_torch / (1 - std::pow(beta2, t + 1));
   wFp32 = wFp32 - lr * m_hat / (v_hat.sqrt() + eps);
 
-  cs::optimizer::AmpAdamW::init(scheduler, fc,
-                                cs::optimizer::AmpAdamW::Options{}
-                                    .lr(lr)
-                                    .beta1(beta1)
-                                    .beta2(beta2)
-                                    .eps(eps)
-                                    .weight_decay(weight_decay)
-                                    .t(t));
-  cs::optimizer::AmpAdamW::step(scheduler, fc);
+  cs::module::AmpAdamW opt{scheduler, fc,
+                           cs::optimizer::AmpAdamW::Options{}
+                               .lr(lr)
+                               .beta1(beta1)
+                               .beta2(beta2)
+                               .eps(eps)
+                               .weight_decay(weight_decay)
+                               .t(t)};
+  opt->step(scheduler);
 
   ASSERT_TRUE(torch::allclose(fc->state()->forward.weight, wFp32.to(dtype),
                               1e-4, 1e-3));
