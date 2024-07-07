@@ -42,15 +42,30 @@ OrderedDict<std::string, Tensor> Linear::State::parameters() const {
   return dict;
 }
 
-OrderedDict<std::string, module::State::Increment> Linear::State::increments() {
-  OrderedDict<std::string, Increment> dict;
-  dict.insert("weight",
-              {forward.weight, forward.grad_weight, forward.optimizer_weight});
+OrderedDict<std::string, Tensor> Linear::State::gradients() const {
+  OrderedDict<std::string, Tensor> dict;
+  dict.insert("weight", forward.grad_weight);
   if (args.bias) {
-    dict.insert("bias",
-                {forward.bias, forward.grad_bias, forward.optimizer_bias});
+    dict.insert("bias", forward.grad_bias);
   }
   return dict;
+}
+
+OrderedDict<std::string, module::State::Increment> Linear::State::increments()
+    const {
+  OrderedDict<std::string, Increment> dict;
+  dict.insert("weight", {forward.weight, forward.grad_weight});
+  if (args.bias) {
+    dict.insert("bias", {forward.bias, forward.grad_bias});
+  }
+  return dict;
+}
+
+void Linear::State::zero_grad() {
+  forward.grad_weight = {};
+  if (args.bias) {
+    forward.grad_bias = {};
+  }
 }
 
 std::shared_ptr<Linear::State> Linear::init(const Scheduler &scheduler,

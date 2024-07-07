@@ -82,6 +82,41 @@ OrderedDict<std::string, Tensor> Module::named_parameters(
   return result;
 }
 
+OrderedDict<std::string, Tensor> Module::named_gradients(bool recurse) const {
+  auto states = named_states(recurse);
+  OrderedDict<std::string, Tensor> result{};
+  for (const auto& pairState : states) {
+    for (auto gradients = pairState.value()->gradients();
+         const auto& pairTensor : gradients) {
+      result.insert(fmt::format("{}.{}", pairState.key(), pairTensor.key()),
+                    pairTensor.value());
+    }
+  }
+  return result;
+}
+
+OrderedDict<std::string, State::Increment> Module::named_increments(
+    bool recurse) const {
+  auto states = named_states(recurse);
+  OrderedDict<std::string, State::Increment> result{};
+  for (const auto& pairState : states) {
+    for (auto increments = pairState.value()->increments();
+         const auto& pairTensor : increments) {
+      result.insert(fmt::format("{}.{}", pairState.key(), pairTensor.key()),
+                    pairTensor.value());
+    }
+  }
+  return result;
+}
+
+void Module::zero_grad() const {
+  auto states = named_states(true);
+  OrderedDict<std::string, State::Increment> result{};
+  for (const auto& kvState : states) {
+    kvState.value()->zero_grad();
+  }
+}
+
 void Module::to(TensorOptions options) const {
   auto parameters = named_parameters();
   for (const auto& pair : parameters) {

@@ -34,37 +34,6 @@ void ampStepKernelAmsgrad(cudaStream_t stream,
                           const Tensor& wFp32, const Tensor& m, const Tensor& v,
                           const Tensor& vMax, const ReadOnlyTensor& dw);
 
-void AmpAdamW::init(const Scheduler& scheduler, const module::Module& module,
-                    const Options& options) {
-  for (auto& kvState : module.named_states()) {
-    for (auto& kvIncrement : kvState.value()->increments()) {
-      auto state = init(scheduler, kvIncrement->parameter, options);
-      kvIncrement->optimizer_state = state;
-    }
-  }
-}
-
-void AmpAdamW::step(const Scheduler& scheduler, const module::Module& module) {
-  auto states = module.named_states();
-  for (auto& kvState : states) {
-    auto increments = kvState.value()->increments();
-    auto ampState =
-        std::dynamic_pointer_cast<module::AmpState>(kvState.value());
-    CS_ASSERT_TRUE(ampState != nullptr, "The module is not an AMP module");
-    auto parameters_high_precision = ampState->parameters_high_precision();
-    for (auto& kvIncrement : increments) {
-      CS_ASSERT_TRUE(parameters_high_precision.contains(kvIncrement.key()),
-                     "Internal error, key is not found, mostly because your "
-                     "parameters_high_precision implementation is not corrent");
-      step(scheduler,
-           std::dynamic_pointer_cast<State>(kvIncrement->optimizer_state),
-           kvIncrement->parameter, parameters_high_precision[kvIncrement.key()],
-           kvIncrement->gradient);
-      kvIncrement->gradient = Tensor{};
-    }
-  }
-}
-
 std::shared_ptr<AmpAdamW::State> AmpAdamW::init(const Scheduler& scheduler,
                                                 const ReadOnlyTensor& parameter,
                                                 const Options& options) {
@@ -131,8 +100,10 @@ std::shared_ptr<AmpAdamW::State> AmpAdamW::init(const Scheduler& scheduler,
 }
 
 void AmpAdamW::step(const Scheduler& scheduler,
-                    const std::shared_ptr<State>& state, Tensor& w,
-                    Tensor& wFp32, const ReadOnlyTensor& dw) {
+                    const std::shared_ptr<module::OptimizerState>& state_,
+                    const Tensor& w, const Tensor& wFp32,
+                    const ReadOnlyTensor& dw) {
+  const auto state = std::dynamic_pointer_cast<State>(state_);
   state->options.t++;
   if (state->options.amsgrad) {
     struct Impl : Task::Impl {

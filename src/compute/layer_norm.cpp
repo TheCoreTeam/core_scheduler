@@ -46,16 +46,30 @@ OrderedDict<std::string, Tensor> LayerNorm::State::parameters() const {
   return dict;
 }
 
-OrderedDict<std::string, module::State::Increment>
-LayerNorm::State::increments() {
-  OrderedDict<std::string, Increment> dict;
-  dict.insert("weight",
-              {forward.weight, forward.grad_weight, forward.optimizer_weight});
+OrderedDict<std::string, Tensor> LayerNorm::State::gradients() const {
+  OrderedDict<std::string, Tensor> dict;
+  dict.insert("weight", forward.grad_weight);
   if (args.bias) {
-    dict.insert("bias",
-                {forward.bias, forward.grad_bias, forward.optimizer_bias});
+    dict.insert("bias", forward.grad_bias);
   }
   return dict;
+}
+
+OrderedDict<std::string, module::State::Increment>
+LayerNorm::State::increments() const {
+  OrderedDict<std::string, Increment> dict;
+  dict.insert("weight", {forward.weight, forward.grad_weight});
+  if (args.bias) {
+    dict.insert("bias", {forward.bias, forward.grad_bias});
+  }
+  return dict;
+}
+
+void LayerNorm::State::zero_grad() {
+  forward.grad_weight = {};
+  if (args.bias) {
+    forward.grad_bias = {};
+  }
 }
 
 std::shared_ptr<LayerNorm::State> LayerNorm::init(const Scheduler& scheduler,

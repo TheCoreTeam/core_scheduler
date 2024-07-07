@@ -41,14 +41,11 @@
 #include "data/dataloader.h"
 #include "data/dataset.h"
 #include "logger.h"
-// #include "module/embedding.h"
+#include "module/amp_adamw.h"
 #include "module/amp_embedding.h"
-// #include "module/layer_norm.h"
 #include "module/amp_layer_norm.h"
-// #include "module/linear.h"
 #include "module/amp_linear.h"
 #include "module/module.h"
-// #include "optimizer/adamw.h"
 #include "optimizer/amp_adamw.h"
 #include "tensor.h"
 #include "threading/dynamic_scheduler.h"
@@ -604,12 +601,12 @@ void train() {
 
   auto loss_state = cs::compute::CrossEntropy::init(scheduler);
 
-  cs::optimizer::AdamW::init(scheduler, model,
-                             cs::optimizer::AdamW::Options{}
-                                 .lr(trainConfig.max_lr)
-                                 .beta1(trainConfig.beta1)
-                                 .beta2(trainConfig.beta2)
-                                 .weight_decay(trainConfig.weight_decay));
+  cs::module::AmpAdamW opt{scheduler, model,
+                           cs::optimizer::AdamW::Options{}
+                               .lr(trainConfig.max_lr)
+                               .beta1(trainConfig.beta1)
+                               .beta2(trainConfig.beta2)
+                               .weight_decay(trainConfig.weight_decay)};
 
   std::unordered_map<std::string, double> training_args =
       getTrainArgs(dataset.size(), modelConfig.block_size,
@@ -678,7 +675,8 @@ void train() {
     // TODO: Add gradient clipping
 
     // Optimizer step
-    cs::optimizer::AdamW::step(scheduler, model);
+    opt->step(scheduler);
+    opt->zero_grad(scheduler);
     // TODO: Add lr scheduler step
     lr_scheduler.get_lr(step);
 

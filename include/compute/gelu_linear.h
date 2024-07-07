@@ -28,8 +28,6 @@ struct CS_API GeluLinear {
       Tensor bias{};
       Tensor grad_weight{};
       Tensor grad_bias{};
-      std::shared_ptr<module::OptimizerState> optimizer_weight = nullptr;
-      std::shared_ptr<module::OptimizerState> optimizer_bias = nullptr;
     } forward;
     struct Backward {
       ReadOnlyTensor input;
@@ -43,7 +41,12 @@ struct CS_API GeluLinear {
 
     [[nodiscard]] OrderedDict<std::string, Tensor> parameters() const override;
 
-    [[nodiscard]] OrderedDict<std::string, Increment> increments() override;
+    [[nodiscard]] OrderedDict<std::string, Tensor> gradients() const override;
+
+    [[nodiscard]] OrderedDict<std::string, Increment> increments()
+        const override;
+
+    void zero_grad() override;
   };
 
   struct Options {
