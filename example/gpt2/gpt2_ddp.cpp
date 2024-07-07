@@ -689,7 +689,7 @@ void train() {
       // Backward
       grad_output = cs::compute::CrossEntropy::backward(scheduler, loss_state);
       model->backward(scheduler, comm, allreduce_bucket, grad_output,
-                      micro_step == grad_accum_steps - 1);
+                      micro_step == (int)grad_accum_steps - 1);
 
       // Wait in micro steps
       auto wait_step = step * (int)grad_accum_steps + micro_step;
