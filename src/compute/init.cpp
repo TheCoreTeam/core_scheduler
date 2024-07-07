@@ -39,8 +39,8 @@ void kaiming_normal_(const Scheduler &scheduler, const Tensor &tensor,
           m{m},
           nonlineari{nonlineari} {}
     void operator()() const override {
-      torch::nn::init::kaiming_normal_(output()[0].impl()->tensor().normal_(),
-                                       a, m, nonlineari);
+      torch::nn::init::kaiming_normal_(output()[0].impl()->tensor(), a, m,
+                                       nonlineari);
     }
     [[nodiscard]] const char *name() const override {
       return "cs::compute::Init::kaiming_normal_";
@@ -67,8 +67,8 @@ void kaiming_uniform_(const Scheduler &scheduler, const Tensor &tensor,
           m{m},
           nonlineari{nonlineari} {}
     void operator()() const override {
-      torch::nn::init::kaiming_uniform_(output()[0].impl()->tensor().normal_(),
-                                        a, m, nonlineari);
+      torch::nn::init::kaiming_uniform_(output()[0].impl()->tensor(), a, m,
+                                        nonlineari);
     }
     [[nodiscard]] const char *name() const override {
       return "cs::compute::Init::kaiming_uniform_";
