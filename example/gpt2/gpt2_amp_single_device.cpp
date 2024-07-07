@@ -611,9 +611,6 @@ void train() {
                                  .beta2(trainConfig.beta2)
                                  .weight_decay(trainConfig.weight_decay));
 
-  LRScheduler lr_scheduler(trainConfig.warmup_steps, trainConfig.max_lr,
-                           trainConfig.max_steps, trainConfig.min_lr);
-
   std::unordered_map<std::string, double> training_args =
       getTrainArgs(dataset.size(), modelConfig.block_size,
                    trainConfig.total_token_batch_size, modelConfig.batch_size,
@@ -631,6 +628,9 @@ void train() {
     std::cout << "=> calculated tokens per step: " << total_tokens_per_step
               << std::endl;
   }
+
+  LRScheduler lr_scheduler(trainConfig.warmup_steps, trainConfig.max_lr,
+                           (int)max_steps, trainConfig.min_lr);
 
   ProgressBar progressBar(max_steps);
   for (int step = 0; step < max_steps; ++step) {
