@@ -38,13 +38,20 @@ OrderedDict<std::string, Tensor> Embedding::State::parameters() const {
   return dict;
 }
 
-OrderedDict<std::string, module::State::Increment>
-Embedding::State::increments() {
-  OrderedDict<std::string, Increment> dict;
-  dict.insert("weight",
-              {forward.weight, forward.grad_weight, forward.optimizer_weight});
+OrderedDict<std::string, Tensor> Embedding::State::gradients() const {
+  OrderedDict<std::string, Tensor> dict;
+  dict.insert("weight", forward.grad_weight);
   return dict;
 }
+
+OrderedDict<std::string, module::State::Increment>
+Embedding::State::increments() const {
+  OrderedDict<std::string, Increment> dict;
+  dict.insert("weight", {forward.weight, forward.grad_weight});
+  return dict;
+}
+
+void Embedding::State::zero_grad() { forward.grad_weight = {}; }
 
 std::shared_ptr<Embedding::State> Embedding::init(const Scheduler &scheduler,
                                                   const Options &options) {

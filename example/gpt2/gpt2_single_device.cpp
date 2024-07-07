@@ -41,6 +41,7 @@
 #include "data/dataloader.h"
 #include "data/dataset.h"
 #include "logger.h"
+#include "module/adamw.h"
 #include "module/embedding.h"
 #include "module/layer_norm.h"
 #include "module/linear.h"
@@ -597,12 +598,12 @@ void train() {
 
   auto loss_state = cs::compute::CrossEntropy::init(scheduler);
 
-  cs::optimizer::AdamW::init(scheduler, model,
-                             cs::optimizer::AdamW::Options{}
-                                 .lr(trainConfig.max_lr)
-                                 .beta1(trainConfig.beta1)
-                                 .beta2(trainConfig.beta2)
-                                 .weight_decay(trainConfig.weight_decay));
+  cs::module::AdamW opt{scheduler, model,
+                        cs::optimizer::AdamW::Options{}
+                            .lr(trainConfig.max_lr)
+                            .beta1(trainConfig.beta1)
+                            .beta2(trainConfig.beta2)
+                            .weight_decay(trainConfig.weight_decay)};
 
   LRScheduler lr_scheduler(trainConfig.warmup_steps, trainConfig.max_lr,
                            trainConfig.max_steps, trainConfig.min_lr);
@@ -671,7 +672,8 @@ void train() {
     // TODO: Add gradient clipping
 
     // Optimizer step
-    cs::optimizer::AdamW::step(scheduler, model);
+    opt->step(scheduler);
+    opt->zero_grad(scheduler);
     // TODO: Add lr scheduler step
     lr_scheduler.get_lr(step);
 

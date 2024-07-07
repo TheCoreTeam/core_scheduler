@@ -43,28 +43,6 @@ void AdamW::State::set_lr(const double lr) const { options.lr = lr; }
 
 double AdamW::State::get_lr() const { return options.lr; }
 
-void AdamW::init(const Scheduler &scheduler, const module::Module &module,
-                 const Options &options) {
-  for (auto &kvState : module.named_states()) {
-    for (auto &kvIncrement : kvState.value()->increments()) {
-      auto state = init(scheduler, kvIncrement->parameter, options);
-      kvIncrement->optimizer_state = state;
-    }
-  }
-}
-
-void AdamW::step(const Scheduler &scheduler, const module::Module &module) {
-  auto states = module.named_states();
-  for (auto &kvState : states) {
-    for (auto &kvIncrement : kvState.value()->increments()) {
-      step(scheduler,
-           std::dynamic_pointer_cast<State>(kvIncrement->optimizer_state),
-           kvIncrement->parameter, kvIncrement->gradient);
-      kvIncrement->gradient = Tensor{};
-    }
-  }
-}
-
 std::shared_ptr<AdamW::State> AdamW::init(const Scheduler &scheduler,
                                           const ReadOnlyTensor &parameter,
                                           const Options &options) {
@@ -126,8 +104,9 @@ std::shared_ptr<AdamW::State> AdamW::init(const Scheduler &scheduler,
 }
 
 void AdamW::step(const Scheduler &scheduler,
-                 const std::shared_ptr<State> &state, Tensor &w,
-                 const ReadOnlyTensor &dw) {
+                 const std::shared_ptr<module::OptimizerState> &state_,
+                 const Tensor &w, const ReadOnlyTensor &dw) {
+  const auto state = std::dynamic_pointer_cast<State>(state_);
   state->options.t++;
   if (state->options.amsgrad) {
     struct Impl : Task::Impl {

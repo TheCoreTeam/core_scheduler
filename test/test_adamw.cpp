@@ -21,6 +21,7 @@
 
 #include "compute/utils.h"
 #include "memory/to_torch.h"
+#include "module/adamw.h"
 #include "module/linear.h"
 #include "optimizer/adamw.h"
 #include "tensor.h"
@@ -160,15 +161,16 @@ void TestAdamW::TestModuleRoutine(const int size) {
 
   optimTorch.step();
 
-  cs::optimizer::AdamW::init(scheduler, fc,
-                             cs::optimizer::AdamW::Options{}
-                                 .lr(lr)
-                                 .beta1(beta1)
-                                 .beta2(beta2)
-                                 .eps(eps)
-                                 .weight_decay(weight_decay)
-                                 .t(t));
-  cs::optimizer::AdamW::step(scheduler, fc);
+  cs::module::AdamW adamw{scheduler, fc,
+                          cs::optimizer::AdamW::Options{}
+                              .lr(lr)
+                              .beta1(beta1)
+                              .beta2(beta2)
+                              .eps(eps)
+                              .weight_decay(weight_decay)
+                              .t(t)};
+
+  adamw->step(scheduler);
 
   ASSERT_TRUE(torch::allclose(fc->state()->forward.weight, fcTorch->weight,
                               1e-4, 1e-5));

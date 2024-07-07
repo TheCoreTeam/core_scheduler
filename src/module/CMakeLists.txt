@@ -25,5 +25,8 @@ set(CORE_SCHEDULER_MODULE_SRCS
         ${CMAKE_CURRENT_SOURCE_DIR}/amp_layer_norm.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/embedding.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/amp_embedding.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/optimizer_module.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/adamw.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/amp_adamw.cpp
 )
 set(CORE_SCHEDULER_MODULE_SRCS ${CORE_SCHEDULER_MODULE_SRCS} PARENT_SCOPE)

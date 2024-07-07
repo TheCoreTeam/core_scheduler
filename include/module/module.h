@@ -53,6 +53,13 @@ struct CS_API Module : std::enable_shared_from_this<Module> {
 
   OrderedDict<std::string, Tensor> named_parameters(bool recurse = true) const;
 
+  OrderedDict<std::string, Tensor> named_gradients(bool recurse = true) const;
+
+  OrderedDict<std::string, State::Increment> named_increments(
+      bool recurse = true) const;
+
+  void zero_grad() const;
+
   void to(TensorOptions options) const;
 
  protected:

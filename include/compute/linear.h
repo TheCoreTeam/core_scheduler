@@ -28,8 +28,6 @@ struct CS_API Linear {
       Tensor bias{};
       Tensor grad_weight{};
       Tensor grad_bias{};
-      std::shared_ptr<module::OptimizerState> optimizer_weight = nullptr;
-      std::shared_ptr<module::OptimizerState> optimizer_bias = nullptr;
     } forward;
     struct Backward {
       ReadOnlyTensor input;
@@ -42,7 +40,12 @@ struct CS_API Linear {
 
     [[nodiscard]] OrderedDict<std::string, Tensor> parameters() const override;
 
-    [[nodiscard]] OrderedDict<std::string, Increment> increments() override;
+    [[nodiscard]] OrderedDict<std::string, Tensor> gradients() const override;
+
+    [[nodiscard]] OrderedDict<std::string, Increment> increments()
+        const override;
+
+    void zero_grad() override;
   };
 
   struct Options {
@@ -63,11 +66,11 @@ struct CS_API Linear {
                         const ReadOnlyTensor &input);
 
   static Tensor backward_input(const Scheduler &scheduler,
-                              const std::shared_ptr<State> &state,
-                              const ReadOnlyTensor &grad_output);
+                               const std::shared_ptr<State> &state,
+                               const ReadOnlyTensor &grad_output);
 
   static void backward_parameter(const Scheduler &scheduler,
-                                const std::shared_ptr<State> &state,
-                                const ReadOnlyTensor &grad_output);
+                                 const std::shared_ptr<State> &state,
+                                 const ReadOnlyTensor &grad_output);
 };
 }  // namespace cs::compute

@@ -26,7 +26,6 @@ struct CS_API Embedding {
     struct Forward {
       Tensor weight;
       Tensor grad_weight{};
-      std::shared_ptr<module::OptimizerState> optimizer_weight = nullptr;
     } forward;
     struct Backward {
       ReadOnlyTensor indices;
@@ -44,7 +43,12 @@ struct CS_API Embedding {
 
     [[nodiscard]] OrderedDict<std::string, Tensor> parameters() const override;
 
-    [[nodiscard]] OrderedDict<std::string, Increment> increments() override;
+    [[nodiscard]] OrderedDict<std::string, Tensor> gradients() const override;
+
+    [[nodiscard]] OrderedDict<std::string, Increment> increments()
+        const override;
+
+    void zero_grad() override;
   };
 
   struct Options {
