@@ -61,8 +61,8 @@ struct ModelConfig {
   const int64_t n_head = 12;       // 32
   const int64_t n_layer = 12;      // 22
   const bool use_bias = false;
-  const float dropout = 0.0;
-  const float epsilon = 1e-5;
+  const double dropout = 0.0;
+  const double epsilon = 1e-5;
   torch::Device device{
       torch::kCUDA,
       static_cast<torch::DeviceIndex>(
