@@ -96,9 +96,9 @@ void TestT(cs::Scheduler& scheduler) {
       scheduler, state, dout);
   dq.wait();
 
-  auto qkv_torch = cs::memory::toTorch(scheduler, qkv);
+  auto qkv_torch = cs::memory::to_torch(scheduler, qkv);
   qkv.wait();
-  auto dout_torch = cs::memory::toTorch(scheduler, dout);
+  auto dout_torch = cs::memory::to_torch(scheduler, dout);
   dout.wait();
 
   auto qkv_torch_v = qkv_torch.split(n_embd, -1);

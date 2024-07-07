@@ -24,12 +24,12 @@ cudnnHandle_t getCurrentCuDnnHandle() {
   thread_local struct HandleImpl {
     cudnnHandle_t handle{nullptr};
     HandleImpl() {
-      CHECK_CUDNN(cudnnCreate(&handle));
-      CHECK_CUDNN(
+      CS_CHECK_CUDNN(cudnnCreate(&handle));
+      CS_CHECK_CUDNN(
           cudnnSetStream(handle, c10::cuda::getCurrentCUDAStream().stream()));
     }
 
-    ~HandleImpl() { CHECK_CUDNN(cudnnDestroy(handle)); }
+    ~HandleImpl() { CS_CHECK_CUDNN(cudnnDestroy(handle)); }
   } handle{};
   return handle.handle;
 }

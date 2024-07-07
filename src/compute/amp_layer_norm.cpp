@@ -34,20 +34,20 @@ AmpLayerNorm::State::State(const Forward& forward,
                            const ForwardHighPrecision& forwardHighPrecision,
                            const Backward& backward, const Args& args)
     : LayerNorm::State{forward, backward, args},
-      forwardHighPrecision{forwardHighPrecision} {}
+      forward_high_precision{forwardHighPrecision} {}
 
-OrderedDict<std::string, Tensor> AmpLayerNorm::State::parametersHighPrecision()
-    const {
+OrderedDict<std::string, Tensor>
+AmpLayerNorm::State::parameters_high_precision() const {
   OrderedDict<std::string, Tensor> dict;
-  dict.insert("weight", forwardHighPrecision.weight);
+  dict.insert("weight", forward_high_precision.weight);
   if (args.bias) {
-    dict.insert("bias", forwardHighPrecision.bias);
+    dict.insert("bias", forward_high_precision.bias);
   }
   return dict;
 }
 
 OrderedDict<std::string, Tensor> AmpLayerNorm::State::parameters() const {
-  return parametersHighPrecision();
+  return parameters_high_precision();
 }
 
 std::shared_ptr<AmpLayerNorm::State> AmpLayerNorm::init(
@@ -70,7 +70,7 @@ std::shared_ptr<AmpLayerNorm::State> AmpLayerNorm::init(
 
       explicit Impl(std::vector<Tensor> output /* weight, bias */,
                     const Options& options, const TensorOptions tensorOptions)
-          : Task::Impl{std::move(output), {}, compute},
+          : Task::Impl{std::move(output), {}, kCompute},
             options{options},
             tensorOptions{tensorOptions} {}
       void operator()() const override {
@@ -106,7 +106,7 @@ std::shared_ptr<AmpLayerNorm::State> AmpLayerNorm::init(
 
       explicit Impl(std::vector<Tensor> output /* weight */,
                     const Options& options, const TensorOptions tensorOptions)
-          : Task::Impl{std::move(output), {}, compute},
+          : Task::Impl{std::move(output), {}, kCompute},
             options{options},
             tensorOptions{tensorOptions} {}
       void operator()() const override {

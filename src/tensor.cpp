@@ -48,7 +48,7 @@ static bool allclose_impl(const T1 &t1_, const T2 &t2_, const double rtol,
 }
 
 void ReadOnlyTensor::wait() const {
-  CHECK_CUDART(cudaStreamSynchronize(impl()->stream()));
+  CS_CHECK_CUDART(cudaStreamSynchronize(impl()->stream()));
 }
 
 const std::shared_ptr<ReadOnlyTensor::Impl> &ReadOnlyTensor::impl() const {

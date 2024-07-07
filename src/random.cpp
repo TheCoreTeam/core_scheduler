@@ -21,20 +21,20 @@
 #include <ATen/cuda/CUDAGeneratorImpl.h>
 
 namespace cs {
-at::Generator &getCUDAGenerator() {
+at::Generator &get_cuda_generator() {
   static at::Generator generator = at::cuda::detail::getDefaultCUDAGenerator();
   return generator;
 }
 
-at::Generator &getCPUGenerator() {
+at::Generator &get_cpu_generator() {
   static at::Generator generator = at::detail::getDefaultCPUGenerator();
   return generator;
 }
 
 void manual_seed(const int64_t seed) {
   at::manual_seed(seed);
-  getCUDAGenerator().set_current_seed(seed);
-  getCUDAGenerator().set_offset(0);
-  getCPUGenerator().set_current_seed(seed);
+  get_cuda_generator().set_current_seed(seed);
+  get_cuda_generator().set_offset(0);
+  get_cpu_generator().set_current_seed(seed);
 }
 }  // namespace cs

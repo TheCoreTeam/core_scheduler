@@ -66,13 +66,13 @@ void TestUtilsFixture::TestCat(const int size) {
   auto x2 = cs::compute::Utils::rand(scheduler, {size, size, size}, option);
   auto x3 = cs::compute::Utils::rand(scheduler, {size, size, size}, option);
   auto y = cs::compute::Utils::cat(scheduler, {x1, x2, x3}, -1);
-  auto x1_torch = cs::memory::toTorch(scheduler, x1);
+  auto x1_torch = cs::memory::to_torch(scheduler, x1);
   x1.wait();
-  auto x2_torch = cs::memory::toTorch(scheduler, x2);
+  auto x2_torch = cs::memory::to_torch(scheduler, x2);
   x2.wait();
-  auto x3_torch = cs::memory::toTorch(scheduler, x3);
+  auto x3_torch = cs::memory::to_torch(scheduler, x3);
   x3.wait();
-  auto y_torch = cs::memory::toTorch(scheduler, y);
+  auto y_torch = cs::memory::to_torch(scheduler, y);
   y.wait();
   ASSERT_TRUE(at::allclose(y, at::cat({x1_torch, x2_torch, x3_torch}, -1)));
 }
@@ -88,9 +88,9 @@ void TestUtilsFixture::TestSum(const int size) {
   const auto option = at::TensorOptions().dtype(dtype).device(device);
   auto x = cs::compute::Utils::rand(scheduler, {size, size, size}, option);
   auto y = cs::compute::Utils::sum(scheduler, x, 0);
-  auto x_torch = cs::memory::toTorch(scheduler, x);
+  auto x_torch = cs::memory::to_torch(scheduler, x);
   x.wait();
-  auto y_torch = cs::memory::toTorch(scheduler, y);
+  auto y_torch = cs::memory::to_torch(scheduler, y);
   y.wait();
   ASSERT_TRUE(at::allclose(y, at::sum(x_torch, 0)));
 }

@@ -340,8 +340,8 @@ struct Attn : cs::module::Module {
   cs::Tensor backward(const cs::DynamicScheduler &scheduler,
                       cs::Tensor &DOutput) {
     // Fc Proj, we first run backward for input and then backward for parameter.
-    auto DAttnOut = c_proj->backwardInput(scheduler, DOutput);
-    c_proj->backwardParameter(scheduler, DOutput);
+    auto DAttnOut = c_proj->backward_input(scheduler, DOutput);
+    c_proj->backward_parameter(scheduler, DOutput);
 
     cs::Tensor DFcAttnOut;
     // Attn
@@ -364,8 +364,8 @@ struct Attn : cs::module::Module {
     }
 
     // Fc Attn, we first run backward for input and then backward for parameter.
-    auto DInput = c_attn->backwardInput(scheduler, DFcAttnOut);
-    c_attn->backwardParameter(scheduler, DFcAttnOut);
+    auto DInput = c_attn->backward_input(scheduler, DFcAttnOut);
+    c_attn->backward_parameter(scheduler, DFcAttnOut);
     return DInput;
   }
 };
@@ -413,13 +413,13 @@ struct MLP : cs::module::Module {
   void backward(const cs::DynamicScheduler &scheduler, cs::Tensor &DInput,
                 cs::Tensor &DOutput) {
     // Fc2
-    auto DGeluOut = fc2->backwardInput(scheduler, DOutput);
-    fc2->backwardParameter(scheduler, DOutput);
+    auto DGeluOut = fc2->backward_input(scheduler, DOutput);
+    fc2->backward_parameter(scheduler, DOutput);
     // GeLU
     auto DFc1Out = cs::compute::GeLU::backward(scheduler, gelu_state, DGeluOut);
     // Fc1
-    DInput = fc1->backwardInput(scheduler, DFc1Out);
-    fc1->backwardParameter(scheduler, DFc1Out);
+    DInput = fc1->backward_input(scheduler, DFc1Out);
+    fc1->backward_parameter(scheduler, DFc1Out);
   }
 };
 
@@ -550,8 +550,8 @@ struct GPT2 : cs::module::Module {
   }
 
   void backward(const cs::DynamicScheduler &scheduler, cs::Tensor &DOutput) {
-    auto DLNfOut = lm_head->backwardInput(scheduler, DOutput);
-    lm_head->backwardParameter(scheduler, DOutput);
+    auto DLNfOut = lm_head->backward_input(scheduler, DOutput);
+    lm_head->backward_parameter(scheduler, DOutput);
     auto DBlockOut = lnf->backward(scheduler, DLNfOut);
     for (auto &block : h) {
       DBlockOut = block->backward(scheduler, DBlockOut);

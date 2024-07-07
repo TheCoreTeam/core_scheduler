@@ -85,8 +85,8 @@ Comm lookupMapOrCreate(const MPI_Comm group, const BackendType backendType) {
   static std::mutex mutex;
   std::lock_guard guard{mutex};
   switch (backendType) {
-    case NCCL: {
-      auto &map = getMap<NCCL>();
+    case kNCCL: {
+      auto &map = getMap<kNCCL>();
       if (const auto find = map.find(group); find == map.end()) {
         auto comm = createNccl(group);
         map.insert({group, comm});
@@ -106,35 +106,35 @@ Comm::Comm(std::shared_ptr<Impl> impl) : impl_{std::move(impl)} {}
 
 const std::shared_ptr<Comm::Impl> &Comm::impl() const { return impl_; }
 
-int64_t Comm::getRank() const { return impl_->backend()->getRank(); }
+int64_t Comm::get_rank() const { return impl_->backend()->getRank(); }
 
-int64_t Comm::getSize() const { return impl_->backend()->getSize(); }
+int64_t Comm::get_size() const { return impl_->backend()->getSize(); }
 
 void Bucket::apply(const Scheduler &scheduler, const Comm &comm) const {
   impl_->apply(scheduler, comm);
 }
 const std::shared_ptr<Bucket::Impl> &Bucket::impl() const { return impl_; }
 
-Comm getComm(const MPI_Comm group, const BackendType backendType) {
+Comm get_comm(const MPI_Comm group, const BackendType backendType) {
   return lookupMapOrCreate(group, backendType);
 }
 
-Comm getCommWorld(const BackendType backendType) {
-  return getComm(MPI_COMM_WORLD, backendType);
+Comm get_comm_world(const BackendType backendType) {
+  return get_comm(MPI_COMM_WORLD, backendType);
 }
 
-Comm getCommNode(const BackendType backendType) {
+Comm get_comm_node(const BackendType backendType) {
   static struct MPICommGuard {
     MPI_Comm comm;
     MPICommGuard() {
       int world_rank;
-      CHECK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &world_rank));
-      CHECK_MPI(MPI_Comm_split_type(MPI_COMM_WORLD, MPI_COMM_TYPE_SHARED, 0,
-                                    MPI_INFO_NULL, &comm));
+      CS_CHECK_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &world_rank));
+      CS_CHECK_MPI(MPI_Comm_split_type(MPI_COMM_WORLD, MPI_COMM_TYPE_SHARED, 0,
+                                       MPI_INFO_NULL, &comm));
     }
-    ~MPICommGuard() { CHECK_MPI(MPI_Comm_free(&comm)); }
+    ~MPICommGuard() { CS_CHECK_MPI(MPI_Comm_free(&comm)); }
   } guard;
-  return getComm(guard.comm, backendType);
+  return get_comm(guard.comm, backendType);
 }
 
 Comm::Impl::Impl(const MPI_Comm group, c10::intrusive_ptr<c10d::Store> store,

@@ -50,10 +50,12 @@ struct TypeToTorch<double> {
 class AllGatherNCCLTestFixture : public ::testing::Test {
  protected:
   cs::communication::Comm comm{
-      cs::communication::getCommWorld(cs::communication::NCCL)};
-  cs::DynamicScheduler scheduler{static_cast<int>(comm.getRank())};
+      cs::communication::get_comm_world(cs::communication::kNCCL)};
+  cs::DynamicScheduler scheduler{static_cast<int>(comm.get_rank())};
 
-  AllGatherNCCLTestFixture() { CHECK_CUDART(cudaSetDevice(comm.getRank())); }
+  AllGatherNCCLTestFixture() {
+    CS_CHECK_CUDART(cudaSetDevice(comm.get_rank()));
+  }
 
   template <typename T>
   void TestlAllToAllT(int blockSize);
@@ -61,14 +63,14 @@ class AllGatherNCCLTestFixture : public ::testing::Test {
 
 template <typename T>
 void AllGatherNCCLTestFixture::TestlAllToAllT(const int blockSize) {
-  const at::Device device(at::kCUDA, comm.getRank());
+  const at::Device device(at::kCUDA, comm.get_rank());
   const at::ScalarType dtype = TypeToTorch<T>::type;
   const auto option = at::TensorOptions().dtype(dtype).device(device);
-  at::manual_seed(comm.getRank() + 1);
+  at::manual_seed(comm.get_rank() + 1);
   auto x = cs::compute::Utils::rand(scheduler, {blockSize}, option);
   std::vector<cs::Tensor> r;
-  r.reserve(comm.getSize());
-  for (int i = 0; i < comm.getSize(); ++i) {
+  r.reserve(comm.get_size());
+  for (int i = 0; i < comm.get_size(); ++i) {
     auto t = cs::compute::Utils::empty(scheduler, {blockSize}, option);
     r.push_back(t);
   }
@@ -76,11 +78,11 @@ void AllGatherNCCLTestFixture::TestlAllToAllT(const int blockSize) {
   std::vector<at::Tensor> r_torch;
   r_torch.resize(r.size());
   for (int i = 0; i < r.size(); ++i) {
-    r_torch[i] = cs::memory::toTorch(scheduler, r[i]);
+    r_torch[i] = cs::memory::to_torch(scheduler, r[i]);
     r[i].wait();
   }
 
-  for (int i = 0; i < comm.getSize(); ++i) {
+  for (int i = 0; i < comm.get_size(); ++i) {
     at::manual_seed(i + 1);
     auto full_random = torch::rand({blockSize}, option);
     ASSERT_TRUE(at::allclose(r_torch[i], full_random));

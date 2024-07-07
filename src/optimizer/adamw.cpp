@@ -48,7 +48,7 @@ void AdamW::init(const Scheduler &scheduler, const module::Module &module,
   for (auto &kvState : module.named_states()) {
     for (auto &kvIncrement : kvState.value()->increments()) {
       auto state = init(scheduler, kvIncrement->parameter, options);
-      kvIncrement->optimizerState = state;
+      kvIncrement->optimizer_state = state;
     }
   }
 }
@@ -58,7 +58,7 @@ void AdamW::step(const Scheduler &scheduler, const module::Module &module) {
   for (auto &kvState : states) {
     for (auto &kvIncrement : kvState.value()->increments()) {
       step(scheduler,
-           std::dynamic_pointer_cast<State>(kvIncrement->optimizerState),
+           std::dynamic_pointer_cast<State>(kvIncrement->optimizer_state),
            kvIncrement->parameter, kvIncrement->gradient);
       kvIncrement->gradient = Tensor{};
     }
@@ -74,7 +74,7 @@ std::shared_ptr<AdamW::State> AdamW::init(const Scheduler &scheduler,
     struct Impl : Task::Impl {
       explicit Impl(std::vector<Tensor> output /* m, v, vMax */,
                     std::vector<ReadOnlyTensor> input /* parameter */)
-          : Task::Impl{std::move(output), std::move(input), compute} {}
+          : Task::Impl{std::move(output), std::move(input), kCompute} {}
       void operator()() const override {
         output()[0].impl()->tensor() =
             at::zeros_like(input()[0].impl()->tensor());
@@ -102,7 +102,7 @@ std::shared_ptr<AdamW::State> AdamW::init(const Scheduler &scheduler,
     struct Impl : Task::Impl {
       explicit Impl(std::vector<Tensor> output /* m, v */,
                     std::vector<ReadOnlyTensor> input /* parameter */)
-          : Task::Impl{std::move(output), std::move(input), compute} {}
+          : Task::Impl{std::move(output), std::move(input), kCompute} {}
       void operator()() const override {
         output()[0].impl()->tensor() =
             at::zeros_like(input()[0].impl()->tensor());
@@ -136,7 +136,7 @@ void AdamW::step(const Scheduler &scheduler,
       explicit Impl(std::vector<Tensor> output /* w, m, v, vMax */,
                     std::vector<ReadOnlyTensor> input /* w, m, v, vMax, dw */,
                     const State::Options &options)
-          : Task::Impl{std::move(output), std::move(input), compute},
+          : Task::Impl{std::move(output), std::move(input), kCompute},
             options{options} {}
       void operator()() const override {
         const auto stream = c10::cuda::getCurrentCUDAStream();
@@ -154,7 +154,7 @@ void AdamW::step(const Scheduler &scheduler,
 
     const auto &m = state->tensors.m;
     const auto &v = state->tensors.v;
-    const auto &vMax = state->tensors.vMax;
+    const auto &vMax = state->tensors.v_max;
     scheduler.impl()->submit(Task{std::make_shared<Impl>(
         Impl{{w, m, v, vMax}, {w, m, v, vMax, dw}, state->options})});
   } else {
@@ -164,7 +164,7 @@ void AdamW::step(const Scheduler &scheduler,
       explicit Impl(std::vector<Tensor> output /* w, m, v */,
                     std::vector<ReadOnlyTensor> input /* w, m, v, dw */,
                     const State::Options &options)
-          : Task::Impl{std::move(output), std::move(input), compute},
+          : Task::Impl{std::move(output), std::move(input), kCompute},
             options{options} {}
       void operator()() const override {
         const auto stream = c10::cuda::getCurrentCUDAStream();

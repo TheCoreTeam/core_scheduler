@@ -37,7 +37,7 @@ struct CS_API State {
   struct Increment {
     Tensor &parameter;
     Tensor &gradient;
-    std::shared_ptr<OptimizerState> &optimizerState;
+    std::shared_ptr<OptimizerState> &optimizer_state;
   };
 
   virtual ~State() = default;

@@ -35,7 +35,7 @@ struct CS_API AdamW {
     struct Tensors {
       Tensor m;
       Tensor v;
-      Tensor vMax{};
+      Tensor v_max{};
     } tensors;
     struct Options {
       mutable double lr = 1e-3;
