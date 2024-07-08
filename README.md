@@ -12,14 +12,16 @@ conda install pytorch torchvision torchaudio pytorch-cuda=11.8 -c pytorch -c nvi
 ```
 please refer to [https://pytorch.org/get-started/locally/] for pytorch installation
 
-Download this project:
+Clone the repository and set up the environment:
 ```bash
 git clone git@github.com:TheCoreTeam/core_scheduler.git
 cd core_scheduler
 git checkout dev-dllm.py
+conda env create -f env.yaml
+conda activate pydllm
 ```
 
-Run the following commands for operators:
+Run the following commands for testing operators:
 ```bash
 python test/operators/compute/basic/linear.py
 ```
