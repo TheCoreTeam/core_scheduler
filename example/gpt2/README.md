@@ -13,5 +13,6 @@ Before running the examples, ensure that your environment is set up correctly by
 ## Future Development
 We are actively working on integrating advanced features such as:
 
-* Mixed Precision Training: Current support for fp16 and bf16 types. Future releases will include automatic mixed precision (AMP) support.
+* Mixed Precision Training: Current support for fp16 and bf16 types. Future releases will include automatic mixed precision (AMP) support. (Done.)
+* Kernel Fusion: Fusing fusible operators to speed up training and save existing.
 * Advanced Distributed Strategies: Planning to introduce Zero and 3D parallelism for efficient scaling across multiple GPUs and nodes.

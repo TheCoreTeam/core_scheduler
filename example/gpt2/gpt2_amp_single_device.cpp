@@ -608,9 +608,6 @@ void train() {
                                .beta2(trainConfig.beta2)
                                .weight_decay(trainConfig.weight_decay)};
 
-  LRScheduler lr_scheduler(trainConfig.warmup_steps, trainConfig.max_lr,
-                           trainConfig.max_steps, trainConfig.min_lr);
-
   std::unordered_map<std::string, double> training_args =
       getTrainArgs(dataset.size(), modelConfig.block_size,
                    trainConfig.total_token_batch_size, modelConfig.batch_size,
@@ -628,6 +625,9 @@ void train() {
     std::cout << "=> calculated tokens per step: " << total_tokens_per_step
               << std::endl;
   }
+
+  LRScheduler lr_scheduler(trainConfig.warmup_steps, trainConfig.max_lr,
+                           (int)max_steps, trainConfig.min_lr);
 
   ProgressBar progressBar(max_steps);
   for (int step = 0; step < max_steps; ++step) {
@@ -676,9 +676,8 @@ void train() {
 
     // Optimizer step
     opt->step(scheduler);
+    opt->set_lr(lr_scheduler.get_lr(step));
     opt->zero_grad(scheduler);
-    // TODO: Add lr scheduler step
-    lr_scheduler.get_lr(step);
 
     // Wait in steps
     if (trainConfig.wait_every_step != -1 &&
@@ -697,7 +696,7 @@ void train() {
                // device
           "\nstep %5d | lr %.4e | grad norm: %.4f | dt: %.2fs | tok/sec: "
           "%.2f\n",
-          step + 1, lr_scheduler.get_lr(step), 1.0, duration.count(),
+          step + 1, opt->get_lr(), 1.0, duration.count(),
           total_tokens_per_step / (duration.count()));
       std::cout << "loss: " << loss << std::endl;
     }

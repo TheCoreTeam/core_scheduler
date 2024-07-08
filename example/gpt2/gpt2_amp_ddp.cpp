@@ -71,7 +71,7 @@ struct ModelConfig {
 struct TrainConfig {
   int64_t epoch = 500;
   int64_t total_token_batch_size =
-      1024 * 512;  // 524288, 2**19, about 0.5 tokens per batch
+      1024 * 32;  // 524288, 2**19, about 0.5 tokens per batch
   int64_t warmup_steps = 715;
   int64_t max_steps = -1;
   int64_t check_every_steps = 5;
@@ -627,7 +627,6 @@ void train() {
   model = std::make_unique<GPT2>(scheduler, modelConfig);
   auto loss_state = cs::compute::CrossEntropy::init(scheduler);
 
-  bool require_backward_grad_sync = true;
   cs::communication::AllReduceBucket allreduce_bucket(trainConfig.bucket_size,
                                                       cs::communication::kSUM);
 
@@ -637,9 +636,6 @@ void train() {
                                .beta1(trainConfig.beta1)
                                .beta2(trainConfig.beta2)
                                .weight_decay(trainConfig.weight_decay)};
-
-  LRScheduler lr_scheduler(trainConfig.warmup_steps, trainConfig.max_lr,
-                           trainConfig.max_steps, trainConfig.min_lr);
 
   std::unordered_map<std::string, double> training_args =
       getTrainArgs(dataset.size(), modelConfig.block_size,
@@ -658,6 +654,9 @@ void train() {
     std::cout << "=> calculated tokens per step: " << total_tokens_per_step
               << std::endl;
   }
+
+  LRScheduler lr_scheduler(trainConfig.warmup_steps, trainConfig.max_lr,
+                           (int)max_steps, trainConfig.min_lr);
 
   ProgressBar progressBar(max_steps);
   for (int step = 0; step < max_steps; ++step) {
@@ -690,7 +689,7 @@ void train() {
       // Backward
       grad_output = cs::compute::CrossEntropy::backward(scheduler, loss_state);
       model->backward(scheduler, comm, allreduce_bucket, grad_output,
-                      require_backward_grad_sync);
+                      micro_step == (int)grad_accum_steps - 1);
 
       // Wait in micro steps
       auto wait_step = step * (int)grad_accum_steps + micro_step;
@@ -705,9 +704,8 @@ void train() {
 
     // Optimizer step
     opt->step(scheduler);
+    opt->set_lr(lr_scheduler.get_lr(step));
     opt->zero_grad(scheduler);
-    // TODO: Add lr scheduler step
-    lr_scheduler.get_lr(step);
 
     // Wait in steps
     if (trainConfig.wait_every_step != -1 &&
@@ -727,7 +725,7 @@ void train() {
       printf(
           "step %5d | lr %.4e | grad norm: %.4f | dt: %.2fs | tok/sec: "
           "%.2f\n",
-          step + 1, lr_scheduler.get_lr(step), 1.0, duration.count(),
+          step + 1, opt->get_lr(), 1.0, duration.count(),
           total_tokens_per_step / (duration.count()));
       std::cout << "loss: " << loss << std::endl;
     }
