@@ -1,6 +1,6 @@
 # DLLM.py
 
-This is a toy project to validate the ideas of DLLM.cpp, good for learning and playing.
+This is a toy project to validate the ideas of CoreScheduler, good for learning and playing.
 
 ## Usage
 
@@ -14,8 +14,8 @@ please refer to [https://pytorch.org/get-started/locally/] for pytorch installat
 
 Download this project:
 ```bash
-git clone git@github.com:TheCoreTeam/DLLM.cpp.git
-cd DLLM.cpp
+git clone git@github.com:TheCoreTeam/core_scheduler.git
+cd core_scheduler
 git checkout dev-dllm.py
 ```
 
