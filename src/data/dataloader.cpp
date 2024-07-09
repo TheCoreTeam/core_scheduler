@@ -311,6 +311,9 @@ LlmDataLoader::LlmDataLoader(const LlmDataset &dataset, int64_t batchSize,
                  "Wrong config, maybe batch size is too large");
   const auto batchEachWorker = batchEachProcess / numWorkers;
   const int64_t totalIterPerWorker = batchEachProcess / batchSize / numWorkers;
+  CS_ASSERT_TRUE(
+      numWorkers <= static_cast<int64_t>(impl->dataset_.files().size()),
+      "Too many workers");
   for (int64_t i = 0; i < numWorkers; ++i) {
     impl->startBarrier_.emplace_back(std::make_shared<std::barrier<>>(2));
     impl->endBarrier_.emplace_back(std::make_shared<std::barrier<>>(2));
@@ -334,7 +337,7 @@ LlmDataLoader::LlmDataLoader(const LlmDataset &dataset, int64_t batchSize,
     size_t endFileIdx;
     for (endFileIdx = startFileIdxOfThisThread; endFileIdx < fileOffsets.size();
          ++endFileIdx) {
-      if (fileOffsets[endFileIdx + 1] >
+      if (fileOffsets[endFileIdx + 1] >=
           batchOffsetOfThisThread + batchEachWorker) {
         break;
       }
@@ -405,7 +408,7 @@ LlmDataLoader::LlmDataLoader(const LlmDataset &dataset,
     size_t endFileIdx;
     for (endFileIdx = startFileIdxOfThisThread; endFileIdx < fileOffsets.size();
          ++endFileIdx) {
-      if (fileOffsets[endFileIdx + 1] >
+      if (fileOffsets[endFileIdx + 1] >=
           batchOffsetOfThisProcess + batchEachWorker) {
         break;
       }
