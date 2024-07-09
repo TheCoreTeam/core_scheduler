@@ -26,11 +26,11 @@ AdamWImpl::AdamWImpl(const Scheduler& scheduler, const Module& module,
     states.insert(kv.key(), state);
   }
   states_ = states;
-  module_ = module.shared_from_this();
+  module_ = module.weak_from_this();
 }
 
 void AdamWImpl::step(const Scheduler& scheduler) const {
-  auto named_increments = module_->named_increments();
+  auto named_increments = module_.lock()->named_increments();
   for (const auto& kv : states_) {
     auto& increment = named_increments[kv.key()];
     optimizer::AdamW::step(scheduler, kv.value(), increment.parameter,

@@ -29,12 +29,12 @@ AmpAdamWImpl::AmpAdamWImpl(const Scheduler& scheduler, const Module& module,
     states.insert(kv.key(), state);
   }
   states_ = states;
-  module_ = module.shared_from_this();
+  module_ = module.weak_from_this();
 }
 
 void AmpAdamWImpl::step(const Scheduler& scheduler) const {
-  const auto named_increments = module_->named_increments();
-  for (auto states = module_->named_states(); auto& kvStates : states) {
+  const auto named_increments = module_.lock()->named_increments();
+  for (auto states = module_.lock()->named_states(); auto& kvStates : states) {
     auto ampState =
         std::dynamic_pointer_cast<module::AmpState>(kvStates.value());
     CS_ASSERT_TRUE(ampState != nullptr, "The module is not an AMP module");
