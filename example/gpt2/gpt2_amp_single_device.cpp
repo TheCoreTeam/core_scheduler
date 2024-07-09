@@ -89,10 +89,8 @@ struct TrainConfig {
 };
 
 struct DataConfig {
-  const std::string path =
-      "/run/media/jie/Data/BaiduNetdiskDownload/fineweb-edu-10BT/train/data/"
-      "part";
-  int64_t num_workers = 1;
+  const std::string path = "../example/dataset_path/train/";
+  int64_t num_workers = 4;
   bool shuffle = false;
 };
 
