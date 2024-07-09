@@ -45,7 +45,7 @@ struct CS_API OptimizerModule : std::enable_shared_from_this<OptimizerModule> {
  protected:
   OrderedDict<std::string, std::shared_ptr<OptimizerState>> states_;
 
-  std::shared_ptr<const Module> module_;
+  std::weak_ptr<const Module> module_;
 };
 }  // namespace cs::module
 
