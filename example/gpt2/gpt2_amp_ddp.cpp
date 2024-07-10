@@ -597,7 +597,7 @@ void train() {
   TrainConfig trainConfig;
   DataConfig dataConfig;
   torch::manual_seed(trainConfig.seed);
-  std::unique_ptr<GPT2> model;
+  std::shared_ptr<GPT2> model;
   cs::Tensor loss;
   cs::Tensor output, grad_output;
   const cs::communication::Comm comm =
@@ -624,7 +624,7 @@ void train() {
   if (master_process) {
     std::cout << "Init" << std::endl;
   }
-  model = std::make_unique<GPT2>(scheduler, modelConfig);
+  model = std::make_shared<GPT2>(scheduler, modelConfig);
   auto loss_state = cs::compute::CrossEntropy::init(scheduler);
 
   cs::communication::AllReduceBucket allreduce_bucket(trainConfig.bucket_size,
