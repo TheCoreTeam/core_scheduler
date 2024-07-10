@@ -51,13 +51,13 @@
 #include "threading/dynamic_scheduler.h"
 
 struct ModelConfig {
-  int64_t batch_size = 16;
+  int64_t batch_size = 2;
   const int64_t block_size = 1024;
   const int64_t vocab_size = 50257;
   const int64_t pad_size = 50304;  // pad vocab_size to be more efficient
-  const int64_t n_embd = 768;      // 2048
-  const int64_t n_head = 12;       // 32
-  const int64_t n_layer = 12;      // 22
+  const int64_t n_embd = 32;       // 2048
+  const int64_t n_head = 2;        // 32
+  const int64_t n_layer = 1;       // 22
   const bool use_bias = false;
   const double dropout = 0.0;
   const double epsilon = 1e-5;
@@ -89,10 +89,8 @@ struct TrainConfig {
 };
 
 struct DataConfig {
-  const std::string path =
-      "/run/media/jie/Data/BaiduNetdiskDownload/fineweb-edu-10BT/train/data/"
-      "part";
-  int64_t num_workers = 1;
+  const std::string path = "../example/dataset_path/train/";
+  int64_t num_workers = 4;
   bool shuffle = false;
 };
 
@@ -581,7 +579,7 @@ void train() {
   std::chrono::time_point<std::chrono::high_resolution_clock> time_start,
       time_stop;
   std::chrono::duration<double> duration;
-  std::unique_ptr<GPT2> model;
+  std::shared_ptr<GPT2> model;
   cs::Tensor loss;
   const torch::TensorOptions option =
       torch::TensorOptions().dtype(torch::kInt64).device(modelConfig.device);
@@ -599,7 +597,7 @@ void train() {
   if (master_process) {
     std::cout << "Init" << std::endl;
   }
-  model = std::make_unique<GPT2>(scheduler, modelConfig);
+  model = std::make_shared<GPT2>(scheduler, modelConfig);
 
   auto loss_state = cs::compute::CrossEntropy::init(scheduler);
 
