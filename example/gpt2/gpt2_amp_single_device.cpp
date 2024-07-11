@@ -89,10 +89,8 @@ struct TrainConfig {
 };
 
 struct DataConfig {
-  const std::string path =
-      "/run/media/jie/Data/BaiduNetdiskDownload/fineweb-edu-10BT/train/data/"
-      "part";
-  int64_t num_workers = 1;
+  const std::string path = "../example/dataset_path/train/";
+  int64_t num_workers = 4;
   bool shuffle = false;
 };
 
@@ -581,7 +579,7 @@ void train() {
   std::chrono::time_point<std::chrono::high_resolution_clock> time_start,
       time_stop;
   std::chrono::duration<double> duration;
-  std::unique_ptr<GPT2> model;
+  std::shared_ptr<GPT2> model;
   cs::Tensor loss;
   const torch::TensorOptions option =
       torch::TensorOptions().dtype(torch::kInt64).device(modelConfig.device);
@@ -599,7 +597,7 @@ void train() {
   if (master_process) {
     std::cout << "Init" << std::endl;
   }
-  model = std::make_unique<GPT2>(scheduler, modelConfig);
+  model = std::make_shared<GPT2>(scheduler, modelConfig);
 
   auto loss_state = cs::compute::CrossEntropy::init(scheduler);
 
