@@ -51,13 +51,13 @@
 #include "threading/dynamic_scheduler.h"
 
 struct ModelConfig {
-  int64_t batch_size = 2;
+  int64_t batch_size = 16;
   const int64_t block_size = 1024;
   const int64_t vocab_size = 50257;
   const int64_t pad_size = 50304;  // pad vocab_size to be more efficient
-  const int64_t n_embd = 32;       // 2048
-  const int64_t n_head = 2;        // 32
-  const int64_t n_layer = 1;       // 22
+  const int64_t n_embd = 768;      // 2048
+  const int64_t n_head = 12;       // 32
+  const int64_t n_layer = 12;      // 22
   const bool use_bias = false;
   const double dropout = 0.0;
   const double epsilon = 1e-5;
