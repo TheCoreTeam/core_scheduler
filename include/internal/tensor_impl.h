@@ -43,6 +43,13 @@ struct ReadOnlyTensor::Impl {
   auto &event() { return event_; }
   auto &event() const { return event_; }
 
+  struct {
+    bool enable = false;
+    c10::ScalarType dtype;
+  } auto_cast_;
+  auto &auto_cast() { return auto_cast_; }
+  auto &auto_cast() const { return auto_cast_; }
+
   Impl() = default;
 
   [[nodiscard]] auto options() const { return tensor_.options(); }

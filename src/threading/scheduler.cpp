@@ -26,7 +26,8 @@ namespace cs {
 const std::shared_ptr<Scheduler::Impl>& Scheduler::impl() const {
   return impl_;
 }
-int64_t Scheduler::get_device_rank() const { return impl()->deviceRank(); }
+
+int64_t Scheduler::get_device_rank() const { return impl()->device_rank(); }
 
 Scheduler::Impl::Impl(const int64_t deviceRank) : device_rank_{deviceRank} {}
 
@@ -34,5 +35,9 @@ void Scheduler::Impl::submit(Task&& task) {
   CS_ASSERT_TRUE(false, "Wrong task - Scheduler pair");
 }
 
-int64_t Scheduler::Impl::deviceRank() const { return device_rank_; }
+void Scheduler::Impl::submit_to_all(Task&& task) {
+  CS_ASSERT_TRUE(false, "Wrong task - Scheduler pair");
+}
+
+int64_t Scheduler::Impl::device_rank() const { return device_rank_; }
 }  // namespace cs

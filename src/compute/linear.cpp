@@ -19,6 +19,7 @@
 #include <c10/util/Exception.h>
 // Header Order Protection
 
+#include <ATen/autocast_mode.h>
 #include <torch/nn/functional/linear.h>
 #include <torch/nn/init.h>
 
@@ -163,6 +164,17 @@ Tensor Linear::forward(const Scheduler &scheduler,
                     std::vector<ReadOnlyTensor> input /* input, weight, bias */)
           : Task::Impl{std::move(output), std::move(input), kCompute} {}
       void operator()() const override {
+        if (at::autocast::is_enabled()) {
+          input()[0].impl()->auto_cast().enable = true;
+          input()[0].impl()->auto_cast().dtype =
+              at::autocast::get_autocast_gpu_dtype();
+          input()[1].impl()->auto_cast().enable = true;
+          input()[1].impl()->auto_cast().dtype =
+              at::autocast::get_autocast_gpu_dtype();
+          input()[2].impl()->auto_cast().enable = true;
+          input()[2].impl()->auto_cast().dtype =
+              at::autocast::get_autocast_gpu_dtype();
+        }
         output()[0].impl()->tensor() =
             at::linear(input()[0].impl()->tensor(), input()[1].impl()->tensor(),
                        input()[2].impl()->tensor());
@@ -183,6 +195,14 @@ Tensor Linear::forward(const Scheduler &scheduler,
                     std::vector<ReadOnlyTensor> input /* input, weight */)
           : Task::Impl{std::move(output), std::move(input), kCompute} {}
       void operator()() const override {
+        if (at::autocast::is_enabled()) {
+          input()[0].impl()->auto_cast().enable = true;
+          input()[0].impl()->auto_cast().dtype =
+              at::autocast::get_autocast_gpu_dtype();
+          input()[1].impl()->auto_cast().enable = true;
+          input()[1].impl()->auto_cast().dtype =
+              at::autocast::get_autocast_gpu_dtype();
+        }
         output()[0].impl()->tensor() = at::linear(input()[0].impl()->tensor(),
                                                   input()[1].impl()->tensor());
       }
@@ -207,8 +227,22 @@ Tensor Linear::backward_input(const Scheduler &scheduler,
                   std::vector<ReadOnlyTensor> input /* grad_output, weight */)
         : Task::Impl{std::move(output), std::move(input), kCompute} {}
     void operator()() const override {
-      output()[0].impl()->tensor() =
-          at::matmul(input()[0].impl()->tensor(), input()[1].impl()->tensor());
+      at::Tensor grad_output = input()[0].impl()->tensor(),
+                 w = input()[1].impl()->tensor();
+      if (input()[1].impl()->auto_cast().enable) {
+        if (input()[0].impl()->tensor().dtype() !=
+            input()[1].impl()->auto_cast().dtype) {
+          grad_output = at::autocast::cached_cast(
+              input()[1].impl()->auto_cast().dtype, grad_output);
+        }
+
+        if (input()[1].impl()->tensor().dtype() !=
+            input()[1].impl()->auto_cast().dtype) {
+          w = at::autocast::cached_cast(input()[1].impl()->auto_cast().dtype,
+                                        w);
+        }
+      }
+      output()[0].impl()->tensor() = at::matmul(grad_output, w);
     }
     [[nodiscard]] const char *name() const override {
       return "cs::compute::Linear::backward_input";
@@ -229,30 +263,47 @@ void Linear::backward_parameter(const Scheduler &scheduler,
                   std::vector<ReadOnlyTensor> input /* grad_output, input */)
         : Task::Impl{std::move(output), std::move(input), kCompute} {}
     void operator()() const override {
+      at::Tensor grad_output = input()[0].impl()->tensor(),
+                 x = input()[1].impl()->tensor();
+      if (input()[1].impl()->auto_cast().enable) {
+        const auto dtype = input()[1].impl()->auto_cast().dtype;
+        if (grad_output.dtype() != input()[1].impl()->auto_cast().dtype) {
+          grad_output = grad_output.to(dtype);
+          intermediate().push_back(grad_output);
+        }
+
+        if (x.dtype() != dtype) {
+          x = at::autocast::cached_cast(dtype, x);
+        }
+      }
+
       if (output()[0].impl()->tensor().defined()) {
-        const auto reshapedGradOutput = input()[0].impl()->tensor().view(
-            {-1, input()[0].impl()->tensor().size(-1)});
+        const auto reshapedGradOutput =
+            grad_output.view({-1, input()[0].impl()->tensor().size(-1)});
         const auto transposedGradOutput = reshapedGradOutput.t();
-        const auto reshapedInput = input()[1].impl()->tensor().view(
-            {-1, input()[1].impl()->tensor().size(-1)});
+        const auto reshapedInput =
+            x.view({-1, input()[1].impl()->tensor().size(-1)});
         const auto result = at::matmul(transposedGradOutput, reshapedInput);
         output()[0].impl()->tensor() += result;
-        intermediate().reserve(2);
         intermediate().push_back(transposedGradOutput);
         intermediate().push_back(result);
       } else {
-        const auto reshapedGradOutput = input()[0].impl()->tensor().view(
-            {-1, input()[0].impl()->tensor().size(-1)});
+        const auto reshapedGradOutput =
+            grad_output.view({-1, input()[0].impl()->tensor().size(-1)});
         const auto transposedGradOutput = reshapedGradOutput.t();
-        const auto reshapedInput = input()[1].impl()->tensor().view(
-            {-1, input()[1].impl()->tensor().size(-1)});
-        const auto result = at::matmul(transposedGradOutput, reshapedInput);
+        const auto reshapedInput =
+            x.view({-1, input()[1].impl()->tensor().size(-1)});
+        auto result = at::matmul(transposedGradOutput, reshapedInput);
+        if (input()[1].impl()->auto_cast().enable) {
+          intermediate().push_back(result);
+          result = result.to(c10::kFloat);
+        }
         output()[0].impl()->tensor() = result;
         intermediate().push_back(transposedGradOutput);
       }
     }
     [[nodiscard]] const char *name() const override {
-      return "cs::compute::Linear::backward_weight";
+      return "cs::compute::Linear::backward_parameter";
     }
   };
 
@@ -260,9 +311,13 @@ void Linear::backward_parameter(const Scheduler &scheduler,
       {state->forward.grad_weight}, {grad_output, state->backward.input}})});
   if (state->args.bias) {
     struct Impl : Task::Impl {
+      const bool autocast;
+
       explicit Impl(std::vector<Tensor> output /* grad_bias */,
-                    std::vector<ReadOnlyTensor> input /* grad_output */)
-          : Task::Impl{std::move(output), std::move(input), kCompute} {}
+                    std::vector<ReadOnlyTensor> input /* grad_output */,
+                    const bool autocast)
+          : Task::Impl{std::move(output), std::move(input), kCompute},
+            autocast{autocast} {}
       void operator()() const override {
         if (output()[0].impl()->tensor().defined()) {
           const auto reshapedGradOutput = input()[0].impl()->tensor().view(
@@ -274,7 +329,12 @@ void Linear::backward_parameter(const Scheduler &scheduler,
           const auto reshapedGradOutput = input()[0].impl()->tensor().view(
               {-1, input()[0].impl()->tensor().size(-1)});
           const auto result = at::sum(reshapedGradOutput, 0);
-          output()[0].impl()->tensor() = result;
+          if (autocast) {
+            output()[0].impl()->tensor() = result.to(c10::kFloat);
+            intermediate().push_back(result);
+          } else {
+            output()[0].impl()->tensor() = result;
+          }
         }
       }
       [[nodiscard]] const char *name() const override {
@@ -283,7 +343,9 @@ void Linear::backward_parameter(const Scheduler &scheduler,
     };
 
     scheduler.impl()->submit(Task{std::make_shared<Impl>(
-        Impl{{state->forward.grad_bias}, {grad_output}})});
+        Impl{{state->forward.grad_bias},
+             {grad_output},
+             state->backward.input.impl()->auto_cast().enable})});
   }
   // decrease counter
   state->backward.input.reset();

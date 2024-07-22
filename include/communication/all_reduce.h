@@ -25,6 +25,8 @@ struct AllReduceBucket : Bucket {
 
   CS_API void push_back(const Scheduler& scheduler, const Comm& comm,
                         Tensor tensor) const;
+
+  CS_API void sync(const Scheduler &scheduler, const Comm &comm) const;
 };
 
 struct AllReduce {
