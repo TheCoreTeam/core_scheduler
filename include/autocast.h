@@ -14,10 +14,18 @@
  * limitations under the License.
  */
 
-#include "module/amp_state.h"
+#pragma once
+#include <c10/core/ScalarType.h>
 
-namespace cs::module {
-OrderedDict<std::string, Tensor> AmpState::parameters_high_precision() const {
-  return OrderedDict<std::string, Tensor>{};
-}
-}  // namespace cs::module
+#include "threading/scheduler.h"
+
+namespace cs::autocast {
+struct CS_API ContextGuard {
+  ContextGuard(const Scheduler &scheduler, const c10::ScalarType &dtype);
+
+  ~ContextGuard();
+
+ private:
+  const Scheduler &scheduler_;
+};
+}  // namespace cs::autocast

@@ -26,7 +26,9 @@ struct Scheduler::Impl {
 
   virtual void submit(Task &&task);
 
-  [[nodiscard]] int64_t deviceRank() const;
+  virtual void submit_to_all(Task &&task);
+
+  [[nodiscard]] int64_t device_rank() const;
 
  private:
   const int64_t device_rank_;
