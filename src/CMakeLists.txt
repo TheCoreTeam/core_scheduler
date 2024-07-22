@@ -34,6 +34,7 @@ set(CORE_SCHEDULER_DATASET_SRCS "")
 add_subdirectory(data)
 
 add_library(core_scheduler_core SHARED
+        autocast.cpp
         logger.cpp
         tensor.cpp
         random.cpp
