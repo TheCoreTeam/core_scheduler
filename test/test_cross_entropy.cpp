@@ -21,6 +21,7 @@
 #include <cuda_fp16.h>
 #include <gtest/gtest.h>
 
+#include "autocast.h"
 #include "compute/cross_entropy.h"
 #include "compute/utils.h"
 #include "memory/to_torch.h"
@@ -42,6 +43,12 @@ struct TypeToTorch<nv_half> {
 };
 
 template <>
+struct TypeToTorch<__nv_bfloat16> {
+  using Type = c10::BFloat16;
+  static const at::ScalarType type = at::kBFloat16;
+};
+
+template <>
 struct TypeToTorch<double> {
   using Type = double;
   static const at::ScalarType type = at::kDouble;
@@ -53,6 +60,9 @@ class TestCrossEntropyFixture : public ::testing::Test {
 
   template <typename T>
   void Test(int size);
+
+  template <typename T>
+  void TestAmp(int size);
 };
 
 template <typename T>
@@ -87,3 +97,43 @@ void TestCrossEntropyFixture::Test(const int size) {
 
 TEST_F(TestCrossEntropyFixture, TestF32) { Test<float>(128); }
 TEST_F(TestCrossEntropyFixture, TestF64) { Test<double>(128); }
+
+template <typename T>
+void TestCrossEntropyFixture::TestAmp(const int size) {
+  at::manual_seed(1);
+  const at::Device device(at::kCUDA, 0);
+  const at::ScalarType dtype = TypeToTorch<T>::type;
+  const auto option = at::TensorOptions().dtype(dtype).device(device);
+  auto x =
+      cs::compute::Utils::rand(scheduler, {size, 2 * size, 3 * size}, option);
+  x = cs::compute::Utils::view(scheduler, x, {-1, x.size(-1)});
+  auto target = cs::compute::Utils::randint(
+      scheduler, 0, 3 * size, {size, 2 * size}, option.dtype(at::kLong));
+  target = cs::compute::Utils::view(scheduler, target, {-1});
+  auto state = cs::compute::CrossEntropy::init(scheduler);
+
+  at::Tensor loss_ref_torch, loss_torch, x_torch;
+  {
+    cs::autocast::ContextGuard guard{scheduler, dtype};
+    auto loss = cs::compute::CrossEntropy::forward(scheduler, state, x, target);
+    loss_ref_torch = cs::memory::to_torch(scheduler, loss);
+    loss.wait();
+    x_torch = cs::memory::to_torch(scheduler, x);
+    x.wait();
+    auto target_torch = cs::memory::to_torch(scheduler, target);
+    target.wait();
+    x_torch = x_torch.to(at::kFloat);
+    x_torch.set_requires_grad(true);
+    loss_torch = at::cross_entropy_loss(x_torch, target_torch);
+  }
+
+  auto dx = cs::compute::CrossEntropy::backward(scheduler, state);
+  auto dx_torch = cs::memory::to_torch(scheduler, dx);
+  dx.wait();
+  loss_torch.backward();
+  ASSERT_TRUE(at::allclose(loss_torch, loss_ref_torch));
+  ASSERT_TRUE(at::allclose(x_torch.grad().to(at::kFloat), dx));
+}
+
+TEST_F(TestCrossEntropyFixture, TestAmpF16) { TestAmp<half>(128); }
+TEST_F(TestCrossEntropyFixture, TestAmpBF16) { TestAmp<__nv_bfloat16>(128); }
