@@ -22,6 +22,7 @@
 namespace cs {
 struct Task::Impl {
   enum Type {
+    kConfig,
     kCompute,
     kLoader,
     kMemcpy,

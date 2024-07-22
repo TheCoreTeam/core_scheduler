@@ -63,11 +63,6 @@ void TestEmbedding::TestRoutine(const double tol_forward,
   const int MaxT = 1024;
   const int vocab = 4095;
   const int d = 512;
-  //  const int B = 1;
-  //  const int T = 8;
-  //  const int MaxT = 8;
-  //  const int vocab = 16;
-  //  const int d = 8;
 
   at::Device device = at::kCUDA;
   torch::Dtype dtype = TypeToTorch<Element>::type;

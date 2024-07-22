@@ -19,6 +19,7 @@
 #include <c10/util/Exception.h>
 // Header Order Protection
 
+#include <ATen/autocast_mode.h>
 #include <ATen/ops/empty.h>
 #include <ATen/ops/layer_norm.h>
 #include <ATen/ops/native_layer_norm.h>
@@ -166,6 +167,19 @@ Tensor LayerNorm::forward(const Scheduler& scheduler,
                                   args.normalized_shape,
                                   input()[1].impl()->tensor(),
                                   input()[2].impl()->tensor(), args.eps);
+        if (at::autocast::is_enabled()) {
+          const auto dtype = at::autocast::get_autocast_gpu_dtype();
+          input()[0].impl()->auto_cast().enable = true;
+          input()[0].impl()->auto_cast().dtype = dtype;
+          input()[1].impl()->auto_cast().enable = true;
+          input()[1].impl()->auto_cast().dtype = dtype;
+          output()[0].impl()->auto_cast().enable = true;
+          output()[0].impl()->auto_cast().dtype = dtype;
+          output()[1].impl()->auto_cast().enable = true;
+          output()[1].impl()->auto_cast().dtype = dtype;
+          output()[2].impl()->auto_cast().enable = true;
+          output()[2].impl()->auto_cast().dtype = dtype;
+        }
       }
       [[nodiscard]] const char* name() const override {
         return "cs::compute::LayerNorm::forward";
@@ -192,6 +206,19 @@ Tensor LayerNorm::forward(const Scheduler& scheduler,
             at::native_layer_norm(input()[0].impl()->tensor(),
                                   args.normalized_shape,
                                   input()[1].impl()->tensor(), {}, args.eps);
+        if (at::autocast::is_enabled()) {
+          const auto dtype = at::autocast::get_autocast_gpu_dtype();
+          input()[0].impl()->auto_cast().enable = true;
+          input()[0].impl()->auto_cast().dtype = dtype;
+          input()[1].impl()->auto_cast().enable = true;
+          input()[1].impl()->auto_cast().dtype = dtype;
+          output()[0].impl()->auto_cast().enable = true;
+          output()[0].impl()->auto_cast().dtype = dtype;
+          output()[1].impl()->auto_cast().enable = true;
+          output()[1].impl()->auto_cast().dtype = dtype;
+          output()[2].impl()->auto_cast().enable = true;
+          output()[2].impl()->auto_cast().dtype = dtype;
+        }
       }
       [[nodiscard]] const char* name() const override {
         return "cs::compute::LayerNorm::forward";
@@ -216,7 +243,7 @@ Tensor LayerNorm::backward(const Scheduler& scheduler,
   Task task{nullptr};
   if (state->args.bias) {
     struct Impl : Task::Impl {
-      State::Args args;
+      const State::Args args;
 
       explicit Impl(
           std::vector<Tensor> output /* grad_input, grad_weight, grad_bias */,
@@ -226,11 +253,15 @@ Tensor LayerNorm::backward(const Scheduler& scheduler,
           : Task::Impl{std::move(output), std::move(input), kCompute},
             args{args} {}
       void operator()() const override {
+        at::Tensor x = input()[1].impl()->tensor();
+        if (input()[1].impl()->auto_cast().enable && x.dtype() != c10::kFloat) {
+          x = at::autocast::cached_cast(c10::kFloat, x);
+        }
         auto [dx, dw, db] = at::native_layer_norm_backward(
-            input()[0].impl()->tensor(), input()[1].impl()->tensor(),
-            args.normalized_shape, input()[2].impl()->tensor(),
-            input()[3].impl()->tensor(), input()[4].impl()->tensor(),
-            input()[5].impl()->tensor(), {true, true, true});
+            input()[0].impl()->tensor(), x, args.normalized_shape,
+            input()[2].impl()->tensor(), input()[3].impl()->tensor(),
+            input()[4].impl()->tensor(), input()[5].impl()->tensor(),
+            {true, true, true});
         output()[0].impl()->tensor() = dx;
         if (output()[1].impl()->tensor().defined()) {
           output()[1].impl()->tensor() += dw;
@@ -258,7 +289,7 @@ Tensor LayerNorm::backward(const Scheduler& scheduler,
              state->args})};
   } else {
     struct Impl : Task::Impl {
-      State::Args args;
+      const State::Args args;
 
       explicit Impl(std::vector<Tensor> output /* grad_input, grad_weight */,
                     std::vector<ReadOnlyTensor>
@@ -267,11 +298,14 @@ Tensor LayerNorm::backward(const Scheduler& scheduler,
           : Task::Impl{std::move(output), std::move(input), kCompute},
             args{args} {}
       void operator()() const override {
+        at::Tensor x = input()[1].impl()->tensor();
+        if (input()[1].impl()->auto_cast().enable && x.dtype() != c10::kFloat) {
+          x = at::autocast::cached_cast(c10::kFloat, x);
+        }
         auto [dx, dw, db] = at::native_layer_norm_backward(
-            input()[0].impl()->tensor(), input()[1].impl()->tensor(),
-            args.normalized_shape, input()[2].impl()->tensor(),
-            input()[3].impl()->tensor(), input()[4].impl()->tensor(), {},
-            {true, true, false});
+            input()[0].impl()->tensor(), x, args.normalized_shape,
+            input()[2].impl()->tensor(), input()[3].impl()->tensor(),
+            input()[4].impl()->tensor(), {}, {true, true, false});
         output()[0].impl()->tensor() = dx;
         if (output()[1].impl()->tensor().defined()) {
           output()[1].impl()->tensor() += dw;

@@ -14,19 +14,13 @@
 
 set(CORE_SCHEDULER_MODULE_SRCS
         ${CMAKE_CURRENT_SOURCE_DIR}/state.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/amp_state.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/module.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/module.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/linear.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/amp_linear.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/gelu_linear.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/amp_gelu_linear.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/layer_norm.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/amp_layer_norm.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/embedding.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/amp_embedding.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/optimizer_module.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/adamw.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/amp_adamw.cpp
 )
 set(CORE_SCHEDULER_MODULE_SRCS ${CORE_SCHEDULER_MODULE_SRCS} PARENT_SCOPE)

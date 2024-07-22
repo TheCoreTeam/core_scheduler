@@ -105,7 +105,7 @@ struct Impl_ final : Scheduler::Impl {
 
   void submit(Task &&task) override;
 
-  void submit(const Task &task) = delete;
+  void submit_to_all(Task &&task) override;
 
  private:
   int8_t threadCommIdx_;
@@ -369,6 +369,20 @@ void Impl_::submit(Task &&task) {
     lastOutput_[streamIdx].push_back(t.impl().get());
   }
   endBarrier_[streamIdx]->arrive_and_wait();
+}
+
+void Impl_::submit_to_all(Task &&task) {
+  for (std::size_t streamIdx = 0; streamIdx < taskQueue_.size(); ++streamIdx) {
+    taskQueue_[streamIdx]->push(task);
+    (void)startBarrier_[streamIdx]->arrive();
+    if (task.impl()->type() != Task::Impl::kConfig) {
+      lastOutput_[streamIdx].clear();
+      for (auto &output = task.output(); auto &t : output) {
+        lastOutput_[streamIdx].push_back(t.impl().get());
+      }
+    }
+    endBarrier_[streamIdx]->arrive_and_wait();
+  }
 }
 
 DynamicScheduler::DynamicScheduler(int localRank) {
