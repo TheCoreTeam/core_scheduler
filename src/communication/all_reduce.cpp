@@ -75,6 +75,13 @@ void AllReduceBucket::push_back(const Scheduler &scheduler, const Comm &comm,
   }
 }
 
+void AllReduceBucket::sync(const Scheduler &scheduler, const Comm &comm) const {
+  const auto impl = std::dynamic_pointer_cast<AllReduceBucketImpl>(impl_);
+  AllReduce::run_inplace(scheduler, comm, impl->buffer, impl->operation);
+  impl->buffer.clear();
+  impl->currentByte = 0;
+}
+
 void AllReduce::run_inplace(const Scheduler &scheduler, const Comm &comm,
                             const std::vector<Tensor> &tensors,
                             const Operation operation) {
