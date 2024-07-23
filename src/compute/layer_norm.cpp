@@ -243,15 +243,26 @@ Tensor LayerNorm::backward(const Scheduler& scheduler,
           : Task::Impl{std::move(output), std::move(input), kCompute},
             args{args} {}
       void operator()() const override {
+        at::Tensor grad_output = input()[0].impl()->tensor();
         at::Tensor x = input()[1].impl()->tensor();
-        if (input()[1].impl()->auto_cast().enable && x.dtype() != c10::kFloat) {
-          x = at::autocast::cached_cast(c10::kFloat, x);
+        if (input()[1].impl()->auto_cast().enable) {
+          if (x.dtype() != c10::kFloat) {
+            x = at::autocast::cached_cast(c10::kFloat, x);
+          }
+          if (grad_output.dtype() != c10::kFloat) {
+            intermediate().resize(3);
+            intermediate().push_back(grad_output);
+            grad_output = grad_output.to(c10::kFloat);
+          } else {
+            intermediate().resize(2);
+          }
+        } else {
+          intermediate().resize(2);
         }
         auto [dx, dw, db] = at::native_layer_norm_backward(
-            input()[0].impl()->tensor(), x, args.normalized_shape,
-            input()[2].impl()->tensor(), input()[3].impl()->tensor(),
-            input()[4].impl()->tensor(), input()[5].impl()->tensor(),
-            {true, true, true});
+            grad_output, x, args.normalized_shape, input()[2].impl()->tensor(),
+            input()[3].impl()->tensor(), input()[4].impl()->tensor(),
+            input()[5].impl()->tensor(), {true, true, true});
         output()[0].impl()->tensor() = dx;
         if (output()[1].impl()->tensor().defined()) {
           output()[1].impl()->tensor() += dw;
@@ -263,7 +274,6 @@ Tensor LayerNorm::backward(const Scheduler& scheduler,
         } else {
           output()[2].impl()->tensor() = db;
         }
-        intermediate().resize(2);
         intermediate().push_back(dw);
         intermediate().push_back(db);
       }
@@ -288,21 +298,32 @@ Tensor LayerNorm::backward(const Scheduler& scheduler,
           : Task::Impl{std::move(output), std::move(input), kCompute},
             args{args} {}
       void operator()() const override {
+        at::Tensor grad_output = input()[0].impl()->tensor();
         at::Tensor x = input()[1].impl()->tensor();
-        if (input()[1].impl()->auto_cast().enable && x.dtype() != c10::kFloat) {
-          x = at::autocast::cached_cast(c10::kFloat, x);
+        if (input()[1].impl()->auto_cast().enable) {
+          if (x.dtype() != c10::kFloat) {
+            x = at::autocast::cached_cast(c10::kFloat, x);
+          }
+          if (grad_output.dtype() != c10::kFloat) {
+            intermediate().resize(2);
+            intermediate().push_back(grad_output);
+            grad_output = grad_output.to(c10::kFloat);
+          } else {
+            intermediate().resize(1);
+          }
+        } else {
+          intermediate().resize(1);
         }
         auto [dx, dw, db] = at::native_layer_norm_backward(
-            input()[0].impl()->tensor(), x, args.normalized_shape,
-            input()[2].impl()->tensor(), input()[3].impl()->tensor(),
-            input()[4].impl()->tensor(), {}, {true, true, false});
+            grad_output, x, args.normalized_shape, input()[2].impl()->tensor(),
+            input()[3].impl()->tensor(), input()[4].impl()->tensor(), {},
+            {true, true, false});
         output()[0].impl()->tensor() = dx;
         if (output()[1].impl()->tensor().defined()) {
           output()[1].impl()->tensor() += dw;
         } else {
           output()[1].impl()->tensor() = dw;
         }
-        intermediate().resize(1);
         intermediate().push_back(dw);
       }
       [[nodiscard]] const char* name() const override {
