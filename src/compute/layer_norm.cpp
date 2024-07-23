@@ -170,15 +170,10 @@ Tensor LayerNorm::forward(const Scheduler& scheduler,
         if (at::autocast::is_enabled()) {
           const auto dtype = at::autocast::get_autocast_gpu_dtype();
           input()[0].impl()->auto_cast().enable = true;
-          input()[0].impl()->auto_cast().dtype = dtype;
           input()[1].impl()->auto_cast().enable = true;
-          input()[1].impl()->auto_cast().dtype = dtype;
           output()[0].impl()->auto_cast().enable = true;
-          output()[0].impl()->auto_cast().dtype = dtype;
           output()[1].impl()->auto_cast().enable = true;
-          output()[1].impl()->auto_cast().dtype = dtype;
           output()[2].impl()->auto_cast().enable = true;
-          output()[2].impl()->auto_cast().dtype = dtype;
         }
       }
       [[nodiscard]] const char* name() const override {
@@ -209,15 +204,10 @@ Tensor LayerNorm::forward(const Scheduler& scheduler,
         if (at::autocast::is_enabled()) {
           const auto dtype = at::autocast::get_autocast_gpu_dtype();
           input()[0].impl()->auto_cast().enable = true;
-          input()[0].impl()->auto_cast().dtype = dtype;
           input()[1].impl()->auto_cast().enable = true;
-          input()[1].impl()->auto_cast().dtype = dtype;
           output()[0].impl()->auto_cast().enable = true;
-          output()[0].impl()->auto_cast().dtype = dtype;
           output()[1].impl()->auto_cast().enable = true;
-          output()[1].impl()->auto_cast().dtype = dtype;
           output()[2].impl()->auto_cast().enable = true;
-          output()[2].impl()->auto_cast().dtype = dtype;
         }
       }
       [[nodiscard]] const char* name() const override {

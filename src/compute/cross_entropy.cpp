@@ -53,6 +53,7 @@ Tensor CrossEntropy::forward(const Scheduler &scheduler,
           !input()[0].impl()->tensor().defined()
               ? c10::optional<at::Tensor>{}
               : c10::optional{input()[0].impl()->tensor()}};
+      // TODO(Jie): maybe change dtype for amp?
       output()[0].impl()->tensor() =
           at::log_softmax(input()[1].impl()->tensor(), 1);
       std::make_tuple(std::ref(output()[1].impl()->tensor()),
@@ -98,6 +99,7 @@ Tensor CrossEntropy::backward(const Scheduler &scheduler,
               ? c10::optional<at::Tensor>{}
               : c10::optional{input()[0].impl()->tensor()}};
 
+      // TODO(Jie): maybe change dtype for amp?
       const auto dnll = at::nll_loss_backward(
           at::ones_like(input()[1].impl()->tensor()),
           input()[2].impl()->tensor(), input()[3].impl()->tensor(), weight_,
