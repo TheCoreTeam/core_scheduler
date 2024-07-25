@@ -31,14 +31,14 @@ struct CS_API Module : std::enable_shared_from_this<Module> {
   using ConstNamedModuleApplyFunction =
       std::function<void(const std::string&, const Module&)>;
 
-  void apply_to_submodules(
-      const NamedModulePointerApplyFunction& function,
-      const std::string& name_prefix = std::string()) const;
+  void apply_to_submodules(const NamedModulePointerApplyFunction& function,
+                           const std::string& name_prefix = std::string(),
+                           std::size_t depth = 0) const;
 
   void apply(const ConstNamedModuleApplyFunction& function,
              const std::string& name_prefix = {}) const;
 
-  void register_state(std::string name, std::shared_ptr<State> state);
+  void register_state(std::shared_ptr<State> state);
 
   template <typename ModuleType>
   std::shared_ptr<ModuleType> register_module(
@@ -48,8 +48,7 @@ struct CS_API Module : std::enable_shared_from_this<Module> {
   std::shared_ptr<ModuleType> register_module(
       std::string name, torch::nn::ModuleHolder<ModuleType> module_holder);
 
-  OrderedDict<std::string, std::shared_ptr<State>> named_states(
-      bool recurse = true) const;
+  OrderedDict<std::string, std::shared_ptr<State>> named_states() const;
 
   OrderedDict<std::string, Tensor> named_parameters(bool recurse = true) const;
 
@@ -65,7 +64,7 @@ struct CS_API Module : std::enable_shared_from_this<Module> {
  protected:
   OrderedDict<std::string, std::shared_ptr<Module>> children_;
 
-  OrderedDict<std::string, std::shared_ptr<State>> states_;
+  std::shared_ptr<State> state_;
 };
 
 template <typename ModuleType>

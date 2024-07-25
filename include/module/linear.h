@@ -40,8 +40,6 @@ struct CS_API LinearImpl : Module {
 
  protected:
   LinearImpl() = default;
-
-  std::weak_ptr<compute::Linear::State> state_;
 };
 
 CS_MODULE(Linear);

@@ -21,8 +21,7 @@
 namespace cs::module {
 LinearImpl::LinearImpl(const Scheduler& scheduler, const Options& options) {
   const auto state = compute::Linear::init(scheduler, options);
-  register_state("LinearState", state);
-  state_ = state;
+  register_state(state);
 }
 
 Tensor LinearImpl::forward(const Scheduler& scheduler,
@@ -49,6 +48,6 @@ Tensor LinearImpl::backward_input(const Scheduler& scheduler,
 }
 
 std::shared_ptr<compute::Linear::State> LinearImpl::state() const {
-  return state_.lock();
+  return std::dynamic_pointer_cast<compute::Linear::State>(state_);
 }
 }  // namespace cs::module

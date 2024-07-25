@@ -40,8 +40,6 @@ struct CS_API GeluLinearImpl : Module {
 
  protected:
   GeluLinearImpl() = default;
-
-  std::weak_ptr<compute::GeluLinear::State> state_;
 };
 
 CS_MODULE(GeluLinear);
