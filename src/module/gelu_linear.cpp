@@ -22,8 +22,7 @@ namespace cs::module {
 GeluLinearImpl::GeluLinearImpl(const Scheduler& scheduler,
                                const Options& options) {
   const auto state = compute::GeluLinear::init(scheduler, options);
-  register_state("GeluLinearState", state);
-  state_ = state;
+  register_state(state);
 }
 
 Tensor GeluLinearImpl::forward(const Scheduler& scheduler,
@@ -50,6 +49,6 @@ Tensor GeluLinearImpl::backward_input(const Scheduler& scheduler,
 }
 
 std::shared_ptr<compute::GeluLinear::State> GeluLinearImpl::state() const {
-  return state_.lock();
+  return std::dynamic_pointer_cast<compute::GeluLinear::State>(state_);
 }
 }  // namespace cs::module

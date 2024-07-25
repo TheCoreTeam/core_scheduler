@@ -22,8 +22,7 @@ namespace cs::module {
 LayerNormImpl::LayerNormImpl(const Scheduler& scheduler,
                              const Options& options) {
   const auto state = compute::LayerNorm::init(scheduler, options);
-  register_state("LayerNormState", state);
-  state_ = state;
+  register_state(state);
 }
 
 Tensor LayerNormImpl::forward(const Scheduler& scheduler,
@@ -37,6 +36,6 @@ Tensor LayerNormImpl::backward(const Scheduler& scheduler,
 }
 
 std::shared_ptr<compute::LayerNorm::State> LayerNormImpl::state() const {
-  return state_.lock();
+  return std::dynamic_pointer_cast<compute::LayerNorm::State>(state_);
 }
 }  // namespace cs::module

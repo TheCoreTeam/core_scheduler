@@ -34,8 +34,6 @@ struct CS_API LayerNormImpl : Module {
 
  protected:
   LayerNormImpl() = default;
-
-  std::weak_ptr<compute::LayerNorm::State> state_;
 };
 
 CS_MODULE(LayerNorm);
