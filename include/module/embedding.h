@@ -34,8 +34,6 @@ struct CS_API EmbeddingImpl : Module {
 
  protected:
   EmbeddingImpl() = default;
-
-  std::weak_ptr<compute::Embedding::State> state_;
 };
 
 CS_MODULE(Embedding);

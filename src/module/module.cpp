@@ -32,11 +32,16 @@
 namespace cs::module {
 void Module::apply_to_submodules(
     const NamedModulePointerApplyFunction& function,
-    const std::string& name_prefix) const {
+    const std::string& name_prefix, const std::size_t depth) const {
   for (const auto& child : children_) {
-    auto qualified_name = fmt::format("{}.{}", name_prefix, child.key());
+    std::string qualified_name;
+    if (depth == 0) {
+      qualified_name = child.key();
+    } else {
+      qualified_name = fmt::format("{}.{}", name_prefix, child.key());
+    }
     function(qualified_name, child.value());
-    child.value()->apply_to_submodules(function, qualified_name);
+    child.value()->apply_to_submodules(function, qualified_name, depth + 1);
   }
 }
 
@@ -51,66 +56,48 @@ void Module::apply(const ConstNamedModuleApplyFunction& function,
       name_prefix);
 }
 
-OrderedDict<std::string, std::shared_ptr<State>> Module::named_states(
-    const bool recurse) const {
+OrderedDict<std::string, std::shared_ptr<State>> Module::named_states() const {
   OrderedDict<std::string, std::shared_ptr<State>> result;
-  if (!recurse) {
-    for (const auto& state : states_) {
-      result.insert(state.key(), state.value());
+  apply([&result](const std::string& name, const Module& module) {
+    if (module.state_ != nullptr) {
+      result.insert(name, module.state_);
     }
-  } else {
-    apply([&result](const std::string& name, const Module& module) {
-      for (const auto& state : module.named_states(/*recurse=*/false)) {
-        result.insert(fmt::format("{}.{}", name, state.key()), state.value());
-      }
-    });
-  }
+  });
   return result;
 }
 
 OrderedDict<std::string, Tensor> Module::named_parameters(
     const bool recurse) const {
-  auto states = named_states(recurse);
+  auto states = named_states();
   OrderedDict<std::string, Tensor> result{};
   for (const auto& pairState : states) {
-    for (auto parameters = pairState.value()->parameters();
-         const auto& pairTensor : parameters) {
-      result.insert(fmt::format("{}.{}", pairState.key(), pairTensor.key()),
-                    pairTensor.value());
-    }
+    result.update(pairState.value()->parameters());
   }
   return result;
 }
 
-OrderedDict<std::string, Tensor> Module::named_gradients(bool recurse) const {
-  auto states = named_states(recurse);
+OrderedDict<std::string, Tensor> Module::named_gradients(
+    const bool recurse) const {
+  auto states = named_states();
   OrderedDict<std::string, Tensor> result{};
   for (const auto& pairState : states) {
-    for (auto gradients = pairState.value()->gradients();
-         const auto& pairTensor : gradients) {
-      result.insert(fmt::format("{}.{}", pairState.key(), pairTensor.key()),
-                    pairTensor.value());
-    }
+    result.update(pairState.value()->gradients());
   }
   return result;
 }
 
 OrderedDict<std::string, State::Increment> Module::named_increments(
-    bool recurse) const {
-  auto states = named_states(recurse);
+    const bool recurse) const {
+  auto states = named_states();
   OrderedDict<std::string, State::Increment> result{};
   for (const auto& pairState : states) {
-    for (auto increments = pairState.value()->increments();
-         const auto& pairTensor : increments) {
-      result.insert(fmt::format("{}.{}", pairState.key(), pairTensor.key()),
-                    pairTensor.value());
-    }
+    result.update(pairState.value()->increments());
   }
   return result;
 }
 
 void Module::zero_grad() const {
-  auto states = named_states(true);
+  auto states = named_states();
   OrderedDict<std::string, State::Increment> result{};
   for (const auto& kvState : states) {
     kvState.value()->zero_grad();
@@ -124,8 +111,9 @@ void Module::to(TensorOptions options) const {
   }
 }
 
-void Module::register_state(std::string name, std::shared_ptr<State> state) {
-  states_.insert(std::move(name), std::move(state));
+void Module::register_state(std::shared_ptr<State> state) {
+  CS_ASSERT_TRUE(state_ == nullptr, "one module can only register state once");
+  state_ = std::move(state);
 }
 }  // namespace cs::module
 

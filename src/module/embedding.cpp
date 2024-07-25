@@ -22,8 +22,7 @@ namespace cs::module {
 EmbeddingImpl::EmbeddingImpl(const Scheduler& scheduler,
                              const Options& options) {
   const auto state = compute::Embedding::init(scheduler, options);
-  register_state("EmbeddingState", state);
-  state_ = state;
+  register_state(state);
 }
 
 Tensor EmbeddingImpl::forward(const Scheduler& scheduler,
@@ -37,6 +36,6 @@ void EmbeddingImpl::backward(const Scheduler& scheduler,
 }
 
 std::shared_ptr<compute::Embedding::State> EmbeddingImpl::state() const {
-  return state_.lock();
+  return std::dynamic_pointer_cast<compute::Embedding::State>(state_);
 }
 }  // namespace cs::module
