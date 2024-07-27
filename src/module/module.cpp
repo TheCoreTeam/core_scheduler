@@ -71,7 +71,10 @@ OrderedDict<std::string, Tensor> Module::named_parameters(
   auto states = named_states();
   OrderedDict<std::string, Tensor> result{};
   for (const auto& pairState : states) {
-    result.update(pairState.value()->parameters());
+    for (const auto& pairParameter : pairState.value()->parameters()) {
+      result.insert(fmt::format("{}.{}", pairState.key(), pairParameter.key()),
+                    pairParameter.value());
+    }
   }
   return result;
 }
@@ -81,7 +84,10 @@ OrderedDict<std::string, Tensor> Module::named_gradients(
   auto states = named_states();
   OrderedDict<std::string, Tensor> result{};
   for (const auto& pairState : states) {
-    result.update(pairState.value()->gradients());
+    for (const auto& pairGradient : pairState.value()->gradients()) {
+      result.insert(fmt::format("{}.{}", pairState.key(), pairGradient.key()),
+                    pairGradient.value());
+    }
   }
   return result;
 }
@@ -91,7 +97,10 @@ OrderedDict<std::string, State::Increment> Module::named_increments(
   auto states = named_states();
   OrderedDict<std::string, State::Increment> result{};
   for (const auto& pairState : states) {
-    result.update(pairState.value()->increments());
+    for (const auto& pairIncrement : pairState.value()->increments()) {
+      result.insert(fmt::format("{}.{}", pairState.key(), pairIncrement.key()),
+                    pairIncrement.value());
+    }
   }
   return result;
 }
