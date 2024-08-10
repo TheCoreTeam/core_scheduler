@@ -38,6 +38,7 @@ struct CS_API OptimizerModule : std::enable_shared_from_this<OptimizerModule> {
 
   virtual void step(const Scheduler& scheduler) const = 0;
 
+  // This is set_to_none by default!
   void zero_grad(const Scheduler& scheduler) const;
 
   void to(TensorOptions options) const;
