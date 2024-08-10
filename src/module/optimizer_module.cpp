@@ -35,7 +35,11 @@ double OptimizerModule::get_lr() const {
   return states_.begin()->value()->get_lr();
 }
 
-void OptimizerModule::zero_grad(const Scheduler& scheduler) const {}
+void OptimizerModule::zero_grad(const Scheduler& scheduler) const {
+  for (const auto& kv : module_.lock()->named_states()) {
+    kv.value()->zero_grad();
+  }
+}
 }  // namespace cs::module
 
 void cs::save(const module::OptimizerModule& module, const std::string& path) {
