@@ -346,7 +346,7 @@ void Impl_::submit(Task &&task) {
     }();
     if (streamIdx == -1 /* not found */) {
       std::vector<int> count;
-      count.resize(taskQueue_.size());
+      count.resize(taskQueue_.size() - 1);
       std::ranges::fill(count, 0);
       for (auto &input = task.input(); auto &t : input) {
         ++count[t.impl()->streamIdx()];
