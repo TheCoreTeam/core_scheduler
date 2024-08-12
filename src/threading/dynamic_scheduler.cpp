@@ -307,7 +307,6 @@ Impl_::Impl_(int localRank) : Impl{localRank} {
   taskQueue_.emplace_back(std::make_shared<std::queue<Task>>());
   startBarrier_.emplace_back(std::make_shared<std::barrier<>>(2));
   endBarrier_.emplace_back(std::make_shared<std::barrier<>>(2));
-  lastOutput_.emplace_back();
   threadVector_.emplace_back(
       threadCommTask, localRank, threadCommIdx_, taskQueue_[threadCommIdx_],
       shutDown_, startBarrier_[threadCommIdx_], endBarrier_[threadCommIdx_]);
@@ -335,7 +334,7 @@ void Impl_::submit(Task &&task) {
       for (const auto &ptr : input) {
         elements.insert(ptr.impl().get());
       }
-      for (std::size_t i = 0; i < lastOutput_.size(); ++i) {
+      for (std::size_t i = 0; i < lastOutput_.size() - 1; ++i) {
         for (auto e : lastOutput_[i]) {
           if (elements.contains(e)) {
             streamIdx = static_cast<int8_t>(i);
@@ -364,9 +363,11 @@ void Impl_::submit(Task &&task) {
 
   taskQueue_[streamIdx]->push(task);
   (void)startBarrier_[streamIdx]->arrive();
-  lastOutput_[streamIdx].clear();
-  for (auto &output = task.output(); auto &t : output) {
-    lastOutput_[streamIdx].push_back(t.impl().get());
+  if (task.impl()->type() != Task::Impl::kNccl) {
+    lastOutput_[streamIdx].clear();
+    for (auto &output = task.output(); auto &t : output) {
+      lastOutput_[streamIdx].push_back(t.impl().get());
+    }
   }
   endBarrier_[streamIdx]->arrive_and_wait();
 }
