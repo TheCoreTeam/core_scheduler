@@ -27,66 +27,66 @@ constexpr __inline__ __attribute__((always_inline)) int ceil_div(TA a, TB b) {
   return (a + b - 1) / b;
 }
 
-template <typename T>
-__device__ float cast_higher(const T v) {
-  return static_cast<float>(v);
+template <typename UpT, typename T>
+__device__ UpT cast_higher(const T v) {
+  return static_cast<UpT>(v);
 }
 
-template <typename T>
+template <typename UpT, typename T>
 __global__ void step(T *__restrict w, T *__restrict m, T *__restrict v,
-                     const T *__restrict dw, const float lr, const float beta1,
-                     const float beta2, const float inv_one_minus_beta1_pow_t,
-                     const float inv_one_minus_beta2_pow_t, const float eps,
-                     const float weigt_decay, const std::size_t n) {
+                     const T *__restrict dw, const UpT lr, const UpT beta1,
+                     const UpT beta2, const UpT inv_one_minus_beta1_pow_t,
+                     const UpT inv_one_minus_beta2_pow_t, const UpT eps,
+                     const UpT weigt_decay, const std::size_t n) {
   auto tid = threadIdx.x + blockIdx.x * blockDim.x;
   if (tid >= n) {
     return;
   }
-  const auto one = cast_higher(static_cast<T>(1));
-  const auto g_t = cast_higher(dw[tid]);
-  auto theta_t = cast_higher(w[tid]) - cast_higher(lr) *
-                                           cast_higher(weigt_decay) *
-                                           cast_higher(w[tid]);
-  const auto m_t = cast_higher(beta1) * cast_higher(m[tid]) +
-                   (one - cast_higher(beta1)) * g_t;
+  const auto one = cast_higher<UpT>(1);
+  const auto g_t = cast_higher<UpT>(dw[tid]);
+  auto theta_t = cast_higher<UpT>(w[tid]) - cast_higher<UpT>(lr) *
+                                                cast_higher<UpT>(weigt_decay) *
+                                                cast_higher<UpT>(w[tid]);
+  const auto m_t = cast_higher<UpT>(beta1) * cast_higher<UpT>(m[tid]) +
+                   (one - cast_higher<UpT>(beta1)) * g_t;
   m[tid] = m_t;
-  const auto v_t = cast_higher(beta2) * cast_higher(v[tid]) +
-                   (one - cast_higher(beta2)) * g_t * g_t;
+  const auto v_t = cast_higher<UpT>(beta2) * cast_higher<UpT>(v[tid]) +
+                   (one - cast_higher<UpT>(beta2)) * g_t * g_t;
   v[tid] = v_t;
-  const auto m_hat_t = m_t * cast_higher(inv_one_minus_beta1_pow_t);
-  const auto v_hat_t = v_t * cast_higher(inv_one_minus_beta2_pow_t);
-  w[tid] = theta_t -
-           cast_higher(lr) * m_hat_t / (std::sqrt(v_hat_t) + cast_higher(eps));
+  const auto m_hat_t = m_t * cast_higher<UpT>(inv_one_minus_beta1_pow_t);
+  const auto v_hat_t = v_t * cast_higher<UpT>(inv_one_minus_beta2_pow_t);
+  w[tid] = theta_t - cast_higher<UpT>(lr) * m_hat_t /
+                         (std::sqrt(v_hat_t) + cast_higher<UpT>(eps));
 }
 
-template <typename T>
+template <typename UpT, typename T>
 __global__ void step(T *__restrict w, T *__restrict m, T *__restrict v,
-                     T *__restrict vMax, const T *__restrict dw, const float lr,
-                     const float beta1, const float beta2,
-                     const float inv_one_minus_beta1_pow_t,
-                     const float inv_one_minus_beta2_pow_t, const float eps,
-                     const float weigt_decay, const std::size_t n) {
+                     T *__restrict vMax, const T *__restrict dw, const UpT lr,
+                     const UpT beta1, const UpT beta2,
+                     const UpT inv_one_minus_beta1_pow_t,
+                     const UpT inv_one_minus_beta2_pow_t, const UpT eps,
+                     const UpT weigt_decay, const std::size_t n) {
   auto tid = threadIdx.x + blockIdx.x * blockDim.x;
   if (tid >= n) {
     return;
   }
-  const auto one = cast_higher(static_cast<T>(1));
-  const auto g_t = cast_higher(dw[tid]);
-  auto theta_t = cast_higher(w[tid]) - cast_higher(lr) *
-                                           cast_higher(weigt_decay) *
-                                           cast_higher(w[tid]);
-  const auto m_t = cast_higher(beta1) * cast_higher(m[tid]) +
-                   (one - cast_higher(beta1)) * g_t;
+  const auto one = cast_higher<UpT>(static_cast<T>(1));
+  const auto g_t = cast_higher<UpT>(dw[tid]);
+  auto theta_t = cast_higher<UpT>(w[tid]) - cast_higher<UpT>(lr) *
+                                                cast_higher<UpT>(weigt_decay) *
+                                                cast_higher<UpT>(w[tid]);
+  const auto m_t = cast_higher<UpT>(beta1) * cast_higher<UpT>(m[tid]) +
+                   (one - cast_higher<UpT>(beta1)) * g_t;
   m[tid] = m_t;
-  const auto v_t = cast_higher(beta2) * cast_higher(v[tid]) +
-                   (one - cast_higher(beta2)) * g_t * g_t;
+  const auto v_t = cast_higher<UpT>(beta2) * cast_higher<UpT>(v[tid]) +
+                   (one - cast_higher<UpT>(beta2)) * g_t * g_t;
   v[tid] = v_t;
-  const auto m_hat_t = m_t * cast_higher(inv_one_minus_beta1_pow_t);
-  const auto v_hat_t = v_t * cast_higher(inv_one_minus_beta2_pow_t);
-  const auto v_hat_max_t = std::max(cast_higher(vMax[tid]), v_hat_t);
+  const auto m_hat_t = m_t * cast_higher<UpT>(inv_one_minus_beta1_pow_t);
+  const auto v_hat_t = v_t * cast_higher<UpT>(inv_one_minus_beta2_pow_t);
+  const auto v_hat_max_t = std::max(cast_higher<UpT>(vMax[tid]), v_hat_t);
   vMax[tid] = v_hat_max_t;
-  w[tid] = theta_t - cast_higher(lr) * m_hat_t /
-                         (std::sqrt(v_hat_max_t) + cast_higher(eps));
+  w[tid] = theta_t - cast_higher<UpT>(lr) * m_hat_t /
+                         (std::sqrt(v_hat_max_t) + cast_higher<UpT>(eps));
 }
 }  // namespace
 
@@ -105,9 +105,11 @@ void stepKernel(cudaStream_t stream, const AdamW::State::Options &options,
       at::ScalarType::Half, at::ScalarType::BFloat16,
       dw.impl()->tensor().scalar_type(), "AdamW w/o Amsgrad", [&] {
         using T = scalar_t;
+        using UpT =
+            std::conditional_t<std::is_same_v<T, double>, double, float>;
         dim3 block(std::min<decltype(size)>(128, size));
         dim3 grid(ceil_div(size, std::min<decltype(size)>(128, size)));
-        step<T><<<grid, block, 0, stream>>>(
+        step<UpT, T><<<grid, block, 0, stream>>>(
             w.impl()->tensor().data_ptr<T>(), m.impl()->tensor().data_ptr<T>(),
             v.impl()->tensor().data_ptr<T>(), dw.impl()->tensor().data_ptr<T>(),
             options.lr, options.beta1, options.beta2,
@@ -133,9 +135,11 @@ void stepKernelAmsgrad(cudaStream_t stream,
       at::ScalarType::Half, at::ScalarType::BFloat16,
       dw.impl()->tensor().scalar_type(), "AdamW w/ Amsgrad", [&] {
         using T = scalar_t;
+        using UpT =
+            std::conditional_t<std::is_same_v<T, double>, double, float>;
         dim3 block(std::min<decltype(size)>(128, size));
         dim3 grid(ceil_div(size, std::min<decltype(size)>(128, size)));
-        step<T><<<grid, block, 0, stream>>>(
+        step<UpT, T><<<grid, block, 0, stream>>>(
             w.impl()->tensor().data_ptr<T>(), m.impl()->tensor().data_ptr<T>(),
             v.impl()->tensor().data_ptr<T>(),
             vMax.impl()->tensor().data_ptr<T>(),
