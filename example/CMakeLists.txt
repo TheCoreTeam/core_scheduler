@@ -25,8 +25,9 @@ function(create_executable target_name source_files)
     )
 endfunction()
 
+create_executable(baseline gpt2/baseline.cpp)
+
 create_executable(gpt2_single_device gpt2/gpt2_single_device.cpp)
-create_executable(gpt2_amp_single_device gpt2/gpt2_amp_single_device.cpp)
 
 create_executable(gpt2_ddp gpt2/gpt2_ddp.cpp)
 create_executable(gpt2_amp_ddp gpt2/gpt2_amp_ddp.cpp)
