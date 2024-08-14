@@ -618,7 +618,7 @@ void train() {
                             .beta1(trainConfig.beta1)
                             .beta2(trainConfig.beta2)
                             .weight_decay(trainConfig.weight_decay)
-                            .fused(false)};
+                            .fused(true)};
 
   std::unordered_map<std::string, double> training_args =
       getTrainArgs(dataset.size(), modelConfig.block_size,
