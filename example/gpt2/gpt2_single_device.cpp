@@ -64,7 +64,7 @@ struct ModelConfig {
   const bool use_bias = false;
   const double dropout = 0.0;
   const double epsilon = 1e-5;
-  torch::Device device = torch::Device(torch::kCUDA, 1);
+  torch::Device device = torch::Device(torch::kCUDA, 0);
   torch::Dtype dtype = torch::kFloat32;  // model percision
   bool share_emb = false;  // share embedding weight or not. See https://arxiv.org/abs/1706.03762
 };
