@@ -25,13 +25,14 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <fstream>
 #include <memory>
 #include <stdexcept>
 #include <string>
-#include <fstream>
 #include <unordered_map>
 #include <vector>
 
+#include "autocast.h"
 #include "compute/cross_entropy.h"
 #include "compute/embedding.h"
 #include "compute/gelu.h"
@@ -44,7 +45,6 @@
 #include "data/dataset.h"
 #include "logger.h"
 #include "module/adamw.h"
-#include "autocast.h"
 #include "module/embedding.h"
 #include "module/layer_norm.h"
 #include "module/linear.h"
@@ -66,7 +66,8 @@ struct ModelConfig {
   const double epsilon = 1e-5;
   torch::Device device = torch::Device(torch::kCUDA, 0);
   torch::Dtype dtype = torch::kFloat32;  // model percision
-  bool share_emb = false;  // share embedding weight or not. See https://arxiv.org/abs/1706.03762
+  bool share_emb = false;                // share embedding weight or not. See
+                                         // https://arxiv.org/abs/1706.03762
 };
 
 struct TrainConfig {
@@ -87,8 +88,9 @@ struct TrainConfig {
   double eps = 1e-8;
   double grad_clip_value = 1.0;
   bool use_amp = true;
-  torch::Dtype amp_dtype = torch::kBFloat16;  // amp percision: torch::kBFloat16, torch::kFloat16 
-                                              // (Now we only support bf16)
+  torch::Dtype amp_dtype =
+      torch::kBFloat16;  // amp percision: torch::kBFloat16, torch::kFloat16
+                         // (Now we only support bf16)
   int64_t seed = 1337;
   int64_t wait_every_step = 1;
 };
@@ -102,18 +104,20 @@ struct DataConfig {
 // Helper function to calculate the training arguments
 std::unordered_map<std::string, double> getTrainArgs(
     int64_t num_samples, int64_t tokens_per_sample,
-    int64_t global_token_batch_size, int64_t batch_size_per_dprank_per_micro_step,
-    int64_t num_dprank, int64_t max_steps = -1, int64_t max_epochs = -1) {
+    int64_t global_token_batch_size,
+    int64_t batch_size_per_dprank_per_micro_step, int64_t num_dprank,
+    int64_t max_steps = -1, int64_t max_epochs = -1) {
   if (max_steps == -1 && max_epochs == -1) {
     throw std::invalid_argument(
         "At least one of max_steps or max_epochs must be provided.");
   }
-  if (global_token_batch_size %
-          (batch_size_per_dprank_per_micro_step * tokens_per_sample * num_dprank) !=
+  if (global_token_batch_size % (batch_size_per_dprank_per_micro_step *
+                                 tokens_per_sample * num_dprank) !=
       0) {
     throw std::invalid_argument(
         "global_token_batch_size must be divisible by "
-        "batch_size_per_dprank_per_micro_step * tokens_per_sample * num_dprank.");
+        "batch_size_per_dprank_per_micro_step * tokens_per_sample * "
+        "num_dprank.");
   }
 
   int64_t tokens_per_dprank_per_step =
@@ -275,12 +279,12 @@ struct Attn : cs::module::Module {
   Attn(cs::Scheduler scheduler, const ModelConfig &config)
       : scheduler(scheduler), config{config} {
     c_attn = register_module(
-        "c_attn", cs::module::Linear(scheduler,
-                                        cs::compute::Linear::Options{
-                                            config.n_embd, 3 * config.n_embd}
-                                            .bias(config.use_bias)
-                                            .device(config.device)
-                                            .dtype(config.dtype)));
+        "c_attn", cs::module::Linear(
+                      scheduler, cs::compute::Linear::Options{config.n_embd,
+                                                              3 * config.n_embd}
+                                     .bias(config.use_bias)
+                                     .device(config.device)
+                                     .dtype(config.dtype)));
     // we don't need to register flash attention to module because it does not
     // have parameters.
     attn_state = cs::compute::ScaledDotProductFlashAttention::init(
@@ -288,17 +292,16 @@ struct Attn : cs::module::Module {
         cs::compute::ScaledDotProductFlashAttention::Options{}.is_causal(true));
     c_proj = register_module(
         "c_proj", cs::module::Linear(
-                      scheduler, cs::compute::Linear::Options{config.n_embd,
-                                                                 config.n_embd}
-                                     .bias(config.use_bias)
-                                     .device(config.device)
-                                     .dtype(config.dtype)));
+                      scheduler,
+                      cs::compute::Linear::Options{config.n_embd, config.n_embd}
+                          .bias(config.use_bias)
+                          .device(config.device)
+                          .dtype(config.dtype)));
 
     _init_weights(scheduler, config);
   }
 
-  void _init_weights(cs::Scheduler scheduler,
-                     const ModelConfig &config) {
+  void _init_weights(cs::Scheduler scheduler, const ModelConfig &config) {
     cs::compute::Utils::normal_(scheduler, c_proj->state()->forward.weight, 0.0,
                                 0.02 / sqrt(2 * config.n_layer));
   }
@@ -342,8 +345,7 @@ struct Attn : cs::module::Module {
     return c_proj->forward(scheduler, attn_out);
   }
 
-  cs::Tensor backward(const cs::Scheduler scheduler,
-                      cs::Tensor dx) {
+  cs::Tensor backward(const cs::Scheduler scheduler, cs::Tensor dx) {
     // Fc Proj, we first run backward for input and then backward for parameter.
     auto dx_c_proj = c_proj->backward_input(scheduler, dx);
     c_proj->backward_parameter(scheduler, dx);
@@ -386,7 +388,7 @@ struct MLP : cs::module::Module {
     fc1 = register_module(
         "fc1", cs::module::Linear(
                    scheduler, cs::compute::Linear::Options{config.n_embd,
-                                                              4 * config.n_embd}
+                                                           4 * config.n_embd}
                                   .bias(config.use_bias)
                                   .device(config.device)
                                   .dtype(config.dtype)));
@@ -394,7 +396,7 @@ struct MLP : cs::module::Module {
     fc2 = register_module(
         "fc2", cs::module::Linear(
                    scheduler, cs::compute::Linear::Options{4 * config.n_embd,
-                                                              config.n_embd}
+                                                           config.n_embd}
                                   .bias(config.use_bias)
                                   .device(config.device)
                                   .dtype(config.dtype)));
@@ -402,8 +404,7 @@ struct MLP : cs::module::Module {
     _init_weights(scheduler, config);
   }
 
-  void _init_weights(cs::Scheduler scheduler,
-                     const ModelConfig &config) {
+  void _init_weights(cs::Scheduler scheduler, const ModelConfig &config) {
     cs::compute::Utils::normal_(scheduler, fc2->state()->forward.weight, 0.0,
                                 0.02 / sqrt(2 * config.n_layer));
   }
@@ -452,9 +453,7 @@ struct Block : cs::module::Module {
     _init_weights(scheduler, config);
   }
 
-  void _init_weights(cs::Scheduler scheduler,
-                     const ModelConfig &config) {
-  }
+  void _init_weights(cs::Scheduler scheduler, const ModelConfig &config) {}
 
   cs::Tensor forward(const cs::Scheduler scheduler, cs::Tensor x) {
     auto ln1_out = ln1->forward(scheduler, x);
@@ -465,8 +464,7 @@ struct Block : cs::module::Module {
     return cs::compute::Utils::add(scheduler, res1_out, mlp_out);
   }
 
-  cs::Tensor backward(const cs::Scheduler scheduler,
-                      cs::Tensor dx) {
+  cs::Tensor backward(const cs::Scheduler scheduler, cs::Tensor dx) {
     auto dx_mlp = mlp->backward(scheduler, dx);
     auto dx_ln2 = ln2->backward(scheduler, dx_mlp);
     auto dx_res1 = cs::compute::Utils::add(scheduler, dx_ln2, dx);
@@ -494,15 +492,15 @@ struct GPT2 : cs::module::Module {
     wte = register_module(
         "wte",
         cs::module::Embedding(scheduler, cs::compute::Embedding::Options(
-                                                config.pad_size, config.n_embd)
-                                                .device(config.device)
-                                                .dtype(config.dtype)));
+                                             config.pad_size, config.n_embd)
+                                             .device(config.device)
+                                             .dtype(config.dtype)));
     wpe = register_module(
-        "wpe", cs::module::Embedding(scheduler,
-                                        cs::compute::Embedding::Options(
-                                            config.block_size, config.n_embd)
-                                            .device(config.device)
-                                            .dtype(config.dtype)));
+        "wpe",
+        cs::module::Embedding(scheduler, cs::compute::Embedding::Options(
+                                             config.block_size, config.n_embd)
+                                             .device(config.device)
+                                             .dtype(config.dtype)));
     // dropout
     for (int layer = 0; layer < config.n_layer; ++layer) {
       // Adding layers to the module list
@@ -517,23 +515,22 @@ struct GPT2 : cs::module::Module {
     lm_head = register_module(
         "lm_head",
         cs::module::Linear(scheduler, cs::compute::Linear::Options(
-                                             config.n_embd, config.pad_size)
-                                             .bias(config.use_bias)
-                                             .device(config.device)
-                                             .dtype(config.dtype)));
+                                          config.n_embd, config.pad_size)
+                                          .bias(config.use_bias)
+                                          .device(config.device)
+                                          .dtype(config.dtype)));
 
     _init_weights(scheduler, config);
   }
 
-  void _init_weights(cs::Scheduler scheduler,
-                     const ModelConfig &config) {
+  void _init_weights(cs::Scheduler scheduler, const ModelConfig &config) {
     cs::compute::Utils::normal_(scheduler, wte->state()->forward.weight, 0.0,
                                 0.02);
     cs::compute::Utils::normal_(scheduler, wpe->state()->forward.weight, 0.0,
                                 0.02);
     cs::compute::Utils::normal_(scheduler, lm_head->state()->forward.weight,
                                 0.0, 0.02);
-    if (config.share_emb) { // share weight
+    if (config.share_emb) {  // share weight
       lm_head->state()->forward.weight = wte->state()->forward.weight;
     }
   }
@@ -560,8 +557,8 @@ struct GPT2 : cs::module::Module {
     auto dx_lnf = lm_head->backward_input(scheduler, dinput);
     lm_head->backward_parameter(scheduler, dinput);
     auto dx_block = lnf->backward(scheduler, dx_lnf);
-    for (int i = h.size() - 1; i >= 0; --i) { // reverse h in backward
-        dx_block = h[i]->backward(scheduler, dx_block);
+    for (int i = h.size() - 1; i >= 0; --i) {  // reverse h in backward
+      dx_block = h[i]->backward(scheduler, dx_block);
     }
     auto dx_emb = dx_block;
     {
@@ -569,10 +566,11 @@ struct GPT2 : cs::module::Module {
       wpe->backward(scheduler, dx_wpe);
       wte->backward(scheduler, dx_emb);
     }
-    if (config.share_emb) { // share weight
-      lm_head->state()->forward.grad_weight = wte->state()->forward.grad_weight = 
-        cs::compute::Utils::add(scheduler, lm_head->state()->forward.grad_weight, 
-          wte->state()->forward.grad_weight);
+    if (config.share_emb) {  // share weight
+      lm_head->state()->forward.grad_weight =
+          wte->state()->forward.grad_weight = cs::compute::Utils::add(
+              scheduler, lm_head->state()->forward.grad_weight,
+              wte->state()->forward.grad_weight);
     }
   }
 };
@@ -658,7 +656,8 @@ void train() {
       auto input = data["input_ids"];
       auto target = data["labels"];
 
-      if (trainConfig.use_amp) {  // AMP: the forward parts should be written into this {}
+      if (trainConfig.use_amp) {  // AMP: the forward parts should be written
+                                  // into this {}
         cs::autocast::ContextGuard guard{scheduler, trainConfig.amp_dtype};
 
         // Forward
@@ -668,9 +667,10 @@ void train() {
         output = cs::compute::Utils::view(
             scheduler, output,
             {modelConfig.batch_size * modelConfig.block_size,
-            modelConfig.pad_size});
+             modelConfig.pad_size});
         target = cs::compute::Utils::view(
-            scheduler, target, {modelConfig.batch_size * modelConfig.block_size});
+            scheduler, target,
+            {modelConfig.batch_size * modelConfig.block_size});
         loss = cs::compute::CrossEntropy::forward(scheduler, loss_state, output,
                                                   target);
       } else {
@@ -681,9 +681,10 @@ void train() {
         output = cs::compute::Utils::view(
             scheduler, output,
             {modelConfig.batch_size * modelConfig.block_size,
-            modelConfig.pad_size});
+             modelConfig.pad_size});
         target = cs::compute::Utils::view(
-            scheduler, target, {modelConfig.batch_size * modelConfig.block_size});
+            scheduler, target,
+            {modelConfig.batch_size * modelConfig.block_size});
         loss = cs::compute::CrossEntropy::forward(scheduler, loss_state, output,
                                                   target);
       }

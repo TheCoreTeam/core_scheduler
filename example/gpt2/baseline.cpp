@@ -1,3 +1,19 @@
+/*
+ * Copyright (c) 2024 The Core Team
+ *
+ * Licensed under the Apache License, Version 2.0;
+ * You may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an 'AS IS' BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 #include <c10/core/ScalarType.h>
 #include <gtest/gtest.h>
 #include <torch/nn/init.h>
@@ -8,13 +24,12 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <fstream>
 #include <memory>
 #include <stdexcept>
 #include <string>
-#include <fstream>
 #include <unordered_map>
 #include <vector>
-
 
 struct ModelConfig {
   int64_t batch_size = 8;
@@ -49,11 +64,11 @@ struct TrainConfig {
   double eps = 1e-8;
   double grad_clip_value = 1.0;
   bool amp = true;
-  torch::Dtype amp_dtype = torch::kBFloat16;  // amp percision: torch::kBFloat16, torch::kFloat16 
-                                              // (Now we only support bf16)
+  torch::Dtype amp_dtype =
+      torch::kBFloat16;  // amp percision: torch::kBFloat16, torch::kFloat16
+                         // (Now we only support bf16)
   int64_t seed = 1337;
 };
-
 
 struct DataConfig {
   const std::string path = "/home/ly/main/dataset/fineweb-edu-10BT/train/";
@@ -61,22 +76,23 @@ struct DataConfig {
   bool shuffle = false;
 };
 
-
 // Helper function to calculate the training arguments
 std::unordered_map<std::string, double> getTrainArgs(
     int64_t num_samples, int64_t tokens_per_sample,
-    int64_t global_token_batch_size, int64_t batch_size_per_dprank_per_micro_step,
-    int64_t num_dprank, int64_t max_steps = -1, int64_t max_epochs = -1) {
+    int64_t global_token_batch_size,
+    int64_t batch_size_per_dprank_per_micro_step, int64_t num_dprank,
+    int64_t max_steps = -1, int64_t max_epochs = -1) {
   if (max_steps == -1 && max_epochs == -1) {
     throw std::invalid_argument(
         "At least one of max_steps or max_epochs must be provided.");
   }
-  if (global_token_batch_size %
-          (batch_size_per_dprank_per_micro_step * tokens_per_sample * num_dprank) !=
+  if (global_token_batch_size % (batch_size_per_dprank_per_micro_step *
+                                 tokens_per_sample * num_dprank) !=
       0) {
     throw std::invalid_argument(
         "global_token_batch_size must be divisible by "
-        "batch_size_per_dprank_per_micro_step * tokens_per_sample * num_dprank.");
+        "batch_size_per_dprank_per_micro_step * tokens_per_sample * "
+        "num_dprank.");
   }
 
   int64_t tokens_per_dprank_per_step =
@@ -148,7 +164,7 @@ struct ProgressBar {
     return oss.str();
   }
 
-  void display(int completed, const std::string &prefix = "", int rank = 0) {
+  void display(int completed, const std::string& prefix = "", int rank = 0) {
     float progress = total > 1 ? static_cast<float>(completed) / (total - 1)
                                : 1.0;  // Adjusted to avoid division by zero
     int pos = width * progress;
@@ -228,7 +244,6 @@ struct LRScheduler {
   }
 };
 
-
 // ------------------------- Model ------------------------- //
 
 torch::Tensor standard_attention(const torch::Tensor q, const torch::Tensor k,
@@ -264,28 +279,28 @@ struct AttnTorch : torch::nn::Module {
   AttnTorch(const ModelConfig& config) {
     c_attn = register_module(
         "c_attn", torch::nn::Linear(
-                      torch::nn::LinearOptions(config.n_embd, 3*config.n_embd)
+                      torch::nn::LinearOptions(config.n_embd, 3 * config.n_embd)
                           .bias(config.use_bias)));
     // c_attn = register_module(
     //     "c_attn", torch::nn::Linear(
     //                   torch::nn::LinearOptions(config.n_embd, config.n_embd)
     //                       .bias(config.use_bias)));
-    
+
     c_proj = register_module(
         "c_proj",
         torch::nn::Linear(torch::nn::LinearOptions(config.n_embd, config.n_embd)
                               .bias(config.use_bias)));
     bias = torch::tril(torch::ones({config.block_size, config.block_size}))
                .view({1, 1, config.block_size, config.block_size});
-  
+
     _init_weights(config);
   }
 
-  void _init_weights(const ModelConfig &config) {
+  void _init_weights(const ModelConfig& config) {
     torch::nn::init::normal_(c_attn->weight, 0.0,
-                                0.02 / sqrt(2 * config.n_layer));
+                             0.02 / sqrt(2 * config.n_layer));
     torch::nn::init::normal_(c_proj->weight, 0.0,
-                                0.02 / sqrt(2 * config.n_layer));
+                             0.02 / sqrt(2 * config.n_layer));
   }
 
   // Forward pass
@@ -332,17 +347,14 @@ struct MLPTorch : torch::nn::Module {
         "fc2", torch::nn::Linear(
                    torch::nn::LinearOptions(4 * config.n_embd, config.n_embd)
                        .bias(config.use_bias)));
-  
+
     _init_weights(config);
   }
 
-  void _init_weights(const ModelConfig &config) {
-    torch::nn::init::normal_(fc1->weight, 0.0,
-                                0.02 / sqrt(2 * config.n_layer));
-    torch::nn::init::normal_(fc2->weight, 0.0,
-                                0.02 / sqrt(2 * config.n_layer));
+  void _init_weights(const ModelConfig& config) {
+    torch::nn::init::normal_(fc1->weight, 0.0, 0.02 / sqrt(2 * config.n_layer));
+    torch::nn::init::normal_(fc2->weight, 0.0, 0.02 / sqrt(2 * config.n_layer));
   }
-
 
   // Forward pass
   torch::Tensor forward(torch::Tensor x, const ModelConfig& config) {
@@ -424,17 +436,14 @@ struct GPT2Torch : torch::nn::Module {
         "lm_head", torch::nn::Linear(
                        torch::nn::LinearOptions(config.n_embd, config.pad_size)
                            .bias(config.use_bias)));
-  
+
     _init_weights(config);
   }
 
-  void _init_weights(const ModelConfig &config) {
-    torch::nn::init::normal_(wte->weight, 0.0,
-                                0.02);
-    torch::nn::init::normal_(wpe->weight, 0.0,
-                                0.02);
-    torch::nn::init::normal_(lm_head->weight,
-                                0.0, 0.02);
+  void _init_weights(const ModelConfig& config) {
+    torch::nn::init::normal_(wte->weight, 0.0, 0.02);
+    torch::nn::init::normal_(wpe->weight, 0.0, 0.02);
+    torch::nn::init::normal_(lm_head->weight, 0.0, 0.02);
     // lm_head->weight = wte->weight; // share weight
   }
 
@@ -461,7 +470,6 @@ struct GPT2Torch : torch::nn::Module {
     return x;
   }
 };
-
 
 void train() {
   ModelConfig modelConfig;
@@ -493,16 +501,15 @@ void train() {
   model->to(modelConfig.device, modelConfig.dtype);
 
   torch::optim::AdamW opt{model->parameters(),
-                            torch::optim::AdamWOptions{}
-                                .lr(trainConfig.max_lr)
-                                .betas({trainConfig.beta1, trainConfig.beta2})
-                                .eps(trainConfig.eps)
-                                .weight_decay(trainConfig.weight_decay)};
+                          torch::optim::AdamWOptions{}
+                              .lr(trainConfig.max_lr)
+                              .betas({trainConfig.beta1, trainConfig.beta2})
+                              .eps(trainConfig.eps)
+                              .weight_decay(trainConfig.weight_decay)};
 
-  std::unordered_map<std::string, double> training_args =
-      getTrainArgs(11778*512, modelConfig.block_size,
-                   trainConfig.total_token_batch_size, modelConfig.batch_size,
-                   1, trainConfig.max_steps, trainConfig.epoch);
+  std::unordered_map<std::string, double> training_args = getTrainArgs(
+      11778 * 512, modelConfig.block_size, trainConfig.total_token_batch_size,
+      modelConfig.batch_size, 1, trainConfig.max_steps, trainConfig.epoch);
   double epochs = training_args["epochs"];
   double max_steps = training_args["max_steps"];
   double grad_accum_steps = training_args["grad_accum_steps"];
@@ -523,12 +530,12 @@ void train() {
   ProgressBar progressBar(max_steps);
 
   // Random generate data
-  auto input = torch::randint(
-      0, modelConfig.vocab_size, 
-      {modelConfig.batch_size, modelConfig.block_size}, data_option);
-  auto target = torch::randint(
-      0, modelConfig.vocab_size, 
-      {modelConfig.batch_size, modelConfig.block_size}, data_option);
+  auto input = torch::randint(0, modelConfig.vocab_size,
+                              {modelConfig.batch_size, modelConfig.block_size},
+                              data_option);
+  auto target = torch::randint(0, modelConfig.vocab_size,
+                               {modelConfig.batch_size, modelConfig.block_size},
+                               data_option);
   for (int step = 0; step < max_steps; ++step) {
     time_start = std::chrono::high_resolution_clock::now();
     progressBar.display(step, "Training: ", 0);
@@ -544,18 +551,18 @@ void train() {
       // auto input = data["input_ids"];
       // auto target = data["labels"];
 
-      { // AMP is not supported in libtorch
+      {  // AMP is not supported in libtorch
         // Forward
         torch::Tensor output;
         output = model->forward(input, modelConfig);
 
         // compute loss
         {
-        output = output.view(
-            {modelConfig.batch_size * modelConfig.block_size, modelConfig.pad_size});
-        target = target.view(
-            {modelConfig.batch_size * modelConfig.block_size});
-        loss = at::cross_entropy_loss(output, target);
+          output = output.view({modelConfig.batch_size * modelConfig.block_size,
+                                modelConfig.pad_size});
+          target =
+              target.view({modelConfig.batch_size * modelConfig.block_size});
+          loss = at::cross_entropy_loss(output, target);
         }
       }
       // Backward
@@ -568,7 +575,7 @@ void train() {
     opt.step();
     auto lr = lr_scheduler.get_lr(step);
     for (auto& group : opt.param_groups()) {
-        static_cast<torch::optim::AdamWOptions&>(group.options()).lr(lr);
+      static_cast<torch::optim::AdamWOptions&>(group.options()).lr(lr);
     }
     opt.zero_grad();
 
@@ -587,12 +594,11 @@ void train() {
       std::cout << "loss: " << loss << std::endl;
       logFile << step + 1 << "," << loss << "\n";
     }
-    }
-    if (master_process) {
-        logFile.close();
-    }
+  }
+  if (master_process) {
+    logFile.close();
+  }
 }
-
 
 int main() {
   train();
