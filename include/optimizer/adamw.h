@@ -45,7 +45,6 @@ struct CS_API AdamW {
       const double weight_decay = 1e-2;
       const bool amsgrad = false;
       long t = 0;
-      bool fused = false;
     } options;
 
     State(const Tensors &tensors, const Options &options);
@@ -63,7 +62,6 @@ struct CS_API AdamW {
     CS_ARG(double, weight_decay) = 1e-2;
     CS_ARG(bool, amsgrad) = false;
     CS_ARG(long, t) = 0;
-    CS_ARG(bool, fused) = true;
   };
 
   static std::shared_ptr<State> init(const Scheduler &scheduler,

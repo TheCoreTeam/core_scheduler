@@ -120,33 +120,8 @@ void AdamW::step(const Scheduler &scheduler,
       void operator()() const override {
         const auto stream = c10::cuda::getCurrentCUDAStream();
         if (input()[4].impl()->tensor().defined()) {
-          if (options.fused) {
-            stepKernelAmsgrad(stream.stream(), options, output()[0],
-                              output()[1], output()[2], output()[3],
-                              input()[4]);
-          } else {
-            const auto &p = output()[0].impl()->tensor();
-            const auto &exp_avg = output()[1].impl()->tensor();
-            const auto &exp_avg_sq = output()[2].impl()->tensor();
-            auto &max_exp_avg_sq = output()[3].impl()->tensor();
-            const auto &grad = input()[4].impl()->tensor();
-            if (options.weight_decay != 0) {
-              p.mul_(1 - options.lr * options.weight_decay);
-            }
-            const auto bias_correction1 =
-                1 - std::pow(options.beta1, options.t);
-            const auto bias_correction2 =
-                1 - std::pow(options.beta2, options.t);
-            exp_avg.mul_(options.beta1).add_(grad, 1 - options.beta1);
-            exp_avg_sq.mul_(options.beta2)
-                .addcmul_(grad, grad, 1 - options.beta2);
-            torch::max_out(max_exp_avg_sq, exp_avg_sq, max_exp_avg_sq);
-            // Use the max. for normalizing running avg. of gradient
-            auto denom = (max_exp_avg_sq.sqrt() / sqrt(bias_correction2))
-                             .add_(options.eps);
-            const auto step_size = options.lr / bias_correction1;
-            p.addcdiv_(exp_avg, denom, -step_size);
-          }
+          stepKernelAmsgrad(stream.stream(), options, output()[0], output()[1],
+                            output()[2], output()[3], input()[4]);
         } else {
           CS_WARN_TRUE(false, "got non-defined gradient, skip the update");
         }
@@ -173,29 +148,8 @@ void AdamW::step(const Scheduler &scheduler,
       void operator()() const override {
         const auto stream = c10::cuda::getCurrentCUDAStream();
         if (input()[3].impl()->tensor().defined()) {
-          if (options.fused) {
-            stepKernel(stream.stream(), options, output()[0], output()[1],
-                       output()[2], input()[3]);
-          } else {
-            const auto &p = output()[0].impl()->tensor();
-            const auto &exp_avg = output()[1].impl()->tensor();
-            const auto &exp_avg_sq = output()[2].impl()->tensor();
-            const auto &grad = input()[3].impl()->tensor();
-            if (options.weight_decay != 0) {
-              p.mul_(1 - options.lr * options.weight_decay);
-            }
-            const auto bias_correction1 =
-                1 - std::pow(options.beta1, options.t);
-            const auto bias_correction2 =
-                1 - std::pow(options.beta2, options.t);
-            exp_avg.mul_(options.beta1).add_(grad, 1 - options.beta1);
-            exp_avg_sq.mul_(options.beta2)
-                .addcmul_(grad, grad, 1 - options.beta2);
-            const auto denom =
-                (exp_avg_sq.sqrt() / sqrt(bias_correction2)).add_(options.eps);
-            const auto step_size = options.lr / bias_correction1;
-            p.addcdiv_(exp_avg, denom, -step_size);
-          }
+          stepKernel(stream.stream(), options, output()[0], output()[1],
+                     output()[2], input()[3]);
         } else {
           CS_WARN_TRUE(false, "got non-defined gradient, skip the update");
         }
