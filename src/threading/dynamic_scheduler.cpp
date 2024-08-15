@@ -100,6 +100,7 @@ hwloc_cpuset_t getClosestCpuSetToGpu(const unsigned int gpuRank) {
 namespace {
 struct AssistQueue {
   int count;
+  Event event;
   std::vector<at::Tensor> protected_tensors;
 };
 
@@ -111,9 +112,7 @@ struct Impl_ final : Scheduler::Impl {
  private:
   std::vector<c10::cuda::CUDAStream> streams_;
   Event main_event_;
-  Event assist_event_;
   std::deque<AssistQueue> assist_queue_;
-  Event comm_event_;
   std::deque<AssistQueue> comm_queue_;
 };
 
@@ -175,19 +174,19 @@ void Impl_::submit(Task &&task) {
     c10::cuda::CUDAStreamGuard streamGuard{
         streams_[Task::Impl::Priority::kMain]};
     try {
-      auto wait = [](std::deque<AssistQueue> &queue, const Event &event) {
+      auto wait = [](std::deque<AssistQueue> &queue) {
         if (!queue.empty()) {
           for (auto &element : queue) {
             --element.count;
           }
           while (!queue.empty() && queue.front().count <= 0) {
-            event.block();
+            queue.front().event.block();
             queue.pop_front();
           }
         }
       };
-      wait(assist_queue_, assist_event_);
-      wait(comm_queue_, comm_event_);
+      wait(assist_queue_);
+      wait(comm_queue_);
       call(Task::Impl::Priority::kMain);
       main_event_.record();
     } catch (const std::exception &e) {
@@ -200,16 +199,20 @@ void Impl_::submit(Task &&task) {
     main_event_.block();
     call(Task::Impl::Priority::kAssist);
     auto protected_tensors = collect();
-    assist_event_.record();
-    assist_queue_.emplace_front(assist_task_gap, std::move(protected_tensors));
+    Event event;
+    event.record();
+    assist_queue_.emplace_front(assist_task_gap, std::move(event),
+                                std::move(protected_tensors));
   } else {
     c10::cuda::CUDAStreamGuard streamGuard{
         streams_[Task::Impl::Priority::kComm]};
     main_event_.block();
     call(Task::Impl::Priority::kComm);
     auto protected_tensors = collect();
-    comm_event_.record();
-    comm_queue_.emplace_front(comm_task_gap, std::move(protected_tensors));
+    Event event;
+    event.record();
+    comm_queue_.emplace_front(comm_task_gap, std::move(event),
+                              std::move(protected_tensors));
   }
 }
 
