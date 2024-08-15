@@ -93,7 +93,7 @@ void AllReduce::run_inplace(const Scheduler &scheduler, const Comm &comm,
       explicit Impl(std::vector<Tensor> output /* tensors */,
                     std::vector<ReadOnlyTensor> input /* tensors */, Comm comm,
                     const Operation operation)
-          : Task::Impl{std::move(output), std::move(input), kNccl},
+          : Task::Impl{std::move(output), std::move(input), kComm, kNccl},
             comm{std::move(comm)},
             operation{operation} {}
       void operator()() const override {
@@ -127,7 +127,7 @@ void AllReduce::run_inplace(const Scheduler &scheduler, const Comm &comm,
       explicit Impl(std::vector<Tensor> output /* tensors */,
                     std::vector<ReadOnlyTensor> input /* tensors */, Comm comm,
                     const Operation operation)
-          : Task::Impl{std::move(output), std::move(input), kNccl},
+          : Task::Impl{std::move(output), std::move(input), kComm, kNccl},
             comm{std::move(comm)},
             operation{operation} {}
       void operator()() const override {

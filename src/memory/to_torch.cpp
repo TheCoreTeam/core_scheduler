@@ -27,7 +27,7 @@ at::Tensor to_torch(const Scheduler &scheduler, const ReadOnlyTensor &src) {
   struct Impl : Task::Impl {
     explicit Impl(std::vector<Tensor> output /* tensor */,
                   std::vector<ReadOnlyTensor> input /* input */)
-        : Task::Impl{std::move(output), std::move(input), kCompute} {}
+        : Task::Impl{std::move(output), std::move(input), kMain, kCompute} {}
     void operator()() const override {
       c10::cuda::getCurrentCUDAStream().synchronize();
       auto &dst = output()[0].impl()->tensor();

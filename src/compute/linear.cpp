@@ -88,7 +88,7 @@ std::shared_ptr<Linear::State> Linear::init(const Scheduler &scheduler,
       explicit Impl(std::vector<Tensor> output /* weight, bias */,
                     const TensorOptions options, const int64_t in_futures,
                     const int64_t out_futures)
-          : Task::Impl{std::move(output), {}, kCompute},
+          : Task::Impl{std::move(output), {}, kMain, kCompute},
             options{options},
             in_futures{in_futures},
             out_futures{out_futures} {}
@@ -128,7 +128,7 @@ std::shared_ptr<Linear::State> Linear::init(const Scheduler &scheduler,
       explicit Impl(std::vector<Tensor> output /* weight, bias */,
                     const TensorOptions options, const int64_t in_futures,
                     const int64_t out_futures)
-          : Task::Impl{std::move(output), {}, kCompute},
+          : Task::Impl{std::move(output), {}, kMain, kCompute},
             options{options},
             in_futures{in_futures},
             out_futures{out_futures} {}
@@ -162,7 +162,7 @@ Tensor Linear::forward(const Scheduler &scheduler,
     struct Impl : Task::Impl {
       explicit Impl(std::vector<Tensor> output /* output */,
                     std::vector<ReadOnlyTensor> input /* input, weight, bias */)
-          : Task::Impl{std::move(output), std::move(input), kCompute} {}
+          : Task::Impl{std::move(output), std::move(input), kMain, kCompute} {}
       void operator()() const override {
         if (at::autocast::is_enabled()) {
           input()[0].impl()->auto_cast().enable = true;
@@ -193,7 +193,7 @@ Tensor Linear::forward(const Scheduler &scheduler,
     struct Impl : Task::Impl {
       explicit Impl(std::vector<Tensor> output /* output */,
                     std::vector<ReadOnlyTensor> input /* input, weight */)
-          : Task::Impl{std::move(output), std::move(input), kCompute} {}
+          : Task::Impl{std::move(output), std::move(input), kMain, kCompute} {}
       void operator()() const override {
         if (at::autocast::is_enabled()) {
           input()[0].impl()->auto_cast().enable = true;
@@ -225,7 +225,7 @@ Tensor Linear::backward_input(const Scheduler &scheduler,
   struct Impl : Task::Impl {
     explicit Impl(std::vector<Tensor> output /* grad_input */,
                   std::vector<ReadOnlyTensor> input /* grad_output, weight */)
-        : Task::Impl{std::move(output), std::move(input), kCompute} {}
+        : Task::Impl{std::move(output), std::move(input), kMain, kCompute} {}
     void operator()() const override {
       at::Tensor grad_output = input()[0].impl()->tensor(),
                  w = input()[1].impl()->tensor();
@@ -261,7 +261,7 @@ void Linear::backward_parameter(const Scheduler &scheduler,
   struct Impl : Task::Impl {
     explicit Impl(std::vector<Tensor> output /* grad_weight */,
                   std::vector<ReadOnlyTensor> input /* grad_output, input */)
-        : Task::Impl{std::move(output), std::move(input), kCompute} {}
+        : Task::Impl{std::move(output), std::move(input), kAssist, kCompute} {}
     void operator()() const override {
       at::Tensor grad_output = input()[0].impl()->tensor(),
                  x = input()[1].impl()->tensor();
@@ -316,7 +316,7 @@ void Linear::backward_parameter(const Scheduler &scheduler,
       explicit Impl(std::vector<Tensor> output /* grad_bias */,
                     std::vector<ReadOnlyTensor> input /* grad_output */,
                     const bool autocast)
-          : Task::Impl{std::move(output), std::move(input), kCompute},
+          : Task::Impl{std::move(output), std::move(input), kAssist, kCompute},
             autocast{autocast} {}
       void operator()() const override {
         if (output()[0].impl()->tensor().defined()) {

@@ -22,6 +22,7 @@
 
 #include "tensor.h"
 #include "threading/event.h"
+#include "threading/task_impl.h"
 
 namespace cs {
 struct Event;
@@ -31,13 +32,9 @@ struct ReadOnlyTensor::Impl {
   auto &stream() { return stream_; }
   auto &stream() const { return stream_; }
 
-  int8_t streamIdx_;
-  auto &streamIdx() { return streamIdx_; }
-  auto &streamIdx() const { return streamIdx_; }
-
-  int8_t schedulerIdx_;
-  auto &schedulerIdx() { return schedulerIdx_; }
-  auto &schedulerIdx() const { return schedulerIdx_; }
+  Task::Impl::Priority priority_;
+  auto &priority() { return priority_; }
+  auto &priority() const { return priority_; }
 
   Event event_;
   auto &event() { return event_; }

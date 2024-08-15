@@ -21,19 +21,18 @@
 
 namespace cs {
 struct Task::Impl {
-  enum Type {
-    kConfig,
-    kCompute,
-    kLoader,
-    kMemcpy,
-    kNccl,
-  };
+  enum Type { kConfig = 0, kCompute, kLoader, kMemcpy, kNccl, kNumType };
+
+  enum Priority { kMain = 0, kAssist, kComm, kNumPriority };
 
   virtual ~Impl() = default;
 
   Impl(std::vector<Tensor> output, std::vector<ReadOnlyTensor> input,
-       const Type type)
-      : output_{std::move(output)}, input_{std::move(input)}, type_{type} {}
+       const Priority priority, const Type type)
+      : output_{std::move(output)},
+        input_{std::move(input)},
+        priority_{priority},
+        type_{type} {}
 
   [[nodiscard]] auto &input() const { return input_; }
 
@@ -42,6 +41,8 @@ struct Task::Impl {
   [[nodiscard]] auto &intermediate() const { return intermediate_; }
 
   [[nodiscard]] auto &type() const { return type_; }
+
+  [[nodiscard]] auto &priority() const { return priority_; }
 
   virtual void operator()() const = 0;
 
@@ -53,6 +54,8 @@ struct Task::Impl {
   std::vector<ReadOnlyTensor> input_;
 
   mutable std::vector<at::Tensor> intermediate_;
+
+  Priority priority_;
 
   Type type_;
 };

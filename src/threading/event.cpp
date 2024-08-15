@@ -61,7 +61,7 @@ Event::Event() : impl_{popEvent()} {}
 Event::Event(std::shared_ptr<Impl> impl) : impl_{std::move(impl)} {}
 
 Event::~Event() {
-  if (impl_ != nullptr) {
+  if (impl_ != nullptr && impl_.use_count() > 1) {
     pushEvent(std::move(impl_));
   }
 }

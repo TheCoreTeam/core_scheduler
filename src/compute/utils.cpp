@@ -37,7 +37,7 @@ Tensor sum(const Scheduler &scheduler, const ReadOnlyTensor &input,
                   std::vector<ReadOnlyTensor> input /* input */,
                   const IntArrayRef dim, const bool keep_dim,
                   const c10::optional<at::ScalarType> dtype)
-        : Task::Impl{std::move(output), std::move(input), kCompute},
+        : Task::Impl{std::move(output), std::move(input), kMain, kCompute},
           dim{dim},
           keep_dim{keep_dim},
           dtype{dtype} {}
@@ -67,7 +67,7 @@ Tensor range(const Scheduler &scheduler, const at::Scalar &start,
     explicit Impl(std::vector<Tensor> output /* tensor */,
                   const at::Scalar &start, const at::Scalar &end,
                   const TensorOptions options)
-        : Task::Impl{std::move(output), {}, kCompute},
+        : Task::Impl{std::move(output), {}, kMain, kCompute},
           start{start},
           end{end},
           options{options} {}
@@ -94,7 +94,7 @@ Tensor arange(const Scheduler &scheduler, const at::Scalar &start,
     explicit Impl(std::vector<Tensor> output /* tensor */,
                   const at::Scalar &start, const at::Scalar &end,
                   const TensorOptions options)
-        : Task::Impl{std::move(output), {}, kCompute},
+        : Task::Impl{std::move(output), {}, kMain, kCompute},
           start{start},
           end{end},
           options{options} {}
@@ -122,7 +122,7 @@ Tensor arange(const Scheduler &scheduler, const at::Scalar &start,
     explicit Impl(std::vector<Tensor> output /* tensor */,
                   const at::Scalar &start, const at::Scalar &end,
                   const at::Scalar &step, const TensorOptions options)
-        : Task::Impl{std::move(output), {}, kCompute},
+        : Task::Impl{std::move(output), {}, kMain, kCompute},
           start{start},
           end{end},
           step{step},
@@ -152,7 +152,7 @@ Tensor randint(const Scheduler &scheduler, const int64_t low,
     explicit Impl(std::vector<Tensor> output /* tensor */, const int64_t low,
                   const int64_t high, const IntArrayRef size,
                   const TensorOptions &options)
-        : Task::Impl{std::move(output), {}, kCompute},
+        : Task::Impl{std::move(output), {}, kMain, kCompute},
           low{low},
           high{high},
           size{size},
@@ -179,7 +179,7 @@ Tensor empty(const Scheduler &scheduler, const IntArrayRef size,
 
     explicit Impl(std::vector<Tensor> output /* tensor */,
                   const IntArrayRef size, const TensorOptions options)
-        : Task::Impl{std::move(output), {}, kCompute},
+        : Task::Impl{std::move(output), {}, kMain, kCompute},
           size{size},
           options{options} {}
     void operator()() const override {
@@ -200,7 +200,7 @@ Tensor empty_like(const Scheduler &scheduler, const ReadOnlyTensor &src) {
   struct Impl : Task::Impl {
     explicit Impl(std::vector<Tensor> output /* tensor */,
                   std::vector<ReadOnlyTensor> input /* input */)
-        : Task::Impl{std::move(output), std::move(input), kCompute} {}
+        : Task::Impl{std::move(output), std::move(input), kMain, kCompute} {}
     void operator()() const override {
       output()[0].impl()->tensor() =
           torch::empty_like(input()[0].impl()->tensor());
@@ -223,7 +223,7 @@ Tensor ones(const Scheduler &scheduler, const IntArrayRef size,
 
     explicit Impl(std::vector<Tensor> output /* tensor */,
                   const IntArrayRef size, const TensorOptions options)
-        : Task::Impl{std::move(output), {}, kCompute},
+        : Task::Impl{std::move(output), {}, kMain, kCompute},
           size{size},
           options{options} {}
     void operator()() const override {
@@ -244,7 +244,7 @@ Tensor ones_like(const Scheduler &scheduler, const ReadOnlyTensor &src) {
   struct Impl : Task::Impl {
     explicit Impl(std::vector<Tensor> output /* tensor */,
                   std::vector<ReadOnlyTensor> input /* input */)
-        : Task::Impl{std::move(output), std::move(input), kCompute} {}
+        : Task::Impl{std::move(output), std::move(input), kMain, kCompute} {}
     void operator()() const override {
       output()[0].impl()->tensor() =
           torch::ones_like(input()[0].impl()->tensor());
@@ -267,7 +267,7 @@ Tensor zeros(const Scheduler &scheduler, const IntArrayRef size,
 
     explicit Impl(std::vector<Tensor> output /* tensor */,
                   const IntArrayRef size, const TensorOptions options)
-        : Task::Impl{std::move(output), {}, kCompute},
+        : Task::Impl{std::move(output), {}, kMain, kCompute},
           size{size},
           options{options} {}
     void operator()() const override {
@@ -288,7 +288,7 @@ Tensor zeros_like(const Scheduler &scheduler, const ReadOnlyTensor &src) {
   struct Impl : Task::Impl {
     explicit Impl(std::vector<Tensor> output /* tensor */,
                   std::vector<ReadOnlyTensor> input /* input */)
-        : Task::Impl{std::move(output), std::move(input), kCompute} {}
+        : Task::Impl{std::move(output), std::move(input), kMain, kCompute} {}
     void operator()() const override {
       output()[0].impl()->tensor() =
           torch::zeros_like(input()[0].impl()->tensor());
@@ -311,7 +311,7 @@ Tensor rand(const Scheduler &scheduler, const IntArrayRef size,
 
     explicit Impl(std::vector<Tensor> output /* tensor */,
                   const IntArrayRef size, const TensorOptions options)
-        : Task::Impl{std::move(output), {}, kCompute},
+        : Task::Impl{std::move(output), {}, kMain, kCompute},
           size{size},
           options{options} {}
     void operator()() const override {
@@ -332,7 +332,7 @@ Tensor rand_like(const Scheduler &scheduler, const ReadOnlyTensor &src) {
   struct Impl : Task::Impl {
     explicit Impl(std::vector<Tensor> output /* tensor */,
                   std::vector<ReadOnlyTensor> input /* input */)
-        : Task::Impl{std::move(output), std::move(input), kCompute} {}
+        : Task::Impl{std::move(output), std::move(input), kMain, kCompute} {}
     void operator()() const override {
       output()[0].impl()->tensor() =
           torch::rand_like(input()[0].impl()->tensor());
@@ -355,7 +355,7 @@ Tensor randn(const Scheduler &scheduler, const IntArrayRef size,
 
     explicit Impl(std::vector<Tensor> output /* tensor */,
                   const IntArrayRef size, const TensorOptions options)
-        : Task::Impl{std::move(output), {}, kCompute},
+        : Task::Impl{std::move(output), {}, kMain, kCompute},
           size{size},
           options{options} {}
     void operator()() const override {
@@ -376,7 +376,7 @@ Tensor randn_like(const Scheduler &scheduler, const ReadOnlyTensor &src) {
   struct Impl : Task::Impl {
     explicit Impl(std::vector<Tensor> output /* tensor */,
                   std::vector<ReadOnlyTensor> input /* input */)
-        : Task::Impl{std::move(output), std::move(input), kCompute} {}
+        : Task::Impl{std::move(output), std::move(input), kMain, kCompute} {}
     void operator()() const override {
       output()[0].impl()->tensor() =
           torch::randn_like(input()[0].impl()->tensor());
@@ -400,7 +400,7 @@ std::vector<Tensor> split(const Scheduler &scheduler, const ReadOnlyTensor &src,
     explicit Impl(std::vector<Tensor> output /* tensor */,
                   std::vector<ReadOnlyTensor> input /* inputs */,
                   const int64_t split_size, const int64_t dim)
-        : Task::Impl{std::move(output), std::move(input), kCompute},
+        : Task::Impl{std::move(output), std::move(input), kMain, kCompute},
           split_size{split_size},
           dim{dim} {}
     void operator()() const override {
@@ -439,7 +439,7 @@ Tensor view(const Scheduler &scheduler, const ReadOnlyTensor &input,
     explicit Impl(std::vector<Tensor> output /* tensor */,
                   std::vector<ReadOnlyTensor> input /* input */,
                   const IntArrayRef size)
-        : Task::Impl{std::move(output), std::move(input), kCompute},
+        : Task::Impl{std::move(output), std::move(input), kMain, kCompute},
           size{size} {}
     void operator()() const override {
       output()[0].impl()->tensor() = input()[0].impl()->tensor().view(size);
@@ -468,7 +468,7 @@ Tensor as_strided(const Scheduler &scheduler, const ReadOnlyTensor &input,
                   std::vector<ReadOnlyTensor> input /* input */,
                   const IntArrayRef size, const IntArrayRef stride,
                   const optional<int64_t> storage_offset)
-        : Task::Impl{std::move(output), std::move(input), kCompute},
+        : Task::Impl{std::move(output), std::move(input), kMain, kCompute},
           size{size},
           stride{stride},
           storage_offset(storage_offset) {}
@@ -496,7 +496,7 @@ Tensor broadcast_to(const Scheduler &scheduler, const ReadOnlyTensor &input,
     explicit Impl(std::vector<Tensor> output /* tensor */,
                   std::vector<ReadOnlyTensor> input /* inputs */,
                   const IntArrayRef size)
-        : Task::Impl{std::move(output), std::move(input), kCompute},
+        : Task::Impl{std::move(output), std::move(input), kMain, kCompute},
           size{size} {}
     void operator()() const override {
       output()[0].impl()->tensor() =
@@ -521,7 +521,8 @@ Tensor cat(const Scheduler &scheduler, const std::vector<ReadOnlyTensor> &input,
     explicit Impl(std::vector<Tensor> output /* tensor */,
                   std::vector<ReadOnlyTensor> input /* inputs */,
                   const int64_t dim)
-        : Task::Impl{std::move(output), std::move(input), kCompute}, dim{dim} {}
+        : Task::Impl{std::move(output), std::move(input), kMain, kCompute},
+          dim{dim} {}
     void operator()() const override {
       std::vector<at::Tensor> vInput;
       vInput.reserve(input().size());
@@ -547,7 +548,7 @@ Tensor add(const Scheduler &scheduler, ReadOnlyTensor x, ReadOnlyTensor y) {
   struct Impl : Task::Impl {
     explicit Impl(std::vector<Tensor> output /* tensor */,
                   std::vector<ReadOnlyTensor> input /* A, B */)
-        : Task::Impl{std::move(output), std::move(input), kCompute} {}
+        : Task::Impl{std::move(output), std::move(input), kMain, kCompute} {}
     void operator()() const override {
       output()[0].impl()->tensor() =
           at::add(input()[0].impl()->tensor(), input()[1].impl()->tensor());
@@ -564,7 +565,7 @@ Tensor add(const Scheduler &scheduler, ReadOnlyTensor x, ReadOnlyTensor y) {
 void zero_(const Scheduler &scheduler, const Tensor &tensor) {
   struct Impl : Task::Impl {
     explicit Impl(const Tensor &tensor /* tensor */)
-        : Task::Impl{{tensor}, {tensor}, kCompute} {}
+        : Task::Impl{{tensor}, {tensor}, kMain, kCompute} {}
     void operator()() const override {
       (void)output()[0].impl()->tensor().zero_();
     }
@@ -584,7 +585,7 @@ void uniform_(const Scheduler &scheduler, const Tensor &tensor,
 
     explicit Impl(const Tensor &tensor /* tensor */, const double from,
                   const double to)
-        : Task::Impl{{tensor}, {tensor}, kCompute}, from{from}, to{to} {}
+        : Task::Impl{{tensor}, {tensor}, kMain, kCompute}, from{from}, to{to} {}
     void operator()() const override {
       (void)output()[0].impl()->tensor().uniform_(from, to);
     }
@@ -605,7 +606,9 @@ void normal_(const Scheduler &scheduler, const Tensor &tensor,
 
     explicit Impl(const Tensor &tensor /* tensor */, const double mean,
                   const double std)
-        : Task::Impl{{tensor}, {tensor}, kCompute}, mean{mean}, std{std} {}
+        : Task::Impl{{tensor}, {tensor}, kMain, kCompute},
+          mean{mean},
+          std{std} {}
     void operator()() const override {
       (void)output()[0].impl()->tensor().normal_(mean, std);
     }
@@ -621,7 +624,7 @@ void normal_(const Scheduler &scheduler, const Tensor &tensor,
 Tensor clone(const Scheduler &scheduler, const Tensor &tensor) {
   struct Impl : Task::Impl {
     explicit Impl(const Tensor &result, const ReadOnlyTensor &input)
-        : Task::Impl{{result}, {input}, kCompute} {}
+        : Task::Impl{{result}, {input}, kMain, kCompute} {}
     void operator()() const override {
       output()[0].impl()->tensor() = input()[0].impl()->tensor().clone();
     }
@@ -650,7 +653,7 @@ Tensor linalg_vector_norm(const Scheduler &scheduler,
       explicit Impl(const Tensor &result, const ReadOnlyTensor &input,
                     const double ord, const IntArray &dim, const bool keepdim,
                     const c10::optional<at::ScalarType> dtype)
-          : Task::Impl{{result}, {input}, kCompute},
+          : Task::Impl{{result}, {input}, kMain, kCompute},
             ord{ord},
             dim{dim},
             keepdim{keepdim},
@@ -675,7 +678,7 @@ Tensor linalg_vector_norm(const Scheduler &scheduler,
       explicit Impl(const Tensor &result, const ReadOnlyTensor &input,
                     const double ord, const bool keepdim,
                     const c10::optional<at::ScalarType> dtype)
-          : Task::Impl{{result}, {input}, kCompute},
+          : Task::Impl{{result}, {input}, kMain, kCompute},
             ord{ord},
             keepdim{keepdim},
             dtype{dtype} {}
@@ -709,6 +712,7 @@ Tensor clip_grad_norm_(const Scheduler &scheduler,
                        return output;
                      }(),
                      {result.begin(), result.end()},
+                     kMain,
                      kCompute},
           max_norm{max_norm},
           norm_type{norm_type} {}

@@ -46,7 +46,7 @@ Tensor CrossEntropy::forward(const Scheduler &scheduler,
         std::vector<Tensor> output /* log_probs, loss, total_weight */,
         std::vector<ReadOnlyTensor> input /* weight, input, target */,
         const State::Args &args)
-        : Task::Impl{std::move(output), std::move(input), kCompute},
+        : Task::Impl{std::move(output), std::move(input), kMain, kCompute},
           args{args} {}
     void operator()() const override {
       const c10::optional weight_{
@@ -91,7 +91,7 @@ Tensor CrossEntropy::backward(const Scheduler &scheduler,
                   std::vector<ReadOnlyTensor>
                       input /* weight, loss, log_probs, target, total_weight */,
                   const State::Args &args)
-        : Task::Impl{std::move(output), std::move(input), kCompute},
+        : Task::Impl{std::move(output), std::move(input), kMain, kCompute},
           args{args} {}
     void operator()() const override {
       const c10::optional weight_{

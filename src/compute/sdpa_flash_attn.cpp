@@ -47,7 +47,7 @@ Tensor ScaledDotProductFlashAttention::forward(
         ,
         std::vector<ReadOnlyTensor> input /* query, key, value */,
         const State::Args &args, std::shared_ptr<State::Backward::Max> max)
-        : Task::Impl{std::move(output), std::move(input), kCompute},
+        : Task::Impl{std::move(output), std::move(input), kMain, kCompute},
           args{args},
           max{std::move(max)} {}
     void operator()() const override {
@@ -110,7 +110,7 @@ std::array<Tensor, 3> ScaledDotProductFlashAttention::backward(
                      philox_seed[8], philox_offset[9] */
         ,
         const State::Args &args, const State::Backward::Max &max)
-        : Task::Impl{std::move(output), std::move(input), kCompute},
+        : Task::Impl{std::move(output), std::move(input), kMain, kCompute},
           args{args},
           max{max} {}
     void operator()() const override {

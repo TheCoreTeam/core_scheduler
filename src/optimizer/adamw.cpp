@@ -52,7 +52,8 @@ std::shared_ptr<AdamW::State> AdamW::init(const Scheduler &scheduler,
     struct Impl : Task::Impl {
       explicit Impl(std::vector<Tensor> output /* m, v, vMax */,
                     std::vector<ReadOnlyTensor> input /* parameter */)
-          : Task::Impl{std::move(output), std::move(input), kCompute} {}
+          : Task::Impl{std::move(output), std::move(input), kAssist, kCompute} {
+      }
       void operator()() const override {
         output()[0].impl()->tensor() =
             at::zeros_like(input()[0].impl()->tensor());
@@ -80,7 +81,8 @@ std::shared_ptr<AdamW::State> AdamW::init(const Scheduler &scheduler,
     struct Impl : Task::Impl {
       explicit Impl(std::vector<Tensor> output /* m, v */,
                     std::vector<ReadOnlyTensor> input /* parameter */)
-          : Task::Impl{std::move(output), std::move(input), kCompute} {}
+          : Task::Impl{std::move(output), std::move(input), kAssist, kCompute} {
+      }
       void operator()() const override {
         output()[0].impl()->tensor() =
             at::zeros_like(input()[0].impl()->tensor());
@@ -115,7 +117,7 @@ void AdamW::step(const Scheduler &scheduler,
       explicit Impl(std::vector<Tensor> output /* w, m, v, vMax */,
                     std::vector<ReadOnlyTensor> input /* w, m, v, vMax, dw */,
                     const State::Options &options)
-          : Task::Impl{std::move(output), std::move(input), kCompute},
+          : Task::Impl{std::move(output), std::move(input), kAssist, kCompute},
             options{options} {}
       void operator()() const override {
         const auto stream = c10::cuda::getCurrentCUDAStream();
@@ -143,7 +145,7 @@ void AdamW::step(const Scheduler &scheduler,
       explicit Impl(std::vector<Tensor> output /* w, m, v */,
                     std::vector<ReadOnlyTensor> input /* w, m, v, dw */,
                     const State::Options &options)
-          : Task::Impl{std::move(output), std::move(input), kCompute},
+          : Task::Impl{std::move(output), std::move(input), kAssist, kCompute},
             options{options} {}
       void operator()() const override {
         const auto stream = c10::cuda::getCurrentCUDAStream();

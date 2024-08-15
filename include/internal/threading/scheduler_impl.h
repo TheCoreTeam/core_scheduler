@@ -26,11 +26,9 @@ struct Scheduler::Impl {
 
   virtual void submit(Task &&task);
 
-  virtual void submit_to_all(Task &&task);
-
   [[nodiscard]] int64_t device_rank() const;
 
- private:
+ protected:
   const int64_t device_rank_;
 };
 }  // namespace cs

@@ -35,7 +35,7 @@ void AllGather::run(const Scheduler &scheduler, const Comm &comm,
     explicit Impl(std::vector<Tensor> output /* tensors */,
                   std::vector<ReadOnlyTensor> input /* tensors */,
                   std::vector<std::vector<Tensor>> actualReceive, Comm comm)
-        : Task::Impl{std::move(output), std::move(input), kNccl},
+        : Task::Impl{std::move(output), std::move(input), kComm, kNccl},
           actualReceive{std::move(actualReceive)},
           comm{std::move(comm)} {}
     void operator()() const override {
