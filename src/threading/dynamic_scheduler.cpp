@@ -110,6 +110,7 @@ struct Impl_ final : Scheduler::Impl {
 
  private:
   std::vector<c10::cuda::CUDAStream> streams_;
+  Event main_event_;
   Event assist_event_;
   std::deque<AssistQueue> assist_queue_;
   Event comm_event_;
@@ -188,6 +189,7 @@ void Impl_::submit(Task &&task) {
       wait(assist_queue_, assist_event_);
       wait(comm_queue_, comm_event_);
       call(Task::Impl::Priority::kMain);
+      main_event_.record();
     } catch (const std::exception &e) {
       CS_ASSERT_TRUE(false, fmt::format("Task {} failed with error: {}",
                                         task.impl()->name(), e.what()));
@@ -195,6 +197,7 @@ void Impl_::submit(Task &&task) {
   } else if (task.impl()->priority() == Task::Impl::Priority::kAssist) {
     c10::cuda::CUDAStreamGuard streamGuard{
         streams_[Task::Impl::Priority::kAssist]};
+    main_event_.block();
     call(Task::Impl::Priority::kAssist);
     auto protected_tensors = collect();
     assist_event_.record();
@@ -202,6 +205,7 @@ void Impl_::submit(Task &&task) {
   } else {
     c10::cuda::CUDAStreamGuard streamGuard{
         streams_[Task::Impl::Priority::kComm]};
+    main_event_.block();
     call(Task::Impl::Priority::kComm);
     auto protected_tensors = collect();
     comm_event_.record();
