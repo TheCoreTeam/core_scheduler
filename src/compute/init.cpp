@@ -34,7 +34,7 @@ void kaiming_normal_(const Scheduler &scheduler, const Tensor &tensor,
     explicit Impl(const Tensor &tensor /* tensor */, const double a,
                   const torch::nn::init::FanModeType &m,
                   const torch::nn::init::NonlinearityType &nonlineari)
-        : Task::Impl{{tensor}, {tensor}, kCompute},
+        : Task::Impl{{tensor}, {tensor}, kMain, kCompute},
           a{a},
           m{m},
           nonlineari{nonlineari} {}
@@ -62,7 +62,7 @@ void kaiming_uniform_(const Scheduler &scheduler, const Tensor &tensor,
     explicit Impl(const Tensor &tensor /* tensor */, const double a,
                   const torch::nn::init::FanModeType &m,
                   const torch::nn::init::NonlinearityType &nonlineari)
-        : Task::Impl{{tensor}, {tensor}, kCompute},
+        : Task::Impl{{tensor}, {tensor}, kMain, kCompute},
           a{a},
           m{m},
           nonlineari{nonlineari} {}

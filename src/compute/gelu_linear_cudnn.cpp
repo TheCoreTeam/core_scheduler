@@ -369,7 +369,7 @@ std::shared_ptr<GeluLinear::State> GeluLinear::init(const Scheduler &scheduler,
       explicit Impl(std::vector<Tensor> output /* weight, bias */,
                     const TensorOptions options, const int64_t in_futures,
                     const int64_t out_futures)
-          : Task::Impl{std::move(output), {}, kCompute},
+          : Task::Impl{std::move(output), {}, kMain, kCompute},
             options{options},
             in_futures{in_futures},
             out_futures{out_futures} {}
@@ -409,7 +409,7 @@ std::shared_ptr<GeluLinear::State> GeluLinear::init(const Scheduler &scheduler,
       explicit Impl(std::vector<Tensor> output /* weight, bias */,
                     const TensorOptions options, const int64_t in_futures,
                     const int64_t out_futures)
-          : Task::Impl{std::move(output), {}, kCompute},
+          : Task::Impl{std::move(output), {}, kMain, kCompute},
             options{options},
             in_futures{in_futures},
             out_futures{out_futures} {}
@@ -444,7 +444,7 @@ Tensor GeluLinear::forward(const Scheduler &scheduler,
     explicit Impl(std::vector<Tensor> output /* output */,
                   std::vector<ReadOnlyTensor> input /* input, weight, bias */,
                   const State::Args &args)
-        : Task::Impl{std::move(output), std::move(input), kCompute},
+        : Task::Impl{std::move(output), std::move(input), kMain, kCompute},
           args{args} {}
     void operator()() const override {
       const auto &x = input()[0].impl()->tensor();
@@ -507,7 +507,7 @@ Tensor GeluLinear::backward_input(const Scheduler &scheduler,
     explicit Impl(
         std::vector<Tensor> output /* grad_input */,
         std::vector<ReadOnlyTensor> input /* grad_output, weight, input */)
-        : Task::Impl{std::move(output), std::move(input), kCompute} {}
+        : Task::Impl{std::move(output), std::move(input), kMain, kCompute} {}
     void operator()() const override {
       auto grad_output = input()[0].impl()->tensor();
       const auto &w = input()[1].impl()->tensor();
@@ -568,7 +568,7 @@ void GeluLinear::backward_parameter(const Scheduler &scheduler,
   struct Impl : Task::Impl {
     explicit Impl(std::vector<Tensor> output /* grad_weight */,
                   std::vector<ReadOnlyTensor> input /* grad_output, input */)
-        : Task::Impl{std::move(output), std::move(input), kCompute} {}
+        : Task::Impl{std::move(output), std::move(input), kAssist, kCompute} {}
     void operator()() const override {
       const auto &grad_output = input()[0].impl()->tensor();
       const auto &x = input()[1].impl()->tensor();
@@ -635,7 +635,8 @@ void GeluLinear::backward_parameter(const Scheduler &scheduler,
     struct Impl : Task::Impl {
       explicit Impl(std::vector<Tensor> output /* grad_bias */,
                     std::vector<ReadOnlyTensor> input /* grad_output */)
-          : Task::Impl{std::move(output), std::move(input), kCompute} {}
+          : Task::Impl{std::move(output), std::move(input), kAssist, kCompute} {
+      }
       void operator()() const override {
         const auto &grad_output = input()[0].impl()->tensor();
 

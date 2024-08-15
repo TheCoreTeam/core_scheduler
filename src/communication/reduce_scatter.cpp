@@ -49,7 +49,7 @@ void ReduceScatter::run(
                   std::vector<ReadOnlyTensor> input /* tensors */,
                   const std::vector<std::vector<ReadOnlyTensor>> &actualSend,
                   Comm comm, const Operation operation)
-        : Task::Impl{std::move(output), std::move(input), kNccl},
+        : Task::Impl{std::move(output), std::move(input), kComm, kNccl},
           actualSend{actualSend},
           comm{std::move(comm)},
           operation{operation} {}

@@ -347,7 +347,7 @@ Tensor ScaledDotProductCuDnn::forward(const Scheduler &scheduler,
                   ,
                   std::vector<ReadOnlyTensor> input /* query, key, value */,
                   const State::Args &args)
-        : Task::Impl{std::move(output), std::move(input), kCompute},
+        : Task::Impl{std::move(output), std::move(input), kMain, kCompute},
           args{args} {}
     void operator()() const override {
       const auto &query = input()[0].impl()->tensor();
@@ -445,7 +445,7 @@ std::array<Tensor, 3> ScaledDotProductCuDnn::backward(
                                              value[3], out[4], stats[5] */
         ,
         const State::Args &args)
-        : Task::Impl{std::move(output), std::move(input), kCompute},
+        : Task::Impl{std::move(output), std::move(input), kMain, kCompute},
           args{args} {}
     void operator()() const override {
       const auto &grad_out = input()[0].impl()->tensor();

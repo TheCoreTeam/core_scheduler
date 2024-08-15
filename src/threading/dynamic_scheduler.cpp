@@ -98,291 +98,114 @@ hwloc_cpuset_t getClosestCpuSetToGpu(const unsigned int gpuRank) {
 }
 }  // namespace
 namespace {
-struct Impl_ final : Scheduler::Impl {
-  explicit Impl_(int localRank);
+struct AssistQueue {
+  int count;
+  std::vector<at::Tensor> protected_tensors;
+};
 
-  ~Impl_() override;
+struct Impl_ final : Scheduler::Impl {
+  explicit Impl_(int local_rank);
 
   void submit(Task &&task) override;
 
-  void submit_to_all(Task &&task) override;
-
  private:
-  int8_t threadCommIdx_;
-  std::vector<std::shared_ptr<std::barrier<>>> startBarrier_{};
-  std::vector<std::shared_ptr<std::barrier<>>> endBarrier_{};
-  std::vector<std::jthread> threadVector_{};
-  std::vector<std::shared_ptr<std::queue<Task>>> taskQueue_{};
-  std::vector<std::vector<void *>> lastOutput_;
-  std::shared_ptr<std::atomic<bool>> shutDown_{
-      std::make_shared<std::atomic<bool>>(false)};
+  std::vector<c10::cuda::CUDAStream> streams_;
+  Event assist_event_;
+  std::deque<AssistQueue> assist_queue_;
+  Event comm_event_;
+  std::deque<AssistQueue> comm_queue_;
 };
 
-struct EventVectorPair {
-  Event event{nullptr};
-  std::vector<at::Tensor> tensors;
-};
-
-void memoryWatchDog(const std::shared_ptr<std::atomic<bool>> shutDown,
-                    const int localRank,
-                    std::shared_ptr<std::queue<EventVectorPair>> queue,
-                    std::shared_ptr<std::mutex> queueMutex,
-                    std::shared_ptr<std::condition_variable> cv,
-                    std::shared_ptr<std::mutex> cvMutex) {
-  c10::cuda::CUDAGuard deviceGuard{static_cast<c10::DeviceIndex>(localRank)};
-  while (!shutDown->load()) {
-    EventVectorPair pair;
-    std::unique_lock lock{*queueMutex};
-    if (!queue->empty()) {
-      pair = std::move(queue->front());
-      queue->pop();
-    }
-    lock.unlock();
-    if (!pair.tensors.empty()) {
-      try {
-        pair.event.synchronize();
-        pair.tensors.clear();
-        pair.event = Event{nullptr};
-      } catch (const std::exception &e) {
-        CS_ASSERT_TRUE(false, "Task failed with error: {}", e.what());
-      }
-    } else {
-      std::unique_lock uniqueLock{*cvMutex};
-      cv->wait(uniqueLock, [&] { return shutDown->load() || !queue->empty(); });
-    }
-  }
-}
-
-void threadTask(const int localRank, const int8_t streamIdx,
-                std::shared_ptr<std::queue<Task>> taskQueue,
-                const std::shared_ptr<std::atomic<bool>> shutDown,
-                const std::shared_ptr<std::barrier<>> startBarrier,
-                const std::shared_ptr<std::barrier<>> endBarrier) {
-  struct ContextCompute {
-    int deviceRank{0};
-    cudaStream_t cudaStream{nullptr};
-  };
-  ContextCompute context{.deviceRank = localRank};
-  startBarrier->arrive_and_wait();
-  const auto stream = c10::cuda::getStreamFromPool(
-      false, static_cast<c10::DeviceIndex>(context.deviceRank));
-  context.cudaStream = stream.stream();
-  c10::cuda::CUDAStreamGuard streamGuard{stream};
-  c10::cuda::CUDAGuard deviceGuard{
-      static_cast<c10::DeviceIndex>(context.deviceRank)};
-
-  struct WatchDogMeta {
-    std::shared_ptr<std::queue<EventVectorPair>> queue{
-        std::make_shared<std::queue<EventVectorPair>>()};
-    std::shared_ptr<std::mutex> queueMutex{std::make_shared<std::mutex>()};
-    std::shared_ptr<std::condition_variable> cv{
-        std::make_shared<std::condition_variable>()};
-    std::shared_ptr<std::mutex> cvMutex{std::make_shared<std::mutex>()};
-  } watchDogMeta;
-
-  std::jthread watchDog{memoryWatchDog,
-                        shutDown,
-                        localRank,
-                        watchDogMeta.queue,
-                        watchDogMeta.queueMutex,
-                        watchDogMeta.cv,
-                        watchDogMeta.cvMutex};
-
-  while (true) {
-    Event event{nullptr};
-    startBarrier->arrive_and_wait();
-    if (shutDown->load()) {
-      break;
-    }
-    auto task = std::move(taskQueue->front());
-    taskQueue->pop();
-    try {
-      for (auto &input = task.input(); auto &t : input) {
-        if (t.impl()->streamIdx() != streamIdx) {
-          if (!t.impl()->event().query()) {
-            t.impl()->event().block();
-          }
-        }
-      }
-      CS_NVTX_RANGE_FN(task.name());
-      task();
-      if (!task.impl()->intermediate().empty()) {
-        event = Event{};
-        event.record();
-      }
-      for (auto &output = task.output(); auto &t : output) {
-        t.impl()->streamIdx() = streamIdx;
-        t.impl()->event().record();
-      }
-    } catch (const std::exception &e) {
-      CS_ASSERT_TRUE(false, fmt::format("Task {} failed with error: {}",
-                                        task.name(), e.what()));
-    }
-    for (auto &output = task.output(); auto &t : output) {
-      t.impl()->stream() = context.cudaStream;
-    }
-    endBarrier->arrive_and_wait();
-    if (!task.impl()->intermediate().empty()) {
-      std::lock_guard guard{*watchDogMeta.queueMutex};
-      watchDogMeta.queue->emplace(std::move(event),
-                                  std::move(task.impl()->intermediate()));
-      watchDogMeta.cv->notify_one();
-    }
-    task.reset();
-  }
-
-  watchDogMeta.cv->notify_one();
-}
-
-void threadCommTask(const int localRank, const int8_t streamIdx,
-                    std::shared_ptr<std::queue<Task>> taskQueue,
-                    const std::shared_ptr<std::atomic<bool>> shutDown,
-                    const std::shared_ptr<std::barrier<>> startBarrier,
-                    const std::shared_ptr<std::barrier<>> endBarrier) {
-  struct ContextCompute {
-    int deviceRank{0};
-    cudaStream_t cudaStream{nullptr};
-  };
-  ContextCompute context{.deviceRank = localRank};
-  startBarrier->arrive_and_wait();
-  const auto stream = c10::cuda::getStreamFromPool(
-      true, static_cast<c10::DeviceIndex>(context.deviceRank));
-  context.cudaStream = stream.stream();
-  c10::cuda::CUDAStreamGuard streamGuard{stream};
-  c10::cuda::CUDAGuard deviceGuard{
-      static_cast<c10::DeviceIndex>(context.deviceRank)};
-
-  while (true) {
-    startBarrier->arrive_and_wait();
-    if (shutDown->load()) {
-      break;
-    }
-    auto task = std::move(taskQueue->front());
-    taskQueue->pop();
-    try {
-      for (auto &input = task.input(); auto &t : input) {
-        if (t.impl()->streamIdx() != streamIdx) {
-          if (!t.impl()->event().query()) {
-            t.impl()->event().block();
-          }
-        }
-      }
-      CS_NVTX_RANGE_FN(task.name());
-      task();
-      for (auto &output = task.output(); auto &t : output) {
-        t.impl()->streamIdx() = streamIdx;
-        t.impl()->event().record();
-      }
-    } catch (const std::exception &e) {
-      CS_ASSERT_TRUE(false, fmt::format("Task {} failed with error: {}",
-                                        task.name(), e.what()));
-    }
-    for (auto &output = task.output(); auto &t : output) {
-      t.impl()->stream() = context.cudaStream;
-    }
-    endBarrier->arrive_and_wait();
-    task.reset();
-  }
-}
+constexpr int assist_task_gap = 2;
+constexpr int comm_task_gap = 5;
 }  // namespace
 
-Impl_::Impl_(int localRank) : Impl{localRank} {
-  constexpr int threadNum = 2;
-  taskQueue_.resize(threadNum);
-  for (auto &queue : taskQueue_) {
-    queue = std::make_shared<std::queue<Task>>();
-  }
-  lastOutput_.resize(threadNum);
-  threadVector_.reserve(threadNum);
-  startBarrier_.reserve(threadNum);
-  endBarrier_.reserve(threadNum);
-  for (int8_t i = 0; i < threadNum; ++i) {
-    startBarrier_.emplace_back(std::make_shared<std::barrier<>>(2));
-    endBarrier_.emplace_back(std::make_shared<std::barrier<>>(2));
-    threadVector_.emplace_back(threadTask, localRank, i, taskQueue_[i],
-                               shutDown_, startBarrier_[i], endBarrier_[i]);
-    startBarrier_[i]->arrive_and_wait();
-  }
-  threadCommIdx_ = static_cast<int8_t>(threadVector_.size());
-  taskQueue_.emplace_back(std::make_shared<std::queue<Task>>());
-  startBarrier_.emplace_back(std::make_shared<std::barrier<>>(2));
-  endBarrier_.emplace_back(std::make_shared<std::barrier<>>(2));
-  threadVector_.emplace_back(
-      threadCommTask, localRank, threadCommIdx_, taskQueue_[threadCommIdx_],
-      shutDown_, startBarrier_[threadCommIdx_], endBarrier_[threadCommIdx_]);
-  startBarrier_[threadCommIdx_]->arrive_and_wait();
-}
-
-Impl_::~Impl_() {
-  shutDown_->store(true);
-  for (const auto &b : startBarrier_) {
-    (void)b->arrive();
-  }
-  for (const auto &b : endBarrier_) {
-    (void)b->arrive();
+Impl_::Impl_(const int local_rank) : Impl{local_rank} {
+  streams_.reserve(Task::Impl::Priority::kNumPriority);
+  for (int i = 0; i < Task::Impl::Priority::kNumPriority; ++i) {
+    streams_.emplace_back(c10::cuda::getStreamFromPool(
+        false, static_cast<c10::DeviceIndex>(local_rank)));
   }
 }
 
 void Impl_::submit(Task &&task) {
-  int8_t streamIdx = -1;
-  if (task.impl()->type() == Task::Impl::kNccl) {
-    streamIdx = threadCommIdx_;
-  } else {
-    [&]() mutable {
-      auto &input = task.input();
-      std::unordered_set<void *> elements;
-      for (const auto &ptr : input) {
-        elements.insert(ptr.impl().get());
+  c10::cuda::CUDAGuard deviceGuard{static_cast<c10::DeviceIndex>(device_rank_)};
+
+  if (task.impl()->type() == Task::Impl::kConfig) {
+    CS_NVTX_RANGE_FN(task.impl()->name());
+    task();
+    return;
+  }
+
+  auto call = [&](const Task::Impl::Priority tag) {
+    for (auto &input = task.impl()->input(); auto &t : input) {
+      if (t.impl()->priority() != tag) {
+        if (!t.impl()->event().query()) {
+          t.impl()->event().block();
+        }
       }
-      for (std::size_t i = 0; i < lastOutput_.size() - 1; ++i) {
-        for (auto e : lastOutput_[i]) {
-          if (elements.contains(e)) {
-            streamIdx = static_cast<int8_t>(i);
-            return;
+    }
+    CS_NVTX_RANGE_FN(task.impl()->name());
+    task();
+    for (auto &output = task.impl()->output(); auto &t : output) {
+      t.impl()->priority() = tag;
+      t.impl()->event().record();
+    }
+  };
+
+  auto collect = [&]() {
+    std::vector<at::Tensor> protected_tensors;
+    protected_tensors.reserve(task.impl()->input().size() +
+                              task.impl()->output().size() +
+                              task.impl()->intermediate().size());
+    for (const auto &t : task.impl()->input()) {
+      protected_tensors.push_back(t.impl()->tensor());
+    }
+    for (const auto &t : task.impl()->output()) {
+      protected_tensors.push_back(t.impl()->tensor());
+    }
+    for (const auto &t : task.impl()->intermediate()) {
+      protected_tensors.push_back(t);
+    }
+    return protected_tensors;
+  };
+
+  if (task.impl()->priority() == Task::Impl::Priority::kMain) {
+    c10::cuda::CUDAStreamGuard streamGuard{
+        streams_[Task::Impl::Priority::kMain]};
+    try {
+      auto wait = [](std::deque<AssistQueue> &queue, const Event &event) {
+        if (!queue.empty()) {
+          for (auto &element : queue) {
+            --element.count;
+          }
+          while (!queue.empty() && queue.front().count <= 0) {
+            event.block();
+            queue.pop_front();
           }
         }
-      }
-    }();
-    if (streamIdx == -1 /* not found */) {
-      std::vector<int> count;
-      count.resize(taskQueue_.size() - 1);
-      std::ranges::fill(count, 0);
-      for (auto &input = task.input(); auto &t : input) {
-        ++count[t.impl()->streamIdx()];
-      }
-      int smallestCount = task.input().size();
-      streamIdx = 0;
-      for (std::size_t i = 0; i < count.size(); ++i) {
-        if (count[i] < smallestCount) {
-          smallestCount = count[i];
-          streamIdx = i;
-        }
-      }
+      };
+      wait(assist_queue_, assist_event_);
+      wait(comm_queue_, comm_event_);
+      call(Task::Impl::Priority::kMain);
+    } catch (const std::exception &e) {
+      CS_ASSERT_TRUE(false, fmt::format("Task {} failed with error: {}",
+                                        task.impl()->name(), e.what()));
     }
-  }
-
-  taskQueue_[streamIdx]->push(task);
-  (void)startBarrier_[streamIdx]->arrive();
-  if (task.impl()->type() != Task::Impl::kNccl) {
-    lastOutput_[streamIdx].clear();
-    for (auto &output = task.output(); auto &t : output) {
-      lastOutput_[streamIdx].push_back(t.impl().get());
-    }
-  }
-  endBarrier_[streamIdx]->arrive_and_wait();
-}
-
-void Impl_::submit_to_all(Task &&task) {
-  for (std::size_t streamIdx = 0; streamIdx < taskQueue_.size(); ++streamIdx) {
-    taskQueue_[streamIdx]->push(task);
-    (void)startBarrier_[streamIdx]->arrive();
-    if (task.impl()->type() != Task::Impl::kConfig) {
-      lastOutput_[streamIdx].clear();
-      for (auto &output = task.output(); auto &t : output) {
-        lastOutput_[streamIdx].push_back(t.impl().get());
-      }
-    }
-    endBarrier_[streamIdx]->arrive_and_wait();
+  } else if (task.impl()->priority() == Task::Impl::Priority::kAssist) {
+    c10::cuda::CUDAStreamGuard streamGuard{
+        streams_[Task::Impl::Priority::kAssist]};
+    call(Task::Impl::Priority::kAssist);
+    auto protected_tensors = collect();
+    assist_event_.record();
+    assist_queue_.emplace_front(assist_task_gap, std::move(protected_tensors));
+  } else {
+    c10::cuda::CUDAStreamGuard streamGuard{
+        streams_[Task::Impl::Priority::kComm]};
+    call(Task::Impl::Priority::kComm);
+    auto protected_tensors = collect();
+    comm_event_.record();
+    comm_queue_.emplace_front(comm_task_gap, std::move(protected_tensors));
   }
 }
 

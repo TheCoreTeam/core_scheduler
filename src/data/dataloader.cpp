@@ -231,7 +231,7 @@ std::unordered_map<std::string, Tensor> LlmDataLoader::load(
   struct Impl : Task::Impl {
     explicit Impl(std::vector<Tensor> output /* x, y */, const Event &event,
                   const std::span<HostBuffer> buffer)
-        : Task::Impl{std::move(output), {}, kLoader},
+        : Task::Impl{std::move(output), {}, kMain, kLoader},
           event{event},
           buffer{buffer} {}
     const Event event;

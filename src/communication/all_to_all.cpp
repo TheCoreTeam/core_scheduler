@@ -35,7 +35,7 @@ void AllToAll::run(const Scheduler &scheduler, const Comm &comm,
 
     explicit Impl(std::vector<Tensor> output /* tensors */,
                   std::vector<ReadOnlyTensor> input /* tensors */, Comm comm)
-        : Task::Impl{std::move(output), std::move(input), kNccl},
+        : Task::Impl{std::move(output), std::move(input), kComm, kNccl},
           comm{std::move(comm)} {}
     void operator()() const override {
       std::vector<at::Tensor> vReceive;

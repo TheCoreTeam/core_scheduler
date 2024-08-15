@@ -34,7 +34,7 @@ ContextGuard::ContextGuard(const Scheduler& scheduler,
     const c10::ScalarType dtype;
 
     explicit Impl(const c10::ScalarType& dtype)
-        : Task::Impl{{}, {}, kConfig}, dtype{dtype} {}
+        : Task::Impl{{}, {}, kMain, kConfig}, dtype{dtype} {}
     void operator()() const override {
       at::autocast::clear_cache();
       at::autocast::set_enabled(true);
@@ -46,20 +46,20 @@ ContextGuard::ContextGuard(const Scheduler& scheduler,
     }
   };
 
-  scheduler.impl()->submit_to_all(Task{std::make_shared<Impl>(dtype)});
+  scheduler.impl()->submit(Task{std::make_shared<Impl>(dtype)});
 }
 
 ContextGuard::~ContextGuard() {
   at::autocast::set_enabled(false);
 
   struct Impl : Task::Impl {
-    explicit Impl() : Task::Impl{{}, {}, kConfig} {}
+    explicit Impl() : Task::Impl{{}, {}, kMain, kConfig} {}
     void operator()() const override { at::autocast::set_enabled(false); }
     [[nodiscard]] const char* name() const override {
       return "cs::autocast::exit";
     }
   };
 
-  scheduler_.impl()->submit_to_all(Task{std::make_shared<Impl>()});
+  scheduler_.impl()->submit(Task{std::make_shared<Impl>()});
 }
 }  // namespace cs::autocast

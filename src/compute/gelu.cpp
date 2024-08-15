@@ -34,7 +34,7 @@ Tensor GeLU::forward(const Scheduler &scheduler,
   struct Impl : Task::Impl {
     Impl(std::vector<Tensor> output /* output */,
          std::vector<ReadOnlyTensor> input /* input */)
-        : Task::Impl{std::move(output), std::move(input), kCompute} {}
+        : Task::Impl{std::move(output), std::move(input), kMain, kCompute} {}
     void operator()() const override {
       output()[0].impl()->tensor() = at::gelu(input()[0].impl()->tensor());
     }
@@ -56,7 +56,7 @@ Tensor GeLU::backward(const Scheduler &scheduler,
   struct Impl : Task::Impl {
     Impl(std::vector<Tensor> output /* grad_input */,
          std::vector<ReadOnlyTensor> input /* grad_ouput, input */)
-        : Task::Impl{std::move(output), std::move(input), kCompute} {}
+        : Task::Impl{std::move(output), std::move(input), kMain, kCompute} {}
     void operator()() const override {
       output()[0].impl()->tensor() = at::gelu_backward(
           input()[0].impl()->tensor(), input()[1].impl()->tensor());
