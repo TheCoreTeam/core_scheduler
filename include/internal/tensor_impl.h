@@ -28,10 +28,6 @@ namespace cs {
 struct Event;
 
 struct ReadOnlyTensor::Impl {
-  cudaStream_t stream_;
-  auto &stream() { return stream_; }
-  auto &stream() const { return stream_; }
-
   Task::Impl::Priority priority_;
   auto &priority() { return priority_; }
   auto &priority() const { return priority_; }
