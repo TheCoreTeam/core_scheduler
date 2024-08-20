@@ -228,6 +228,65 @@ Tensor LayerNorm::forward(const Scheduler& scheduler,
 Tensor LayerNorm::backward(const Scheduler& scheduler,
                            const std::shared_ptr<State>& state,
                            const ReadOnlyTensor& grad_output) {
+  backward_parameter(scheduler, state, grad_output);
+  return backward_input(scheduler, state, grad_output);
+}
+
+Tensor LayerNorm::backward_input(const Scheduler& scheduler,
+                                 const std::shared_ptr<State>& state,
+                                 const ReadOnlyTensor& grad_output) {
+  auto weight = static_cast<const ReadOnlyTensor&>(state->forward.weight);
+  Tensor grad_input;
+  Task task{nullptr};
+  struct Impl : Task::Impl {
+    const State::Args args;
+
+    explicit Impl(std::vector<Tensor> output /* grad_input */,
+                  std::vector<ReadOnlyTensor>
+                      input /* grad_output, input, mean, rstd, weight */,
+                  const State::Args& args)
+        : Task::Impl{std::move(output), std::move(input), kMain, kCompute},
+          args{args} {}
+    void operator()() const override {
+      at::Tensor grad_output = input()[0].impl()->tensor();
+      at::Tensor x = input()[1].impl()->tensor();
+      if (input()[1].impl()->auto_cast().enable) {
+        if (x.dtype() != c10::kFloat) {
+          x = at::autocast::cached_cast(c10::kFloat, x);
+        }
+        if (grad_output.dtype() != c10::kFloat) {
+          intermediate().resize(2);
+          intermediate().push_back(grad_output);
+          grad_output = grad_output.to(c10::kFloat);
+        }
+      }
+      auto [dx, dw, db] = at::native_layer_norm_backward(
+          grad_output, x, args.normalized_shape, input()[2].impl()->tensor(),
+          input()[3].impl()->tensor(), input()[4].impl()->tensor(), {},
+          {true, false, false});
+      output()[0].impl()->tensor() = dx;
+    }
+    [[nodiscard]] const char* name() const override {
+      return "cs::compute::LayerNorm::backward_input";
+    }
+  };
+
+  task = Task{std::make_shared<Impl>(
+      Impl{{grad_input},
+           {grad_output, state->backward.input, state->backward.mean,
+            state->backward.rstd, state->forward.weight},
+           state->args})};
+
+  state->backward.input.reset();
+  state->backward.mean.reset();
+  state->backward.rstd.reset();
+  scheduler.impl()->submit(std::move(task));
+  return grad_input;
+}
+
+void LayerNorm::backward_parameter(const Scheduler& scheduler,
+                                   const std::shared_ptr<State>& state,
+                                   const ReadOnlyTensor& grad_output) {
   auto weight = static_cast<const ReadOnlyTensor&>(state->forward.weight);
   Tensor grad_input;
   Task task{nullptr};
@@ -236,11 +295,11 @@ Tensor LayerNorm::backward(const Scheduler& scheduler,
       const State::Args args;
 
       explicit Impl(
-          std::vector<Tensor> output /* grad_input, grad_weight, grad_bias */,
+          std::vector<Tensor> output /* grad_weight, grad_bias */,
           std::vector<ReadOnlyTensor>
               input /* grad_output, input, mean, rstd, weight, bias */,
           const State::Args& args)
-          : Task::Impl{std::move(output), std::move(input), kMain, kCompute},
+          : Task::Impl{std::move(output), std::move(input), kAssist, kCompute},
             args{args} {}
       void operator()() const override {
         at::Tensor grad_output = input()[0].impl()->tensor();
@@ -262,8 +321,7 @@ Tensor LayerNorm::backward(const Scheduler& scheduler,
         auto [dx, dw, db] = at::native_layer_norm_backward(
             grad_output, x, args.normalized_shape, input()[2].impl()->tensor(),
             input()[3].impl()->tensor(), input()[4].impl()->tensor(),
-            input()[5].impl()->tensor(), {true, true, true});
-        output()[0].impl()->tensor() = dx;
+            input()[5].impl()->tensor(), {false, true, true});
         if (output()[1].impl()->tensor().defined()) {
           output()[1].impl()->tensor() += dw;
         } else {
@@ -278,7 +336,7 @@ Tensor LayerNorm::backward(const Scheduler& scheduler,
         intermediate().push_back(db);
       }
       [[nodiscard]] const char* name() const override {
-        return "cs::compute::LayerNorm::backward";
+        return "cs::compute::LayerNorm::backward_parameter";
       }
     };
 
@@ -291,11 +349,11 @@ Tensor LayerNorm::backward(const Scheduler& scheduler,
     struct Impl : Task::Impl {
       const State::Args args;
 
-      explicit Impl(std::vector<Tensor> output /* grad_input, grad_weight */,
+      explicit Impl(std::vector<Tensor> output /* grad_weight */,
                     std::vector<ReadOnlyTensor>
                         input /* grad_output, input, mean, rstd, weight */,
                     const State::Args& args)
-          : Task::Impl{std::move(output), std::move(input), kMain, kCompute},
+          : Task::Impl{std::move(output), std::move(input), kAssist, kCompute},
             args{args} {}
       void operator()() const override {
         at::Tensor grad_output = input()[0].impl()->tensor();
@@ -317,8 +375,7 @@ Tensor LayerNorm::backward(const Scheduler& scheduler,
         auto [dx, dw, db] = at::native_layer_norm_backward(
             grad_output, x, args.normalized_shape, input()[2].impl()->tensor(),
             input()[3].impl()->tensor(), input()[4].impl()->tensor(), {},
-            {true, true, false});
-        output()[0].impl()->tensor() = dx;
+            {false, true, false});
         if (output()[1].impl()->tensor().defined()) {
           output()[1].impl()->tensor() += dw;
         } else {
@@ -327,7 +384,7 @@ Tensor LayerNorm::backward(const Scheduler& scheduler,
         intermediate().push_back(dw);
       }
       [[nodiscard]] const char* name() const override {
-        return "cs::compute::LayerNorm::backward";
+        return "cs::compute::LayerNorm::backward_parameter";
       }
     };
 
@@ -338,11 +395,7 @@ Tensor LayerNorm::backward(const Scheduler& scheduler,
              state->args})};
   }
 
-  state->backward.input.reset();
-  state->backward.mean.reset();
-  state->backward.rstd.reset();
   scheduler.impl()->submit(std::move(task));
-  return grad_input;
 }
 
 }  // namespace cs::compute
