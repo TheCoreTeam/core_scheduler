@@ -74,5 +74,14 @@ struct CS_API LayerNorm {
   static Tensor backward(const Scheduler &scheduler,
                          const std::shared_ptr<State> &state,
                          const ReadOnlyTensor &grad_output);
+
+private:
+  static Tensor backward_input(const Scheduler &scheduler,
+                               const std::shared_ptr<State> &state,
+                               const ReadOnlyTensor &grad_output);
+
+  static void backward_parameter(const Scheduler &scheduler,
+                                   const std::shared_ptr<State> &state,
+                                   const ReadOnlyTensor &grad_output);
 };
 }  // namespace cs::compute

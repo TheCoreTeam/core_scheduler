@@ -31,10 +31,8 @@ Tensor LinearImpl::forward(const Scheduler& scheduler,
 
 Tensor LinearImpl::backward(const Scheduler& scheduler,
                             const ReadOnlyTensor& grad_output) const {
-  auto grad_input =
-      compute::Linear::backward_input(scheduler, state(), grad_output);
   compute::Linear::backward_parameter(scheduler, state(), grad_output);
-  return grad_input;
+  return compute::Linear::backward_input(scheduler, state(), grad_output);
 }
 
 void LinearImpl::backward_parameter(const Scheduler& scheduler,
