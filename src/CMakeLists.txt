@@ -30,7 +30,7 @@ add_subdirectory(optimizer)
 set(CORE_SCHEDULER_THREADING_SRCS "")
 add_subdirectory(threading)
 
-set(CORE_SCHEDULER_DATASET_SRCS "")
+set(CORE_SCHEDULER_DATA_SRCS "")
 add_subdirectory(data)
 
 add_library(core_scheduler_core SHARED
