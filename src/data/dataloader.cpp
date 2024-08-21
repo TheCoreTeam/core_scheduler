@@ -89,10 +89,7 @@ struct LlmDataLoaderImpl final : DataLoader::Impl {
 LlmDataLoaderImpl::~LlmDataLoaderImpl() {
   shutDown_->store(true);
   for (const auto &b : startBarrier_) {
-    (void)b->arrive();
-  }
-  for (const auto &b : endBarrier_) {
-    (void)b->arrive();
+    b->arrive_and_wait();
   }
 }
 int64_t LlmDataLoaderImpl::iterations_per_epoch() const {
@@ -149,6 +146,7 @@ void threadLoaderTask(const std::span<const std::string> files,
                  fmt::format("Failed to create scanner: {}",
                              scanner_result.status().ToString()));
   const auto &scanner = scanner_result.ValueOrDie();
+  scanner->options()->batch_readahead = 0;
   auto it = scanner->ScanBatches().ValueOrDie();
   auto batch = it.Next().ValueOrDie();
   for (int64_t i = 1; i < startIter; ++i) {
